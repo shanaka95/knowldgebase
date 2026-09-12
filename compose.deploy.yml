@@ -1,0 +1,169 @@
+# Production deployment: one prebuilt image serves the API, the built web app and
+# the background worker. Models are not run here - they come from any
+# OpenAI-compatible provider over HTTPS.
+#
+#   docker compose -f compose.deploy.yml up -d
+#
+# Every secret comes from the environment (a `.env` beside this file, or real env
+# vars). Nothing credential-shaped is baked into the image.
+
+x-backend-common: &backend-common
+  image: ${KB_IMAGE:-shanaka95/knowledge-base:latest}
+  restart: unless-stopped
+  environment: &backend-env
+    PROJECT_NAME: ${PROJECT_NAME:-Knowledge Base}
+    SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+    FIRST_SUPERUSER: ${FIRST_SUPERUSER:?set FIRST_SUPERUSER}
+    FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?set FIRST_SUPERUSER_PASSWORD}
+    FRONTEND_HOST: ${FRONTEND_HOST:-http://localhost}
+    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/app
+    QDRANT_URL: http://qdrant:6333
+    QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_documents}
+    MINIO_ENDPOINT: minio:9000
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY}
+    MINIO_BUCKET: ${MINIO_BUCKET:-kb-attachments}
+    MINIO_SECURE: "false"
+
+    # --- models: one provider, one key, set on the host -----------------------
+    LLM_BASE_URL: ${LLM_BASE_URL:?set LLM_BASE_URL}
+    LLM_MODEL: ${LLM_MODEL:?set LLM_MODEL}
+    LLM_API_KEY: ${LLM_API_KEY:?set LLM_API_KEY}
+    LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-300}
+    LLM_DISABLE_THINKING: ${LLM_DISABLE_THINKING:-true}
+    EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:?set EMBEDDING_BASE_URL}
+    EMBEDDING_MODEL: ${EMBEDDING_MODEL:?set EMBEDDING_MODEL}
+    EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:?set EMBEDDING_API_KEY}
+    EMBEDDING_DIM: ${EMBEDDING_DIM:?set EMBEDDING_DIM}
+    EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-16}
+    # No document-parsing model here: page images go to the chat model instead.
+    IMPORT_PARSER: ${IMPORT_PARSER:-llm}
+
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+    IMPORT_CONCURRENCY: ${IMPORT_CONCURRENCY:-1}
+    RRF_K: ${RRF_K:-60}
+    VECTOR_MIN_SCORE: ${VECTOR_MIN_SCORE:-0.15}
+    MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-25}
+    MAX_IMPORT_SIZE_MB: ${MAX_IMPORT_SIZE_MB:-50}
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: app
+    volumes:
+      - app-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio:
+    # quay.io is MinIO's own registry; the Docker Hub mirror now needs auth.
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  prestart:
+    <<: *backend-common
+    restart: "no"
+    command: ["bash", "scripts/prestart.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # TLS terminator. Set SITE_DOMAINS to enable it; without a domain you can run
+  # the stack with `--scale caddy=0` and publish the backend port instead.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAINS: ${SITE_DOMAINS:?set SITE_DOMAINS}
+      # The same names with an http:// scheme, e.g. "http://a.com, http://www.a.com"
+      SITE_DOMAINS_HTTP: ${SITE_DOMAINS_HTTP:?set SITE_DOMAINS_HTTP}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      SERVER_IP: ${SERVER_IP:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # certificates and account keys survive restarts
+      - caddy-config:/config
+    depends_on:
+      - backend
+
+  backend:
+    <<: *backend-common
+    # Not published: Caddy reaches it on the Docker network.
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      prestart:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *backend-common
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      prestart:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/worker-heartbeat') < 60 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  app-db-data:
+  qdrant-data:
+  minio-data:
+  caddy-data:
+  caddy-config:

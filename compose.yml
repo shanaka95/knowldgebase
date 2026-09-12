@@ -1,0 +1,144 @@
+x-backend-common: &backend-common
+  image: knowledge-base-backend:latest
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  extra_hosts:
+    # lets the containers reach model servers running on the host
+    - "host.docker.internal:host-gateway"
+  volumes:
+    # single source of truth for model endpoints (base URL, API key, model name)
+    - ./models.toml:/app/models.toml:ro
+  environment: &backend-env
+    PROJECT_NAME: ${PROJECT_NAME:?Variable not set}
+    SECRET_KEY: ${SECRET_KEY:?Variable not set}
+    FIRST_SUPERUSER: ${FIRST_SUPERUSER:?Variable not set}
+    FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?Variable not set}
+    FRONTEND_HOST: ${FRONTEND_HOST:-http://localhost:5173}
+    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/app
+    QDRANT_URL: http://qdrant:6333
+    QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_documents}
+    MINIO_ENDPOINT: minio:9000
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Variable not set}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Variable not set}
+    MINIO_BUCKET: ${MINIO_BUCKET:-kb-attachments}
+    MINIO_SECURE: "false"
+    MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-25}
+    # Model endpoints come from models.toml (mounted above); only the file
+    # location is passed in. Any value can still be overridden by env var.
+    MODELS_CONFIG_FILE: /app/models.toml
+    MAX_IMPORT_SIZE_MB: ${MAX_IMPORT_SIZE_MB:-50}
+    RRF_K: ${RRF_K:-60}
+    RETRIEVAL_CANDIDATES_PER_SOURCE: ${RETRIEVAL_CANDIDATES_PER_SOURCE:-50}
+    VECTOR_MIN_SCORE: ${VECTOR_MIN_SCORE:-0.15}
+    WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+    WORKER_POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-1}
+    WORKER_LEASE_SECONDS: ${WORKER_LEASE_SECONDS:-60}
+    WORKER_HEARTBEAT_SECONDS: ${WORKER_HEARTBEAT_SECONDS:-5}
+    WORKER_OFFLINE_AFTER_SECONDS: ${WORKER_OFFLINE_AFTER_SECONDS:-30}
+    EMBEDDING_DEBOUNCE_SECONDS: ${EMBEDDING_DEBOUNCE_SECONDS:-10}
+    EMBEDDING_MAX_ATTEMPTS: ${EMBEDDING_MAX_ATTEMPTS:-3}
+    EMBEDDING_RETRY_BACKOFF_SECONDS: ${EMBEDDING_RETRY_BACKOFF_SECONDS:-30}
+
+services:
+
+  db:
+    image: postgres:18
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - app-db-data:/var/lib/postgresql
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Variable not set}
+      - POSTGRES_DB=app
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      # the image has no curl; use bash's /dev/tcp to check the REST port
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio:
+    # quay.io is MinIO's own registry; the Docker Hub mirror now needs auth.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?Variable not set}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Variable not set}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  adminer:
+    image: adminer
+    depends_on:
+      - db
+    environment:
+      - ADMINER_DESIGN=pepa-linha-dark
+      - ADMINER_DEFAULT_SERVER=db
+
+  prestart:
+    <<: *backend-common
+    restart: "no"
+    command: ["bash", "scripts/prestart.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    <<: *backend-common
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      prestart:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *backend-common
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      prestart:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/worker-heartbeat') < 30 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  app-db-data:
+  qdrant-data:
+  minio-data:

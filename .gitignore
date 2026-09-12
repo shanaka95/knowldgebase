@@ -1,0 +1,42 @@
+# --- secrets and per-machine configuration -----------------------------------
+# Copy the .example files and fill these in; they never belong in the repository.
+.env
+.env.*
+!.env.example
+models.toml
+
+# --- dependencies (installed, not stored) ------------------------------------
+node_modules/
+.venv/
+**/__pycache__/
+
+# --- build output ------------------------------------------------------------
+# The web app, built into the backend image at release time.
+backend/app/frontend/
+# Regenerated from the running app by scripts/generate-client.sh.
+frontend/openapi.json
+dist/
+
+# --- caches and tool state ---------------------------------------------------
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+backend/htmlcov/
+backend/.coverage
+.DS_Store
+
+# --- test artefacts ----------------------------------------------------------
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+# Saved login state.
+frontend/playwright/.auth/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# --- editors -----------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/

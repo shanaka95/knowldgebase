@@ -1,0 +1,17 @@
+.git
+**/__pycache__
+**/.venv
+backend/htmlcov
+frontend/blob-report
+frontend/dist
+frontend/node_modules
+frontend/playwright-report
+frontend/test-results
+node_modules
+
+# Never bake configuration or secrets into the image: the app reads these at
+# runtime from env vars or a mounted file, so a copy here would ship credentials.
+.env
+.env.*
+*.env
+models.toml

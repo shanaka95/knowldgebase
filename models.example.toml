@@ -1,0 +1,56 @@
+# Model endpoints — the single place to point this app at AI models.
+# Copy to models.toml and edit. Keep api_key values out of version control.
+#
+# Every role below talks to an OpenAI-compatible HTTP API, so anything that
+# speaks that protocol works: vMLX, LM Studio, Ollama, vLLM, TGI, OpenAI,
+# Together, Groq, an internal gateway…
+#
+# Values here are defaults; an environment variable of the same name always wins
+# (LLM_BASE_URL, LLM_MODEL, LLM_API_KEY, EMBEDDING_*, PARSER_*), which is how the
+# containers get `host.docker.internal` instead of `127.0.0.1`.
+#
+# The app itself (API, worker, database, vector store, object storage, web UI)
+# runs entirely in Docker. Only the model servers live outside it.
+
+[defaults]
+# Inherited by every role that does not override it.
+base_url = "http://host.docker.internal:8080/v1"
+api_key = ""
+
+# --- Chat model: semantic chunking, summaries, and page-parsing fallback ------
+[llm]
+model = "lmstudio-community/Qwen3.5-9B-MLX-4bit"
+timeout_seconds = 300
+# Qwen3.5 is a reasoning model; this sends chat_template_kwargs.enable_thinking=false
+disable_thinking = true
+temperature = 0.1
+
+# --- Embedding model: document, summary and chunk vectors --------------------
+[embeddings]
+model = "jinaai/jina-embeddings-v5-text-small-retrieval-mlx"
+dimensions = 1024
+batch_size = 16
+timeout_seconds = 180
+
+# --- Document parser: PDF / image -> text ------------------------------------
+# MinerU2.5 is a document-parsing vision model. vMLX's bundled engine cannot load
+# it (its mlx-vlm is too old for the qwen2_vl vision stack), so it runs in its
+# own tiny server: `bash scripts/mineru-server.sh`.
+# Leave base_url empty to reuse [defaults] — e.g. when your provider serves
+# MinerU (or another parsing VLM) on the same gateway.
+[parser]
+# backend = "auto" tries MinerU and falls back to the [llm] model; "mineru"
+# requires it; "llm" skips it entirely - the right choice when your models come
+# from a hosted provider that has no document-parsing model.
+backend = "auto"
+base_url = "http://host.docker.internal:8010/v1"
+# mlx-vlm identifies a model by the path it was started with, so this is the one
+# value that is machine-specific; scripts/mineru-server.sh prints the exact line
+# to paste. If the server advertises a model on /v1/models, leaving this empty
+# works too - the app then asks the server what it serves.
+model = ""
+timeout_seconds = 600
+# If the parser is unreachable, transcribe pages with the [llm] model instead.
+fallback_to_llm = true
+page_dpi = 200
+max_pages = 100

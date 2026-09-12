@@ -1,0 +1,47 @@
+# TLS terminator for the deployed instance.
+#
+# Caddy obtains and renews Let's Encrypt certificates automatically using the
+# HTTP-01 challenge, so port 80 must stay reachable from the internet.
+
+{
+	email {$ACME_EMAIL}
+
+	# This origin sits behind Cloudflare, which may connect over plain HTTP (its
+	# "Flexible" SSL mode). Redirecting HTTP to HTTPS here would send that request
+	# straight back to Cloudflare and loop forever, so both schemes serve the app.
+	# With Cloudflare set to Full (strict) this line can be removed.
+	auto_https disable_redirects
+}
+
+# One definition, used by every address below.
+(app) {
+	encode zstd gzip
+
+	request_body {
+		max_size 64MB
+	}
+
+	reverse_proxy backend:8000 {
+		# Answers stream as server-sent events; buffering would hold them back.
+		flush_interval -1
+		# Cloudflare puts the visitor's address here; pass on something truthful.
+		header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+	}
+}
+
+# HTTPS, with the Let's Encrypt certificate.
+{$SITE_DOMAINS} {
+	import app
+}
+
+# Plain HTTP for the same names. Disabling redirects above leaves port 80
+# without a handler, and that is the port Cloudflare actually connects to.
+{$SITE_DOMAINS_HTTP} {
+	import app
+}
+
+# Reaching the box by its IP keeps working, which is useful when DNS or the CDN
+# is the thing being debugged.
+http://{$SERVER_IP} {
+	import app
+}
