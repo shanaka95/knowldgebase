@@ -73,7 +73,7 @@ async def _matching_chunks(
     ids = [str(d) for d in document_ids]
     per_source = settings.RETRIEVAL_CANDIDATES_PER_SOURCE
     sparse_query = encode_query(query)
-    dense_query = (await embeddings.embed([query]))[0]
+    dense_query = await embeddings.embed_query(query)
 
     rankings: dict[tuple[str, str], list[ScoredPoint]] = {}
     if sparse_query.indices:

@@ -48,6 +48,19 @@ export function namespaceMembersQuery(namespaceId: string) {
   })
 }
 
+/** Addresses invited to a space that have not joined yet. Admins only. */
+export function namespaceInvitationsQuery(namespaceId: string) {
+  return queryOptions({
+    queryKey: queryKeys.namespaces.invitations(namespaceId),
+    queryFn: async () =>
+      (
+        await NamespacesService.readNamespaceInvitations({
+          path: { namespace_id: namespaceId },
+        })
+      ).data,
+  })
+}
+
 /** Normalised view of a namespace tree for fast lookups in the sidebar and dialogs. */
 export interface TreeIndex {
   raw: NamespaceTree

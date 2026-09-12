@@ -611,3 +611,37 @@ def test_the_private_test_api_is_off_outside_development() -> None:
     ]
     if settings.FASTAPI_ENV != "development":
         assert not private_routes
+
+
+def test_an_api_key_cannot_manage_accounts_through_the_admin_routes(
+    client: TestClient, db: Session, superuser_token_headers: dict[str, str]
+) -> None:
+    """The rule is about the endpoint's power, not about which path reaches it.
+
+    `/users/me/password` refuses an API key, so a key that could set the same
+    password through `/users/{id}` would make that refusal decorative - and the
+    key that does it needs no write scope either.
+    """
+    key = make_key(client, superuser_token_headers, ApiKeyScope.read)
+    key_headers = {"Authorization": f"Bearer {key}"}
+    victim, _ = create_user_with_password(db)
+
+    taken_over = client.patch(
+        f"{API}/users/{victim.id}",
+        headers=key_headers,
+        json={"password": "a-password-they-did-not-choose", "is_superuser": True},
+    )
+    assert taken_over.status_code in DENIED
+
+    minted = client.post(
+        f"{API}/users/",
+        headers=key_headers,
+        json={"email": "made-by-a-key@example.com", "password": "made-by-a-key-1"},
+    )
+    assert minted.status_code in DENIED
+
+    removed = client.delete(f"{API}/users/{victim.id}", headers=key_headers)
+    assert removed.status_code in DENIED
+
+    db.refresh(victim)
+    assert victim.is_superuser is False

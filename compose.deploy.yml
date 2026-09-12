@@ -20,6 +20,9 @@ x-backend-common: &backend-common
     FRONTEND_HOST: ${FRONTEND_HOST:?set FRONTEND_HOST}
     DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/app
     QDRANT_URL: http://qdrant:6333
+    # Qdrant answers anyone who can reach it, and on one host that means
+    # anything else on this network. Authenticate it.
+    QDRANT_API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY}
     QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_documents}
     MINIO_ENDPOINT: minio:9000
     MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY}
@@ -96,6 +99,11 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.19.1
     restart: unless-stopped
+    environment:
+      # Without this Qdrant serves every user's embeddings to anything that can
+      # open a socket to it. It is not published to the host, but "only the
+      # container network" is not the same as "only us".
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY}
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:

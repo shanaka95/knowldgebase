@@ -4,6 +4,7 @@ import { FolderKanban, Plus } from "lucide-react"
 import { EmptyState } from "@/components/Layout/EmptyState"
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
 import { RoleBadge } from "@/components/Namespaces/RoleBadge"
+import { SharedSpaceBadge } from "@/components/Namespaces/SharedSpaceBadge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useNamespaces } from "@/hooks/useNamespaces"
@@ -58,6 +59,7 @@ export function NamespaceCards() {
               <span className="min-w-0 truncate text-sm font-medium">
                 {ns.name}
               </span>
+              <SharedSpaceBadge shared={ns.shared_with_you} />
               <RoleBadge role={ns.my_role} />
             </span>
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">

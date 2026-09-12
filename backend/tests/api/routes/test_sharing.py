@@ -16,7 +16,13 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.models import DocumentShare, ShareInvitation, ShareRole
+from app.models import (
+    DocumentShare,
+    NamespaceMember,
+    ShareInvitation,
+    ShareRole,
+    User,
+)
 from app.services.email import LoggingEmailSender, get_email_sender
 from tests.utils.kb import (
     API,
@@ -755,7 +761,12 @@ def test_a_copy_brings_its_images_with_it(
     upload = client.post(
         f"{API}/attachments/",
         headers=owner["headers"],
-        data={"namespace_id": str(owner["namespace"].id)},
+        # Bound to the page, which is what the editor does when an image is
+        # inserted, and what makes it readable by whoever can read the page.
+        data={
+            "namespace_id": str(owner["namespace"].id),
+            "document_id": str(owner["document"].id),
+        },
         files={"file": ("chart.png", io.BytesIO(b"pretend png"), "image/png")},
     )
     attachment_id = upload.json()["id"]
@@ -881,3 +892,464 @@ def test_invitations_are_not_visible_to_strangers(
     assert (
         client.get(f"{owner['url']}/invitations", headers=headers).status_code in DENIED
     )
+
+
+# ---------------------------------------------------------------------------
+# Sharing a whole space
+# ---------------------------------------------------------------------------
+
+
+def space_url(owner: dict[str, Any]) -> str:
+    return f"{API}/namespaces/{owner['namespace'].id}"
+
+
+def test_a_space_is_shared_the_same_way_a_page_is(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """Same request shape, same three outcomes, so nobody learns two things."""
+    known, password = create_user_with_password(db)
+    unknown = random_email()
+
+    r = client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={
+            "emails": [known.email, unknown],
+            "role": "editor",
+            "message": "Everything for the roof job is in here.",
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [m["user"]["email"] for m in body["shared"]] == [known.email]
+    assert [i["email"] for i in body["invited"]] == [unknown.lower()]
+    assert body["invited"][0]["target"] == "space"
+
+    sent = [m for m in mailbox() if m.to == known.email][-1]
+    assert "Owner space" in sent.subject
+    assert "roof job" in sent.text
+
+    headers = login(client, known, password)
+    assert client.get(owner["url"], headers=headers).status_code == 200
+
+
+def test_sharing_a_space_covers_everything_in_it(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """Including pages added afterwards, which is what makes it a bigger grant."""
+    guest, password = create_user_with_password(db)
+    client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [guest.email], "role": "viewer"},
+    )
+    headers = login(client, guest, password)
+
+    later = create_document(db, owner["namespace"], owner["user"], title="Added later")
+    db.commit()
+    assert client.get(f"{API}/documents/{later.id}", headers=headers).status_code == 200
+
+
+def test_a_space_invitation_grants_nothing_until_the_address_is_confirmed(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    address = random_email()
+    client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [address], "role": "editor"},
+    )
+    token = last_email_link_token()
+
+    preview = client.get(f"{API}/public/invitations/{token}")
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["target"] == "space"
+    assert body["document_title"] == "Owner space"
+    assert body["namespace_id"] == str(owner["namespace"].id)
+
+    # Still nothing until an account confirms that address.
+    assert client.get(space_url(owner)).status_code in DENIED
+
+    password = random_lower_string()
+    client.post(f"{API}/users/signup", json={"email": address, "password": password})
+    confirmed = client.post(
+        f"{API}/login/verify-email", json={"token": last_email_link_token()}
+    )
+    assert "space" in confirmed.json()["message"]
+
+    from app import crud
+
+    user = crud.get_user_by_email(session=db, email=address)
+    assert user is not None
+    headers = login(client, user, password)
+    assert client.get(space_url(owner), headers=headers).status_code == 200
+    assert client.get(owner["url"], headers=headers).status_code == 200
+
+
+def test_the_owner_is_skipped_rather_than_demoted(
+    client: TestClient, owner: dict[str, Any]
+) -> None:
+    r = client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [owner["user"].email], "role": "viewer"},
+    )
+    assert r.json()["skipped"], r.json()
+
+
+def test_a_space_has_its_own_limit(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    owner["user"].max_members_per_space = 1
+    db.add(owner["user"])
+    db.commit()
+
+    r = client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [random_email(), random_email()], "role": "viewer"},
+    )
+    body = r.json()
+    assert len(body["invited"]) == 1
+    assert "limit of 1" in body["skipped"][0]["reason"]
+    assert body["max_members"] == 1
+
+
+def test_only_a_space_admin_may_share_it(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """Editing what is in a space is not the same as handing the space out."""
+    guest, password = create_user_with_password(db)
+    client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [guest.email], "role": "editor"},
+    )
+    headers = login(client, guest, password)
+    r = client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=headers,
+        json={"emails": [random_email()], "role": "admin"},
+    )
+    assert r.status_code in DENIED
+
+
+def test_a_withdrawn_space_invitation_stops_working(
+    client: TestClient, owner: dict[str, Any]
+) -> None:
+    r = client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [random_email()], "role": "viewer"},
+    )
+    invitation_id = r.json()["invited"][0]["id"]
+    token = last_email_link_token()
+
+    assert (
+        client.delete(
+            f"{space_url(owner)}/invitations/{invitation_id}",
+            headers=owner["headers"],
+        ).status_code
+        == 200
+    )
+    assert client.get(f"{API}/public/invitations/{token}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Saying which things are yours
+# ---------------------------------------------------------------------------
+
+
+def test_a_shared_space_appears_in_the_space_list_marked_as_shared(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """It has to be selectable, and it has to be obvious that it is not yours."""
+    guest, password = create_user_with_password(db)
+    client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [guest.email], "role": "editor"},
+    )
+    headers = login(client, guest, password)
+
+    spaces = client.get(f"{API}/namespaces/", headers=headers).json()["data"]
+    theirs = [n for n in spaces if n["name"] == "Owner space"]
+    assert theirs, "a shared space is still a space you can switch to"
+    assert theirs[0]["shared_with_you"] is True
+    assert theirs[0]["my_role"] == "editor"
+
+
+def test_your_own_space_is_not_marked_as_shared(
+    client: TestClient, db: Session
+) -> None:
+    user, password = create_user_with_password(db)
+    create_namespace(db, user, "Mine")
+    db.commit()
+    headers = login(client, user, password)
+
+    spaces = client.get(f"{API}/namespaces/", headers=headers).json()["data"]
+    mine = [n for n in spaces if n["name"] == "Mine"][0]
+    assert mine["shared_with_you"] is False
+
+
+def test_shared_with_me_separates_whole_spaces_from_single_pages(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """A space covers everything in it; a page is one page. Different risks."""
+    guest, password = create_user_with_password(db)
+
+    # A whole space from one person...
+    client.post(
+        f"{space_url(owner)}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [guest.email], "role": "viewer"},
+    )
+    # ...and a single page from another.
+    other, other_password = create_user_with_password(db)
+    other_ns = create_namespace(db, other, "Someone else's space")
+    page = create_document(db, other_ns, other, title="Just this one")
+    db.commit()
+    other_headers = login(client, other, other_password)
+    client.post(
+        f"{API}/documents/{page.id}/shares/batch",
+        headers=other_headers,
+        json={"emails": [guest.email], "role": "viewer"},
+    )
+
+    headers = login(client, guest, password)
+    body = client.get(f"{API}/documents/shared-with-me", headers=headers).json()
+
+    assert [n["name"] for n in body["namespaces"]] == ["Owner space"]
+    assert all(n["shared_with_you"] for n in body["namespaces"])
+
+    singles = [d["title"] for d in body["documents"]]
+    assert "Just this one" in singles
+    # The page names the space it came from without granting access to it.
+    only = [d for d in body["documents"] if d["title"] == "Just this one"][0]
+    assert only["namespace_name"] == "Someone else's space"
+    assert (
+        client.get(f"{API}/namespaces/{other_ns.id}", headers=headers).json()["my_role"]
+        is None
+    )
+
+
+def test_a_published_page_says_so_when_you_read_it(
+    client: TestClient, owner: dict[str, Any]
+) -> None:
+    """Otherwise the interface shows the link switch as off while the link is live."""
+    before = client.get(owner["url"], headers=owner["headers"]).json()
+    assert before["public_slug"] is None
+
+    slug = client.post(f"{owner['url']}/public", headers=owner["headers"]).json()[
+        "slug"
+    ]
+    after = client.get(owner["url"], headers=owner["headers"]).json()
+    assert after["public_slug"] == slug
+
+    client.delete(f"{owner['url']}/public", headers=owner["headers"])
+    assert (
+        client.get(owner["url"], headers=owner["headers"]).json()["public_slug"] is None
+    )
+
+
+def test_the_link_in_a_share_email_opens_the_page(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """Pages live under their space, so a link without the slug is a dead end."""
+    guest, _ = create_user_with_password(db)
+    client.post(
+        f"{owner['url']}/shares/batch",
+        headers=owner["headers"],
+        json={"emails": [guest.email], "role": "viewer"},
+    )
+    sent = [m for m in mailbox() if m.to == guest.email][-1]
+    expected = f"/s/{owner['namespace'].slug}/d/{owner['document'].id}"
+    assert expected in sent.text, sent.text
+
+
+def test_a_sharer_s_name_cannot_carry_markup_into_somebody_s_mail(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """A display name is text one person chose and another person is shown."""
+    owner["user"].full_name = '<img src=x onerror=alert(1)>"evil"'
+    db.add(owner["user"])
+    db.commit()
+    guest, _ = create_user_with_password(db)
+
+    client.post(
+        f"{owner['url']}/shares/batch",
+        headers=owner["headers"],
+        json={"emails": [guest.email], "role": "viewer"},
+    )
+    sent = [m for m in mailbox() if m.to == guest.email][-1]
+    assert "<img" not in sent.html
+
+
+def test_a_page_title_cannot_carry_markup_into_somebody_s_mail(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """Anybody who can share a page chooses its title, so it is untrusted too."""
+    doc = create_document(
+        db,
+        owner["namespace"],
+        owner["user"],
+        title='<a href="https://evil.example">Reset your password</a>',
+    )
+    db.commit()
+    address = random_email()
+
+    client.post(
+        f"{API}/documents/{doc.id}/shares/batch",
+        headers=owner["headers"],
+        json={"emails": [address], "role": "viewer"},
+    )
+    sent = [m for m in mailbox() if m.to == address][-1]
+    # The real button is still a link; the title is not allowed to be one.
+    assert '<a href="https://evil.example"' not in sent.html
+    assert "&lt;a href=&quot;https://evil.example&quot;&gt;" in sent.html
+
+
+def test_a_space_name_cannot_carry_markup_into_somebody_s_mail(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    space = create_namespace(db, owner["user"], "<img src=x onerror=alert(1)>")
+    db.commit()
+    address = random_email()
+
+    client.post(
+        f"{API}/namespaces/{space.id}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [address], "role": "viewer"},
+    )
+    sent = [m for m in mailbox() if m.to == address][-1]
+    assert "<img" not in sent.html
+
+
+def test_an_address_with_an_unconfirmed_account_is_invited_not_given_access(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """Access is granted to a confirmed identity, or to nobody.
+
+    Anybody may register any address, so an account whose address was never
+    confirmed proves nothing about who owns that address. Sharing with it must
+    take the invitation path, which turns into access only once the address is
+    confirmed.
+    """
+    address = random_email()
+    signup = client.post(
+        f"{API}/users/signup",
+        json={"email": address, "password": random_lower_string()},
+    )
+    assert signup.status_code == 200, signup.text
+    squatter = db.exec(select(User).where(User.email == address)).one()
+    assert squatter.email_verified_at is None
+
+    r = client.post(
+        f"{owner['url']}/shares/batch",
+        headers=owner["headers"],
+        json={"emails": [address], "role": "viewer"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["shared"] == []
+    assert [i["email"] for i in body["invited"]] == [address]
+
+    granted = db.exec(
+        select(DocumentShare).where(DocumentShare.user_id == squatter.id)
+    ).first()
+    assert granted is None, "an unconfirmed address must not hold a share"
+
+
+def test_a_space_is_not_handed_to_an_unconfirmed_account_either(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    address = random_email()
+    client.post(
+        f"{API}/users/signup",
+        json={"email": address, "password": random_lower_string()},
+    )
+    squatter = db.exec(select(User).where(User.email == address)).one()
+
+    r = client.post(
+        f"{API}/namespaces/{owner['namespace'].id}/members/batch",
+        headers=owner["headers"],
+        json={"emails": [address], "role": "viewer"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["shared"] == []
+    assert [i["email"] for i in r.json()["invited"]] == [address]
+    member = db.exec(
+        select(NamespaceMember).where(NamespaceMember.user_id == squatter.id)
+    ).first()
+    assert member is None
+
+
+def test_copying_a_page_cannot_reach_a_file_you_could_not_download(
+    client: TestClient, db: Session, owner: dict[str, Any]
+) -> None:
+    """Markup is editable, so a reference is not a permission.
+
+    A guest with editor access to one page can write any attachment id into it.
+    If cloning copied whatever the markup named, that would be a way to pull
+    bytes out of a *different* page in the same space - one the guest cannot
+    open and whose file the download endpoint refuses them.
+    """
+    # A file belonging to a second page the guest is never shown.
+    private_page = create_document(
+        db, owner["namespace"], owner["user"], title="Not shared with anyone"
+    )
+    db.commit()
+    upload = client.post(
+        f"{API}/attachments/",
+        headers=owner["headers"],
+        data={
+            "namespace_id": str(owner["namespace"].id),
+            "document_id": str(private_page.id),
+        },
+        files={"file": ("secret.png", io.BytesIO(b"private bytes"), "image/png")},
+    )
+    assert upload.status_code == 200, upload.text
+    secret_id = upload.json()["id"]
+
+    guest, password = create_user_with_password(db)
+    client.post(
+        f"{owner['url']}/shares/batch",
+        headers=owner["headers"],
+        json={"emails": [guest.email], "role": "editor"},
+    )
+    headers = login(client, guest, password)
+
+    # The download route already refuses them.
+    assert (
+        client.get(
+            f"{API}/attachments/{secret_id}/download", headers=headers
+        ).status_code
+        in DENIED
+    )
+
+    # So they point the page they *can* edit at it, and clone.
+    client.put(
+        owner["url"],
+        headers=headers,
+        json={
+            "content": (
+                f'<p><img src="{settings.API_V1_STR}/attachments/{secret_id}'
+                '/download" alt=""></p>'
+            )
+        },
+    )
+    mine = create_namespace(db, guest, "Guest space")
+    db.commit()
+    clone = client.post(
+        f"{owner['url']}/clone", headers=headers, json={"namespace_id": str(mine.id)}
+    )
+    assert clone.status_code == 200, clone.text
+
+    # Nothing was copied, so there is no readable duplicate in their space.
+    from app.models import Attachment
+
+    copies = db.exec(select(Attachment).where(Attachment.namespace_id == mine.id)).all()
+    assert copies == [], "cloning must not copy a file its maker cannot read"
+    # The reference is left pointing at the original, which still refuses them.
+    assert secret_id in clone.json()["content_html"]

@@ -109,13 +109,20 @@ class QdrantStore:
         collection: str = settings.QDRANT_COLLECTION,
         dim: int = settings.EMBEDDING_DIM,
         timeout: float = settings.QDRANT_TIMEOUT_SECONDS,
+        api_key: str | None = None,
     ) -> None:
         from qdrant_client import AsyncQdrantClient
 
         self.collection = collection
         self.dim = dim
+        key = settings.QDRANT_API_KEY if api_key is None else api_key
         self.client = AsyncQdrantClient(
-            url=url, prefer_grpc=False, timeout=int(timeout)
+            url=url,
+            prefer_grpc=False,
+            timeout=int(timeout),
+            # None rather than "" so the client omits the header entirely when
+            # the store is unauthenticated, which is how it runs in development.
+            api_key=key or None,
         )
 
     # --- schema -------------------------------------------------------------

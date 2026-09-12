@@ -9,6 +9,7 @@ import {
 
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
 import { RoleBadge } from "@/components/Namespaces/RoleBadge"
+import { SharedSpaceBadge } from "@/components/Namespaces/SharedSpaceBadge"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,8 +86,11 @@ export function NamespaceSwitcher() {
                 tile down to a sliver inside the 32px button.
               */}
               <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate font-medium">
-                  {active?.name ?? "No spaces yet"}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate font-medium">
+                    {active?.name ?? "No spaces yet"}
+                  </span>
+                  <SharedSpaceBadge shared={active?.shared_with_you} />
                 </span>
                 <span className="truncate text-xs text-muted-foreground">
                   {active
@@ -117,6 +121,7 @@ export function NamespaceSwitcher() {
               >
                 <NamespaceIcon icon={ns.icon} color={ns.color} size="sm" />
                 <span className="flex-1 truncate">{ns.name}</span>
+                <SharedSpaceBadge shared={ns.shared_with_you} />
                 <RoleBadge role={ns.my_role} />
                 {ns.id === active?.id && (
                   <Check className="size-4 text-primary" />

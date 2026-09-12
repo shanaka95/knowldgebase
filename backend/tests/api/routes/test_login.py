@@ -17,6 +17,7 @@ from app.services.email import LoggingEmailSender, get_email_sender
 from tests.utils.user import (
     last_email_code,
     last_email_link_token,
+    user_authentication_headers,
     verify_email,
 )
 from tests.utils.utils import random_email, random_lower_string
@@ -541,3 +542,82 @@ def test_only_so_many_codes_can_be_requested(
     refused = client.post(ACCESS, data={"username": user.email, "password": password})
     assert refused.status_code == 429
     assert "too many" in refused.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Moving an account to a different address
+# ---------------------------------------------------------------------------
+
+
+def test_moving_to_a_new_address_leaves_it_unconfirmed(
+    client: TestClient, db: Session
+) -> None:
+    """Changing the address is not proof of owning the new one.
+
+    Everything downstream treats a confirmed address as the account's identity -
+    sharing looks accounts up by address - so an address that arrived by an
+    authenticated PATCH and was never answered from must not count as confirmed.
+    """
+    user, password = make_user(db)
+    headers = user_authentication_headers(
+        client=client, email=user.email, password=password
+    )
+    somebody_elses = random_email()
+
+    r = client.patch(f"{API}/users/me", headers=headers, json={"email": somebody_elses})
+    assert r.status_code == 200, r.text
+
+    db.refresh(user)
+    assert user.email == somebody_elses
+    assert user.email_verified_at is None, (
+        "the new address was never answered from, so it is not confirmed"
+    )
+    assert (
+        client.post(
+            ACCESS, data={"username": somebody_elses, "password": password}
+        ).status_code
+        == 403
+    ), "and the account cannot be signed into until it is"
+
+
+def test_moving_to_a_new_address_asks_that_address_to_confirm_it(
+    client: TestClient, db: Session
+) -> None:
+    user, password = make_user(db)
+    headers = user_authentication_headers(
+        client=client, email=user.email, password=password
+    )
+    moved_to = random_email()
+    client.patch(f"{API}/users/me", headers=headers, json={"email": moved_to})
+
+    sender = get_email_sender()
+    assert isinstance(sender, LoggingEmailSender)
+    assert [m for m in sender.sent if m.to == moved_to], (
+        "the only way back in is a link sent to the new address"
+    )
+
+    r = client.post(VERIFY_EMAIL, json={"token": last_email_link_token()})
+    assert r.status_code == 200, r.text
+    db.refresh(user)
+    assert user.email_verified_at is not None
+
+
+def test_changing_the_address_cannot_be_used_to_post_somebody_mail(
+    client: TestClient, db: Session
+) -> None:
+    """The new address is whatever was typed, so the send has the usual ceiling."""
+    settings.AUTH_CODE_MAX_SENDS = 3
+    try:
+        user, password = make_user(db)
+        headers = user_authentication_headers(
+            client=client, email=user.email, password=password
+        )
+        target = random_email()
+        for _ in range(10):
+            client.patch(f"{API}/users/me", headers=headers, json={"email": target})
+
+        sender = get_email_sender()
+        assert isinstance(sender, LoggingEmailSender)
+        assert len([m for m in sender.sent if m.to == target]) <= 3
+    finally:
+        settings.AUTH_CODE_MAX_SENDS = 10_000

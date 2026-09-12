@@ -310,3 +310,43 @@ Several complaints came in about dishes left in the sink and food abandoned in t
 ## Python 3.14 migration
 The platform team finished migrating the ingestion services to Python 3.14. The main change is the new template-string syntax and the removal of several deprecated asyncio APIs; two libraries needed upgrades. CI now runs on 3.14 only. Remaining services must migrate before the end of the quarter; a checklist and a compatibility matrix are in the engineering wiki.
 `
+
+export async function shareNamespaceWithMany(
+  request: APIRequestContext,
+  token: string,
+  namespaceId: string,
+  body: {
+    emails: string[]
+    role?: "viewer" | "editor" | "admin"
+    message?: string
+  },
+) {
+  return request.post(`${API}/namespaces/${namespaceId}/members/batch`, {
+    headers: auth(token),
+    data: { role: "viewer", ...body },
+  })
+}
+
+export async function getMembers(
+  request: APIRequestContext,
+  token: string,
+  namespaceId: string,
+) {
+  return expectOk(
+    await request.get(`${API}/namespaces/${namespaceId}/members`, {
+      headers: auth(token),
+    }),
+  )
+}
+
+export async function getNamespaceInvitations(
+  request: APIRequestContext,
+  token: string,
+  namespaceId: string,
+) {
+  return expectOk(
+    await request.get(`${API}/namespaces/${namespaceId}/invitations`, {
+      headers: auth(token),
+    }),
+  )
+}

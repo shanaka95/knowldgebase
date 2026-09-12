@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -11,8 +12,10 @@ from app.api.serializers import (
     role_for_documents,
     to_document_summary,
     to_namespace_public,
+    to_namespace_publics,
     user_ref,
 )
+from app.core.config import settings
 from app.core.permissions import (
     accessible_namespace_ids,
     get_document_role,
@@ -40,8 +43,23 @@ from app.models import (
     NamespacesPublic,
     NamespaceTree,
     NamespaceUpdate,
+    ShareInvitation,
+    ShareInvitationPublic,
+    ShareSkipped,
+    SpaceShareEmails,
+    SpaceShareResult,
     User,
 )
+from app.services import sharing
+from app.services.email import (
+    Email,
+    EmailError,
+    get_email_sender,
+    space_invitation_email,
+    space_notice_email,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/namespaces", tags=["namespaces"])
 
@@ -78,7 +96,7 @@ def read_namespaces(session: SessionDep, auth: AuthDep) -> Any:
         .where(col(Namespace.id).in_(ids))
         .order_by(col(Namespace.name))
     ).all()
-    data = [to_namespace_public(session, auth.user, ns) for ns in namespaces]
+    data = to_namespace_publics(session, auth.user, namespaces)
     return NamespacesPublic(data=data, count=len(data))
 
 
@@ -238,6 +256,18 @@ def read_namespace_tree(
 # --- members -----------------------------------------------------------------
 
 
+async def _deliver_quietly(message: Email) -> None:
+    """Tell somebody they were let into a space; never fail the share over it.
+
+    Access has already been granted by the time this runs. A mail outage should
+    not be reported back as though it had not.
+    """
+    try:
+        await get_email_sender().send(message)
+    except EmailError as exc:
+        logger.error("could not send %r: %s", message.subject, exc)
+
+
 def _to_member_public(
     session: Session, member: NamespaceMember, namespace: Namespace
 ) -> NamespaceMemberPublic:
@@ -292,7 +322,7 @@ def add_namespace_member(
     member_in: NamespaceMemberCreate,
 ) -> Any:
     namespace, _ = require_namespace(session, auth.user, namespace_id, "admin")
-    user = crud.get_user_by_email(session=session, email=member_in.email)
+    user = crud.get_confirmed_user_by_email(session=session, email=member_in.email)
     if user is None:
         raise HTTPException(status_code=404, detail="No user with this email")
     if user.id == namespace.owner_id:
@@ -315,6 +345,184 @@ def add_namespace_member(
     session.commit()
     session.refresh(member)
     return _to_member_public(session, member, namespace)
+
+
+@router.post("/{namespace_id}/members/batch", response_model=SpaceShareResult)
+async def add_namespace_members(
+    session: SessionDep,
+    auth: WriteAuth,
+    namespace_id: uuid.UUID,
+    body: SpaceShareEmails,
+) -> Any:
+    """Share a whole space with several addresses at once.
+
+    The same shape as sharing a page, deliberately: addresses that already have
+    an account join now and are told by email; addresses that do not are
+    invited, and join when that address is confirmed.
+
+    Sharing a space gives access to everything in it, now and later. That is a
+    bigger grant than sharing a page, which is why it needs space admin.
+    """
+    namespace, _ = require_namespace(session, auth.user, namespace_id, "admin")
+    sharer = sharing.display_name(auth.user)
+    link = sharing.space_url(namespace.slug)
+
+    owner = session.get(User, namespace.owner_id)
+    limit = owner.max_members_per_space if owner else settings.SHARE_MAX_RECIPIENTS
+    used = sharing.member_count(session, namespace.id)
+
+    result = SpaceShareResult(members=used, max_members=limit)
+    seen: set[str] = set()
+
+    for raw in body.emails:
+        address = sharing.normalise_email(str(raw))
+        if address in seen:
+            continue
+        seen.add(address)
+
+        if address == sharing.normalise_email(auth.user.email):
+            result.skipped.append(
+                ShareSkipped(email=address, reason="That is your own address")
+            )
+            continue
+
+        user = crud.get_confirmed_user_by_email(session=session, email=address)
+        if user is not None and user.id == namespace.owner_id:
+            result.skipped.append(
+                ShareSkipped(email=address, reason="The owner already has full access")
+            )
+            continue
+
+        if used >= limit:
+            result.skipped.append(
+                ShareSkipped(
+                    email=address,
+                    reason=(
+                        f"This space has reached its limit of {limit} people. "
+                        "Remove someone first."
+                    ),
+                )
+            )
+            continue
+
+        if user is not None:
+            existing = session.exec(
+                select(NamespaceMember).where(
+                    NamespaceMember.namespace_id == namespace.id,
+                    NamespaceMember.user_id == user.id,
+                )
+            ).first()
+            if existing is not None:
+                existing.role = body.role
+                session.add(existing)
+                session.commit()
+                session.refresh(existing)
+                result.shared.append(_to_member_public(session, existing, namespace))
+                continue
+
+            member = NamespaceMember(
+                namespace_id=namespace.id,
+                user_id=user.id,
+                role=body.role,
+                created_by=auth.user.id,
+            )
+            session.add(member)
+            session.commit()
+            session.refresh(member)
+            result.shared.append(_to_member_public(session, member, namespace))
+            used += 1
+            await _deliver_quietly(
+                space_notice_email(
+                    user.email,
+                    sharer=sharer,
+                    space=namespace.name,
+                    url=link,
+                    role=str(body.role),
+                    note=body.message,
+                )
+            )
+            continue
+
+        was_pending = sharing.pending_invitation(
+            session, address, namespace_id=namespace.id
+        )
+        record, token = sharing.invite(
+            session,
+            namespace=namespace,
+            email=address,
+            role=str(body.role),
+            invited_by=auth.user,
+        )
+        if was_pending is None:
+            used += 1
+        result.invited.append(
+            ShareInvitationPublic(
+                id=record.id,
+                email=record.email,
+                role=record.role,
+                expires_at=record.expires_at,
+                created_at=record.created_at,
+                target="space",
+            )
+        )
+        await _deliver_quietly(
+            space_invitation_email(
+                address,
+                sharer=sharer,
+                space=namespace.name,
+                url=sharing.invitation_url(token),
+                role=str(body.role),
+                days=settings.SHARE_INVITE_TTL_DAYS,
+                note=body.message,
+            )
+        )
+
+    result.members = used
+    return result
+
+
+@router.get("/{namespace_id}/invitations", response_model=list[ShareInvitationPublic])
+def read_namespace_invitations(
+    session: SessionDep, auth: AuthDep, namespace_id: uuid.UUID
+) -> Any:
+    """People invited to this space who have not joined yet."""
+    namespace, _ = require_namespace(session, auth.user, namespace_id, "viewer")
+    rows = session.exec(
+        select(ShareInvitation)
+        .where(
+            ShareInvitation.namespace_id == namespace.id,
+            col(ShareInvitation.accepted_at).is_(None),
+        )
+        .order_by(col(ShareInvitation.created_at))
+    ).all()
+    return [
+        ShareInvitationPublic(
+            id=r.id,
+            email=r.email,
+            role=r.role,
+            expires_at=r.expires_at,
+            created_at=r.created_at,
+            target="space",
+        )
+        for r in rows
+    ]
+
+
+@router.delete("/{namespace_id}/invitations/{invitation_id}")
+def cancel_namespace_invitation(
+    session: SessionDep,
+    auth: WriteAuth,
+    namespace_id: uuid.UUID,
+    invitation_id: uuid.UUID,
+) -> Message:
+    """Withdraw an invitation. The emailed link stops working immediately."""
+    namespace, _ = require_namespace(session, auth.user, namespace_id, "admin")
+    record = session.get(ShareInvitation, invitation_id)
+    if record is None or record.namespace_id != namespace.id:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    session.delete(record)
+    session.commit()
+    return Message(message="Invitation withdrawn")
 
 
 @router.patch("/{namespace_id}/members/{user_id}", response_model=NamespaceMemberPublic)

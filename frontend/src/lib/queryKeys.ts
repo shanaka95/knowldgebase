@@ -7,6 +7,7 @@ export const queryKeys = {
     bySlug: (slug: string) => ["namespaces", "by-slug", slug] as const,
     detail: (id: string) => ["namespaces", id] as const,
     members: (id: string) => ["namespaces", id, "members"] as const,
+    invitations: (id: string) => ["namespaces", id, "invitations"] as const,
     tree: (id: string) => ["namespaces", id, "tree"] as const,
   },
   folders: {

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from sqlalchemy import text
 from sqlmodel import Session, col, select
 
+from app.api.deps import OptionalAuth
 from app.core.config import settings
 from app.core.db import engine
 from app.models import HealthReport, ServiceHealth, WorkerHeartbeat
@@ -115,15 +116,43 @@ async def collect_health(request: Request) -> HealthReport:
     return HealthReport(status=status, services=services, checked_at=datetime.now(UTC))
 
 
+def _without_detail(report: HealthReport) -> HealthReport:
+    """The same verdict, with the diagnostics removed.
+
+    Whether each service answers is what a monitor needs, and it is safe to say.
+    *Why* it did not is a different thing: a failing database reports its host,
+    its port and the user it tried, and the worker probe names the container it
+    runs in. None of that is a stranger's business, and this endpoint has no
+    credential behind it.
+    """
+    return HealthReport(
+        status=report.status,
+        services={
+            name: ServiceHealth(
+                ok=service.ok,
+                latency_ms=service.latency_ms,
+                detail=None if service.ok else "unavailable",
+            )
+            for name, service in report.services.items()
+        },
+        checked_at=report.checked_at,
+    )
+
+
 @router.get("/", response_model=HealthReport)
-async def read_health(request: Request) -> Any:
-    """Reachability of Postgres, Qdrant, MinIO, the model servers and the worker."""
+async def read_health(request: Request, auth: OptionalAuth) -> Any:
+    """Reachability of Postgres, Qdrant, MinIO, the model servers and the worker.
+
+    Open, so a monitor can poll it without a credential. Anyone signed in also
+    sees why a service is unhealthy; anyone else sees only that it is.
+    """
     cache: tuple[float, HealthReport] | None = getattr(
         request.app.state, "health_cache", None
     )
     now = time.monotonic()
     if cache is not None and now - cache[0] < CACHE_TTL:
-        return cache[1]
-    report = await collect_health(request)
-    request.app.state.health_cache = (now, report)
-    return report
+        report = cache[1]
+    else:
+        report = await collect_health(request)
+        request.app.state.health_cache = (now, report)
+    return report if auth is not None else _without_detail(report)

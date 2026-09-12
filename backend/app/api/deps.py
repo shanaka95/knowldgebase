@@ -151,6 +151,28 @@ def get_auth_context(
 AuthDep = Annotated[AuthContext, Depends(get_auth_context)]
 
 
+def get_optional_auth(
+    session: SessionDep,
+    request: Request,
+    _oauth: Annotated[str | None, Depends(reusable_oauth2)] = None,
+    _key: Annotated[object | None, Depends(api_key_scheme)] = None,
+) -> AuthContext | None:
+    """Who is calling, if anyone. For endpoints open to the public that say more
+    to somebody signed in - the health report, which keeps its diagnostics for
+    people who have an account rather than handing them to the internet.
+
+    A bad credential is treated as no credential rather than an error: this is
+    never the thing guarding anything.
+    """
+    try:
+        return get_auth_context(session, request, _oauth, _key)
+    except HTTPException:
+        return None
+
+
+OptionalAuth = Annotated[AuthContext | None, Depends(get_optional_auth)]
+
+
 def get_current_user(ctx: AuthDep) -> User:
     return ctx.user
 
@@ -183,7 +205,14 @@ def require_session_auth(ctx: AuthDep) -> User:
 SessionUser = Annotated[User, Depends(require_session_auth)]
 
 
-def get_current_active_superuser(current_user: CurrentUser) -> User:
+def get_current_active_superuser(current_user: SessionUser) -> User:
+    """Administrator endpoints, which are account management by another name.
+
+    Built on ``SessionUser`` rather than ``CurrentUser`` because everything
+    behind it can set somebody's password or hand out ``is_superuser``. A key
+    that could do that through ``/users/{id}`` would make the refusal on
+    ``/users/me/password`` decorative, and a leaked key would be a takeover.
+    """
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=403, detail="The user doesn't have enough privileges"

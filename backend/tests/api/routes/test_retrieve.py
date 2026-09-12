@@ -39,6 +39,9 @@ class StubEmbeddings:
     async def embed(self, texts: list[str]) -> list[list[float]]:
         return [_vector(t) for t in texts]
 
+    async def embed_query(self, text: str) -> list[float]:
+        return _vector(text)
+
 
 def _vector(text: str) -> list[float]:
     """Crude bag-of-words vector: shared words point in a shared direction."""
@@ -408,3 +411,24 @@ def test_limit_caps_the_number_of_hits(client: TestClient, corpus: tuple) -> Non
     ).json()
     assert len(body["data"]) == 1
     assert body["count"] == 1
+
+
+def test_one_request_cannot_run_a_source_over_and_over(
+    client: TestClient, corpus: tuple
+) -> None:
+    """`targets` repeated a thousand times must not become a thousand searches.
+
+    Every (method, target) pair is a separate query against the vector store,
+    fired concurrently, so a query string anybody may send is otherwise a lever
+    that multiplies one cheap request into arbitrarily many expensive ones.
+    """
+    owner, password, *_ = corpus
+    h = login(client, owner, password)
+
+    body = client.get(
+        RETRIEVE, headers=h, params={"q": "budget", "targets": ["chunk"] * 200}
+    ).json()
+    assert len(body["sources"]) <= 7, (
+        "at most 3 targets x 2 methods plus full text, however often a target is named"
+    )
+    assert body["targets"] == ["chunk"]

@@ -66,19 +66,15 @@ function ConfigBlock({ created }: { created: ApiKeyCreated }) {
   const [copied, copy] = useCopyToClipboard()
   const config = mcpConfig(created.key)
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-sm font-medium">Add this to your assistant's config</p>
-      <div className="relative">
-        <pre
-          className="overflow-x-auto rounded-md border bg-muted p-3 text-xs leading-relaxed font-mono"
-          data-testid="mcp-config"
-        >
-          {config}
-        </pre>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-medium text-sm">
+          Add this to your assistant's config
+        </p>
         <Button
           size="sm"
           variant="outline"
-          className={cn("absolute top-2 right-2", copied && "border-success")}
+          className={cn("shrink-0", copied && "border-success")}
           onClick={() => copy(config)}
           data-testid="mcp-config-copy"
         >
@@ -86,6 +82,18 @@ function ConfigBlock({ created }: { created: ApiKeyCreated }) {
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
+      {/*
+        Wrapped rather than scrolled, and the copy button moved out of the way:
+        the point of showing this block is that someone can read the whole thing
+        and see their key is in it. A horizontal scrollbar hides the one line
+        that matters, and a floating button sat on top of it.
+      */}
+      <pre
+        className="min-w-0 wrap-anywhere whitespace-pre-wrap rounded-md border bg-muted p-3 font-mono text-xs leading-relaxed"
+        data-testid="mcp-config"
+      >
+        {config}
+      </pre>
     </div>
   )
 }

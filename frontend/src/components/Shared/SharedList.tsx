@@ -20,6 +20,26 @@ import { relativeTime } from "@/lib/format"
 import { sharedWithMeQuery } from "@/queries/shared"
 import { openDialog } from "@/stores/dialogs"
 
+function SectionHeader({
+  title,
+  count,
+  explanation,
+}: {
+  title: string
+  count: number
+  /** What this kind of share actually covers. The two are not the same grant. */
+  explanation: string
+}) {
+  return (
+    <header className="flex flex-col gap-0.5">
+      <h2 className="text-sm font-medium">
+        {title} ({count})
+      </h2>
+      <p className="text-xs text-muted-foreground">{explanation}</p>
+    </header>
+  )
+}
+
 export function SharedList() {
   const { data, isPending } = useQuery(sharedWithMeQuery())
   const { data: namespaces } = useNamespaces()
@@ -39,13 +59,15 @@ export function SharedList() {
   }
   return (
     <div className="flex flex-col gap-8" data-testid="shared-list">
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          Spaces ({spaces.length})
-        </h2>
+      <section className="flex flex-col gap-3" data-testid="shared-spaces">
+        <SectionHeader
+          title="Whole spaces shared with you"
+          count={spaces.length}
+          explanation="Everything in these spaces is open to you — every page and folder in them now, and anything added to them later."
+        />
         {spaces.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No spaces have been shared with you.
+            No whole space has been shared with you.
           </p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -55,6 +77,7 @@ export function SharedList() {
                 to="/s/$namespaceSlug"
                 params={{ namespaceSlug: ns.slug }}
                 className="flex items-start gap-3 rounded-lg border bg-card p-4 transition hover:border-primary/40 hover:shadow-sm"
+                data-testid="shared-space"
               >
                 <NamespaceIcon icon={ns.icon} color={ns.color} />
                 <span className="min-w-0 flex-1">
@@ -75,10 +98,12 @@ export function SharedList() {
           </div>
         )}
       </section>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          Pages ({docs.length})
-        </h2>
+      <section className="flex flex-col gap-3" data-testid="shared-pages">
+        <SectionHeader
+          title="Individual pages shared with you"
+          count={docs.length}
+          explanation="Only these pages. The space each one sits in is not shared with you: you cannot browse it, and pages added to it later will not appear here."
+        />
         {docs.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No individual pages have been shared with you.
@@ -88,6 +113,7 @@ export function SharedList() {
             {docs.map((d) => {
               const ns = nsById.get(d.namespace_id)
               const slug = d.namespace_slug ?? ns?.slug ?? "shared"
+              const spaceName = d.namespace_name ?? ns?.name
               return (
                 <li key={d.id} className="flex items-center gap-1 pr-2">
                   <Link
@@ -106,8 +132,32 @@ export function SharedList() {
                         <DocumentTypeBadge type={d.doc_type} />
                         <RoleBadge role={d.my_role} />
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        updated {relativeTime(d.updated_at)}
+                      <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                        {spaceName && (
+                          <>
+                            {/* Where the page lives, so two pages of the same
+                                name can be told apart — said in a way that does
+                                not read as access to the space itself. */}
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  className="truncate underline decoration-dotted underline-offset-2"
+                                  data-testid="shared-page-space"
+                                >
+                                  from {spaceName}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                This page was shared with you on its own. You do
+                                not have access to the rest of {spaceName}.
+                              </TooltipContent>
+                            </Tooltip>
+                            <span aria-hidden="true">·</span>
+                          </>
+                        )}
+                        <span className="shrink-0">
+                          updated {relativeTime(d.updated_at)}
+                        </span>
                       </span>
                     </span>
                     <EmbeddingStatusIcon state={deriveEmbeddingState(d)} />

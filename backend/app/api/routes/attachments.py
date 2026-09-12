@@ -32,6 +32,35 @@ router = APIRouter(prefix="/attachments", tags=["attachments"])
 
 CHUNK = 1024 * 1024
 
+# What a browser may be asked to paint in place. Everything else is handed over
+# as a download, because an uploader chooses the content type and these bytes
+# come back from the application's own origin.
+INLINE_TYPES = frozenset({"application/pdf"})
+INLINE_PREFIX = "image/"
+
+
+def serve_headers(attachment: Attachment) -> tuple[str, dict[str, str]]:
+    """The media type and headers for handing an attachment's bytes back.
+
+    The stored content type was chosen by whoever uploaded the file, and the
+    file is served from the same origin as the application - to anyone holding
+    a public link, in the case of a published page. Without this, uploading an
+    HTML file and sending somebody its perfectly ordinary-looking link is
+    scripting on this site: the sandbox denies the response an origin of its
+    own, and anything that is not an image or a PDF is not rendered at all.
+    """
+    declared = (attachment.content_type or "").split(";")[0].strip().lower()
+    renderable = declared.startswith(INLINE_PREFIX) or declared in INLINE_TYPES
+    media_type = declared if renderable else "application/octet-stream"
+    disposition = "inline" if renderable else "attachment"
+    return media_type, {
+        "Content-Disposition": (
+            f"{disposition}; filename*=UTF-8''{quote(attachment.filename)}"
+        ),
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox",
+    }
+
 
 def _storage(request: Request) -> ObjectStorage:
     storage: ObjectStorage | None = getattr(request.app.state, "storage", None)
@@ -165,16 +194,13 @@ async def download_attachment(
     except Exception as exc:  # noqa: BLE001
         logger.warning("attachment %s missing in storage: %s", attachment.id, exc)
         raise HTTPException(status_code=404, detail="File not found in storage")
-    filename = quote(attachment.filename)
-    headers = {
-        "Content-Disposition": f"inline; filename*=UTF-8''{filename}",
-        "Cache-Control": "private, max-age=3600",
-    }
+    media_type, headers = serve_headers(attachment)
+    headers["Cache-Control"] = "private, max-age=3600"
     if obj.size:
         headers["Content-Length"] = str(obj.size)
     return StreamingResponse(
         obj.stream,
-        media_type=attachment.content_type,
+        media_type=media_type,
         headers=headers,
         background=BackgroundTask(obj.close),
     )

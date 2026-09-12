@@ -36,6 +36,7 @@ class Embedder(Protocol):
     """Just the part of the embedding client retrieval needs."""
 
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
+    async def embed_query(self, text: str) -> list[float]: ...
 
 
 class LexicalSearch(Protocol):
@@ -177,8 +178,9 @@ async def retrieve(
 
     dense_query: list[float] | None = None
     if use_vector:
-        # One embedding call serves every vector target.
-        dense_query = (await embeddings.embed([query]))[0]
+        # One embedding call serves every vector target, and a repeat of the
+        # same query costs nothing at all.
+        dense_query = await embeddings.embed_query(query)
 
     async def run_one(
         method: SearchMethod, target: str

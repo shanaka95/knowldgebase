@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from sqlmodel import Session, col, func, select
 
@@ -92,11 +92,99 @@ def to_namespace_public(
         owner_id=namespace.owner_id,
         owner=user_ref(owner),
         my_role=role,
+        # Said plainly rather than left for the interface to work out, which it
+        # could only do by comparing ids it would otherwise not need.
+        shared_with_you=namespace.owner_id != user.id,
         document_count=document_count,
         member_count=member_count,
         created_at=namespace.created_at,
         updated_at=namespace.updated_at,
     )
+
+
+def to_namespace_publics(
+    session: Session,
+    user: User,
+    namespaces: Sequence[Namespace],
+) -> list[NamespacePublic]:
+    """Serialise a list of spaces in a fixed number of queries.
+
+    ``to_namespace_public`` runs three queries per space - page count, member
+    count, owner - which is fine for one space and is 3N queries for a list.
+    Somebody with forty spaces was paying a hundred and twenty round trips to
+    open the space switcher. These are the same numbers, gathered once.
+    """
+    if not namespaces:
+        return []
+
+    ids = [ns.id for ns in namespaces]
+
+    roles: dict[uuid.UUID, NamespaceRole | None] = {}
+    if user.is_superuser:
+        roles = {ns.id: NamespaceRole.admin for ns in namespaces}
+    else:
+        memberships = session.exec(
+            select(NamespaceMember).where(
+                col(NamespaceMember.namespace_id).in_(ids),
+                NamespaceMember.user_id == user.id,
+            )
+        ).all()
+        by_namespace = {m.namespace_id: m.role for m in memberships}
+        for ns in namespaces:
+            roles[ns.id] = (
+                NamespaceRole.admin
+                if ns.owner_id == user.id
+                else by_namespace.get(ns.id)
+            )
+
+    # Page counts stay scoped to the caller, exactly as the single-space path
+    # does: a share on one page must not reveal how much else is in the space.
+    page_counts: dict[uuid.UUID, int] = dict(
+        session.exec(
+            select(Document.namespace_id, func.count())
+            .where(
+                col(Document.namespace_id).in_(ids),
+                accessible_documents_filter(session, user),
+            )
+            .group_by(col(Document.namespace_id))
+        ).all()
+    )
+
+    member_counts: dict[uuid.UUID, int] = dict(
+        session.exec(
+            select(NamespaceMember.namespace_id, func.count())
+            .where(col(NamespaceMember.namespace_id).in_(ids))
+            .group_by(col(NamespaceMember.namespace_id))
+        ).all()
+    )
+
+    owners = user_refs_by_id(session, [ns.owner_id for ns in namespaces])
+
+    return [
+        NamespacePublic(
+            id=ns.id,
+            name=ns.name,
+            slug=ns.slug,
+            description=ns.description,
+            icon=ns.icon,
+            color=ns.color,
+            owner_id=ns.owner_id,
+            owner=owners.get(ns.owner_id),
+            my_role=roles.get(ns.id),
+            shared_with_you=ns.owner_id != user.id,
+            document_count=page_counts.get(ns.id, 0),
+            # None for somebody who only holds shares on individual pages: they
+            # are not a member, so the size of the membership is not theirs.
+            member_count=(
+                member_counts.get(ns.id, 0) + 1
+                if roles.get(ns.id) is not None
+                else None
+            ),
+            created_at=ns.created_at,
+            updated_at=ns.updated_at,
+        )
+        for ns in namespaces
+    ]
 
 
 def role_for_documents(
@@ -118,9 +206,14 @@ def to_document_summary(
         id=document.id,
         namespace_id=document.namespace_id,
         namespace_slug=document.namespace.slug if document.namespace else None,
+        namespace_name=document.namespace.name if document.namespace else None,
         folder_id=document.folder_id,
         title=document.title,
         doc_type=document.doc_type,
+        # Without this the interface cannot tell a published page from an
+        # unpublished one, and the "share by link" switch reads as off on a page
+        # whose link is live.
+        public_slug=document.public_slug,
         version=document.version,
         created_by=document.created_by,
         updated_by=document.updated_by,

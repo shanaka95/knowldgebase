@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import time
+from collections import OrderedDict
+
 import httpx
 
 from app.core.config import settings
@@ -8,6 +11,11 @@ from app.services.model_client import (
     make_http_client,
     post_json_with_cold_start_retry,
 )
+
+# A search query is embedded and re-embedded far more often than it changes.
+# Small and short-lived on purpose: this is a latency cache, not a store.
+QUERY_CACHE_MAX = 512
+QUERY_CACHE_TTL_SECONDS = 600.0
 
 
 class EmbeddingDimensionError(ModelServerError):
@@ -27,6 +35,11 @@ class EmbeddingClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
+        # Query text -> (when it was embedded, the vector). An ordered dict so
+        # the oldest entry is the one evicted.
+        self._query_cache: OrderedDict[tuple[str, str], tuple[float, list[float]]] = (
+            OrderedDict()
+        )
         self.dim = dim
         self.batch_size = max(1, batch_size)
         self.max_chars = max_chars
@@ -77,3 +90,33 @@ class EmbeddingClient:
         for start in range(0, len(texts), self.batch_size):
             out.extend(await self.embed_batch(texts[start : start + self.batch_size]))
         return out
+
+    async def embed_query(self, text: str) -> list[float]:
+        """Embed one search query, reusing a recent answer for the same text.
+
+        This is the slowest single step in a search: measured against the hosted
+        model it ranged from 0.8 to 4.8 seconds, and it happens before anything
+        else can run. The same query text is embedded again constantly - a
+        person paging results or toggling a filter, and Ask, which embeds the
+        question once to find pages and again to find the sections inside them.
+
+        Safe to cache because it is a pure function of (model, text), and the
+        model is pinned per deployment. Bounded and short-lived, so it never
+        becomes a place where memory or stale vectors accumulate.
+        """
+        key = (self.model, text)
+        now = time.monotonic()
+        hit = self._query_cache.get(key)
+        if hit is not None:
+            stored_at, vector = hit
+            if now - stored_at < QUERY_CACHE_TTL_SECONDS:
+                # Refresh its position so the useful entries survive eviction.
+                self._query_cache.move_to_end(key)
+                return vector
+            del self._query_cache[key]
+
+        vector = (await self.embed([text]))[0]
+        self._query_cache[key] = (now, vector)
+        while len(self._query_cache) > QUERY_CACHE_MAX:
+            self._query_cache.popitem(last=False)
+        return vector

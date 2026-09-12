@@ -57,6 +57,21 @@ def get_user_by_email(*, session: Session, email: str) -> User | None:
     return session_user
 
 
+def get_confirmed_user_by_email(*, session: Session, email: str) -> User | None:
+    """The account that has *proved* it owns this address, if there is one.
+
+    Anybody may register any address, so a row whose ``email_verified_at`` is
+    unset says only that somebody typed it. Handing that account a share would
+    give someone else's mail a page meant for the person who reads it, which is
+    why sharing looks accounts up this way: access goes to a confirmed identity
+    or to nobody, and an unconfirmed address takes the invitation path instead.
+    """
+    user = get_user_by_email(session=session, email=email)
+    if user is None or user.email_verified_at is None:
+        return None
+    return user
+
+
 # Dummy hash to use for timing attack prevention when user is not found
 # This is an Argon2 hash of a random password, used to ensure constant-time comparison
 DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$MjQyZWE1MzBjYjJlZTI0Yw$YTU4NGM5ZTZmYjE2NzZlZjY0ZWY3ZGRkY2U2OWFjNjk"

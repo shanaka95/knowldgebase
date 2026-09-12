@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     QDRANT_URL: HttpUrl = HttpUrl("http://localhost:6333")
     QDRANT_COLLECTION: str = "kb_documents"
     QDRANT_TIMEOUT_SECONDS: float = 10.0
+    # Qdrant holds every user's embeddings and the payloads beside them, and it
+    # answers anyone who can reach it. On a single host that is "anything else
+    # on the container network", which is not the same as nobody. Empty in
+    # development, where nothing else is on the network.
+    QDRANT_API_KEY: str = ""
 
     # --- Object storage (MinIO) ---------------------------------------------
     MINIO_ENDPOINT: str = "localhost:9000"

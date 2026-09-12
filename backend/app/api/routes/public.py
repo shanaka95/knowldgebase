@@ -22,11 +22,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import SessionDep, StorageDep
+from app.api.routes.attachments import serve_headers
 from app.core.config import settings
 from app.models import (
     Attachment,
     Document,
     InvitationPreview,
+    Namespace,
     PublicDocument,
     User,
 )
@@ -109,16 +111,15 @@ def read_public_attachment(
         raise HTTPException(status_code=404, detail="Not found")
 
     stored = storage.open(attachment.object_key)
+    media_type, headers = serve_headers(attachment)
+    # Public, but not indexed: a shared link is meant for the people it was sent
+    # to, not for a search engine.
+    headers["Cache-Control"] = "public, max-age=300"
+    headers["X-Robots-Tag"] = "noindex"
     return StreamingResponse(
         stored.stream,
-        media_type=attachment.content_type,
-        headers={
-            # Public, but not indexed: a shared link is meant for the people it
-            # was sent to, not for a search engine.
-            "Cache-Control": "public, max-age=300",
-            "X-Robots-Tag": "noindex",
-            "Content-Disposition": f'inline; filename="{attachment.filename}"',
-        },
+        media_type=media_type,
+        headers=headers,
         background=None,
     )
 
@@ -140,13 +141,31 @@ def read_invitation(session: SessionDep, token: str) -> Any:
             detail="This invitation has expired. Ask for a new one.",
         )
 
+    inviter = session.get(User, record.invited_by) if record.invited_by else None
+
+    if record.namespace_id is not None:
+        namespace = session.get(Namespace, record.namespace_id)
+        if namespace is None:
+            raise HTTPException(
+                status_code=404, detail="The shared space no longer exists"
+            )
+        return InvitationPreview(
+            email=record.email,
+            target="space",
+            namespace_id=namespace.id,
+            document_title=namespace.name,
+            shared_by=sharing.display_name(inviter),
+            role=record.role,
+            expires_at=record.expires_at,
+            already_accepted=record.accepted_at is not None,
+        )
+
     document = session.get(Document, record.document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="The shared page no longer exists")
-    inviter = session.get(User, record.invited_by) if record.invited_by else None
-
     return InvitationPreview(
         email=record.email,
+        target="page",
         document_id=document.id,
         document_title=document.title,
         shared_by=sharing.display_name(inviter),

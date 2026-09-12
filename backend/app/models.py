@@ -160,6 +160,7 @@ class UserUpdate(SQLModel):
     full_name: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
+    max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
 
 
 class UserUpdateMe(SQLModel):
@@ -191,6 +192,9 @@ class User(UserBase, table=True):
     # invitations that have not been accepted yet. Per account rather than
     # global so it can follow a plan later without another migration.
     max_shares_per_document: int = Field(default=50)
+    # The same idea for a whole space. Separate from the per-page limit because
+    # they are different decisions: a space is a bigger thing to hand over.
+    max_members_per_space: int = Field(default=50)
 
     namespaces: list[Namespace] = Relationship(
         back_populates="owner", cascade_delete=True
@@ -203,6 +207,7 @@ class UserPublic(UserBase):
     created_at: datetime | None = None
     email_verified_at: datetime | None = None
     max_shares_per_document: int = 50
+    max_members_per_space: int = 50
 
 
 class UsersPublic(SQLModel):
@@ -275,6 +280,9 @@ class NamespacePublic(NamespaceBase):
     owner_id: uuid.UUID
     owner: UserRef | None = None
     my_role: NamespaceRole | None = None
+    # True when this space belongs to somebody else and was shared with you.
+    # Derived here so the interface does not have to know who you are to say so.
+    shared_with_you: bool = False
     document_count: int = 0
     # None when the caller only holds shares on individual pages: they are
     # not a member, so the size of the membership is not theirs to know.
@@ -553,6 +561,9 @@ class DocumentSummaryPublic(SQLModel):
     id: uuid.UUID
     namespace_id: uuid.UUID
     namespace_slug: str | None = None
+    # The space this page lives in, by name. A page shared on its own shows the
+    # space it came from without granting any access to it.
+    namespace_name: str | None = None
     folder_id: uuid.UUID | None = None
     title: str
     doc_type: str | None = None
@@ -609,6 +620,14 @@ class NamespaceTree(SQLModel):
 
 
 class SharedWithMe(SQLModel):
+    """What other people have given this account access to.
+
+    Two different things, kept apart on purpose. A *space* shared with you
+    covers everything in it, now and later. A *page* shared with you is one
+    page, and the space around it stays invisible. Anyone deciding what they can
+    safely edit needs to know which of the two they are looking at.
+    """
+
     namespaces: list[NamespacePublic]
     documents: list[DocumentSummaryPublic]
 
@@ -646,13 +665,22 @@ class ShareInvitation(SQLModel, table=True):
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    document_id: uuid.UUID = Field(
-        foreign_key="document.id", nullable=False, ondelete="CASCADE", index=True
+    # Exactly one of these is set. A page and a space are different grants but
+    # the same promise, and giving them one redemption path means an address
+    # confirmed once collects everything waiting for it.
+    document_id: uuid.UUID | None = Field(
+        default=None, foreign_key="document.id", ondelete="CASCADE", index=True
+    )
+    namespace_id: uuid.UUID | None = Field(
+        default=None, foreign_key="namespace.id", ondelete="CASCADE", index=True
     )
     # Stored lowercased: addresses are matched, not displayed, and a person who
     # was invited as "Sam@Example.com" signs up as "sam@example.com".
     email: str = Field(max_length=255)
-    role: ShareRole = Field(default=ShareRole.viewer, sa_type=String(32))  # type: ignore
+    # A page invitation carries a ShareRole (viewer/editor); a space invitation
+    # carries a NamespaceRole (viewer/editor/admin). Stored as text, read back
+    # according to which id is set.
+    role: str = Field(default="viewer", sa_type=String(32))  # type: ignore
     invited_by: uuid.UUID | None = Field(
         default=None, foreign_key="user.id", ondelete="SET NULL"
     )
@@ -668,25 +696,57 @@ class ShareInvitation(SQLModel, table=True):
 class ShareInvitationPublic(SQLModel):
     id: uuid.UUID
     email: str
-    role: ShareRole
+    role: str
     expires_at: datetime
     created_at: datetime | None = None
+    # "page" or "space", so one list can show both without guessing.
+    target: str = "page"
 
 
 class InvitationPreview(SQLModel):
     """What the landing page shows somebody who followed an invitation link.
 
-    Deliberately thin. Whoever holds the link already knows they were sent a
-    page; they should not learn anything else about the account that sent it.
+    Deliberately thin. Whoever holds the link already knows what they were sent;
+    they should not learn anything else about the account that sent it.
     """
 
     email: str
-    document_id: uuid.UUID
+    # "page" or "space".
+    target: str = "page"
+    document_id: uuid.UUID | None = None
+    namespace_id: uuid.UUID | None = None
+    # The page's title, or the space's name.
     document_title: str
     shared_by: str  # a name, or the address if no name was set
-    role: ShareRole
+    role: str
     expires_at: datetime
     already_accepted: bool = False
+
+
+class ShareSkipped(SQLModel):
+    email: str
+    reason: str
+
+
+class SpaceShareEmails(SQLModel):
+    """Share a whole space with several addresses at once.
+
+    The same shape as sharing a page, deliberately: the two are the same act at
+    different scales, and an interface that treats them differently makes people
+    learn two things instead of one.
+    """
+
+    emails: list[EmailStr] = Field(min_length=1, max_length=50)
+    role: NamespaceRole = NamespaceRole.viewer
+    message: str | None = Field(default=None, max_length=1000)
+
+
+class SpaceShareResult(SQLModel):
+    shared: list[NamespaceMemberPublic] = []
+    invited: list[ShareInvitationPublic] = []
+    skipped: list[ShareSkipped] = []
+    members: int = 0
+    max_members: int = 0
 
 
 class ShareEmails(SQLModel):
@@ -703,11 +763,6 @@ class ShareEmails(SQLModel):
     # it is quoted into a message sent on their behalf, so it must not be able
     # to carry markup into somebody else's mail client.
     message: str | None = Field(default=None, max_length=1000)
-
-
-class ShareSkipped(SQLModel):
-    email: str
-    reason: str
 
 
 class ShareResult(SQLModel):

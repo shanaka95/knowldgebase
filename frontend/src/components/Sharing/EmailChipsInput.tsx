@@ -1,5 +1,4 @@
 import { UserPlus, X } from "lucide-react"
-import { useState } from "react"
 import { z } from "zod"
 
 import type { UserRef } from "@/client"
@@ -32,6 +31,13 @@ export interface ChipLookup {
 interface EmailChipsInputProps {
   emails: string[]
   onChange: (emails: string[]) => void
+  /**
+   * The address still being typed. Owned by the caller so that pressing Share
+   * without pressing Enter first still sends it — and so that a dialog bouncing
+   * focus around cannot chop a half-typed address into two chips.
+   */
+  draft: string
+  onDraftChange: (draft: string) => void
   /** Lookup outcome per address, keyed by the address itself. */
   lookups: Map<string, ChipLookup>
   disabled?: boolean
@@ -118,17 +124,17 @@ function Chip({
 export function EmailChipsInput({
   emails,
   onChange,
+  draft,
+  onDraftChange,
   lookups,
   disabled,
   placeholder = "colleague@company.com",
   "data-testid": testId,
 }: EmailChipsInputProps) {
-  const [draft, setDraft] = useState("")
-
   const commit = (raw: string) => {
     const candidates = splitCandidates(raw)
     if (candidates.length === 0) {
-      setDraft("")
+      onDraftChange("")
       return
     }
     const next = [...emails]
@@ -137,7 +143,7 @@ export function EmailChipsInput({
       if (!next.includes(value)) next.push(value)
     }
     onChange(next)
-    setDraft("")
+    onDraftChange("")
   }
 
   const remove = (email: string) => onChange(emails.filter((e) => e !== email))
@@ -170,7 +176,7 @@ export function EmailChipsInput({
         onChange={(e) => {
           // A comma ends an address wherever it lands, including mid-paste.
           if (e.target.value.includes(",")) commit(e.target.value)
-          else setDraft(e.target.value)
+          else onDraftChange(e.target.value)
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === "," || e.key === "Tab") {
@@ -182,7 +188,7 @@ export function EmailChipsInput({
             // Take the last chip back into the field so a typo can be fixed.
             const last = emails[emails.length - 1]
             onChange(emails.slice(0, -1))
-            setDraft(last)
+            onDraftChange(last)
           }
         }}
         onPaste={(e) => {
@@ -191,7 +197,6 @@ export function EmailChipsInput({
           e.preventDefault()
           commit(`${draft}${text}`)
         }}
-        onBlur={() => draft.trim() !== "" && commit(draft)}
       />
     </label>
   )

@@ -11,6 +11,7 @@ import { openDialog } from "@/stores/dialogs"
 import { getInitials } from "@/utils"
 import { NamespaceIcon } from "./NamespaceIcon"
 import { RoleBadge } from "./RoleBadge"
+import { SharedSpaceBadge } from "./SharedSpaceBadge"
 
 export function NamespaceHeader({ namespace }: { namespace: NamespacePublic }) {
   const isAdmin = canAdminNamespace(namespace)
@@ -21,7 +22,10 @@ export function NamespaceHeader({ namespace }: { namespace: NamespacePublic }) {
   const people = members?.data ?? []
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div
+      className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+      data-testid="space-header"
+    >
       <div className="flex min-w-0 items-start gap-4">
         <NamespaceIcon
           icon={namespace.icon}
@@ -37,6 +41,7 @@ export function NamespaceHeader({ namespace }: { namespace: NamespacePublic }) {
               {namespace.name}
             </h1>
             <RoleBadge role={namespace.my_role} />
+            <SharedSpaceBadge shared={namespace.shared_with_you} withLabel />
           </div>
           {namespace.description && (
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -48,6 +53,11 @@ export function NamespaceHeader({ namespace }: { namespace: NamespacePublic }) {
               {namespace.document_count ?? 0} page
               {namespace.document_count === 1 ? "" : "s"}
             </span>
+            {namespace.shared_with_you && namespace.owner && (
+              <span data-testid="space-owner">
+                Owned by {namespace.owner.full_name || namespace.owner.email}
+              </span>
+            )}
             {people.length > 0 && (
               <span className="flex items-center gap-1.5">
                 <span className="flex -space-x-1.5">

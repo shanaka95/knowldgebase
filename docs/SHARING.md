@@ -1,18 +1,42 @@
-# Sharing a page
+# Sharing
 
-Four ways to let somebody else read a page, and one rule that runs through all
-of them: **access is granted to a confirmed identity, or to nobody.**
+Ways to let somebody else in, and one rule that runs through all of them:
+**access is granted to a confirmed identity, or to nobody.**
+
+A **page** and a **space** are shared the same way, deliberately - the same
+request shape, the same three outcomes, the same invitation machinery - because
+they are the same act at different scales, and an interface that treats them
+differently makes people learn two things instead of one.
+
+What differs is how much is being handed over. A page is one page. A space is
+everything in it, **including pages added later**, which is why sharing a space
+needs space admin while sharing a page needs only editor.
 
 | | Who gets in | How access ends |
 |---|---|---|
-| Share with a person | one account, named by email | the share is removed |
-| Invite an address | nobody yet - it becomes a share when that address is confirmed on an account | the invitation is withdrawn, or it expires |
-| Share by link | anyone holding the link, without signing in | the link is withdrawn |
+| Share a page with a person | one account, named by email | the share is removed |
+| Share a space with a person | one account; everything in the space, now and later | they are removed from the space |
+| Invite an address | nobody yet - it becomes access when that address is confirmed on an account | the invitation is withdrawn, or it expires |
+| Share a page by link | anyone holding the link, without signing in | the link is withdrawn |
 | Copy | nobody - the copy belongs to whoever made it | not applicable |
 
-A share is a grant on **one page**. It never gives access to the space around
-it, the folder it sits in, or anything beside it. That is asserted directly in
-`tests/api/routes/test_isolation.py::test_sharing_one_page_does_not_share_the_space`.
+Sharing a **page** is a grant on that page alone. It never gives access to the
+space around it, the folder it sits in, or anything beside it. That is asserted
+in `tests/api/routes/test_isolation.py::test_sharing_one_page_does_not_share_the_space`.
+
+## Telling the two apart
+
+Somebody who has been given things needs to know which kind each one is, so the
+API says so rather than leaving it to be inferred:
+
+* `NamespacePublic.shared_with_you` is true for a space that belongs to somebody
+  else. Shared spaces still appear in the space list and are still selectable -
+  they are yours to work in - but they are marked, because writing into one puts
+  content in another person's knowledge base.
+* `SharedWithMe` returns `namespaces` and `documents` separately. A whole space
+  and a single page are different grants with different risks.
+* A page shared on its own carries `namespace_name`, so it can be shown where it
+  came from without that granting any access to the space.
 
 ## Finding the person
 
@@ -29,6 +53,9 @@ a complete address before it asks.
 ```
 POST /documents/{id}/shares/batch
   { "emails": [...], "role": "viewer" | "editor", "message": "optional note" }
+
+POST /namespaces/{id}/members/batch
+  { "emails": [...], "role": "viewer" | "editor" | "admin", "message": "..." }
 ```
 
 Batched, because the interface asks for several addresses at once and has to
@@ -49,10 +76,14 @@ if treated casually.
 
 ### How many people
 
-A page can be shared with at most `user.max_shares_per_document` people -
-**50 by default, and set per account** so it can follow a plan later without
-another migration. The limit belongs to whoever owns the space the page lives
-in: it is their content being distributed, whoever pressed the button.
+A page can be shared with at most `user.max_shares_per_document` people, and a
+space with at most `user.max_members_per_space` - **50 each by default, and set
+per account** so they can follow a plan later without another migration. They
+are separate numbers because they are separate decisions: a space is a bigger
+thing to hand over.
+
+The limit belongs to whoever owns the space: it is their content being
+distributed, whoever pressed the button.
 
 Pending invitations count towards it. Otherwise a thousand invitations would
 slip under a limit of two and only bite once people started signing up.
@@ -145,7 +176,9 @@ An assistant sees exactly what its key's owner sees, and is told which is which:
 | `list_shared_with_you` | pages other people shared, marked `shared_with_you` with `your_role` |
 | `list_people_with_access` | who has access, and who is only invited |
 | `share_page` | share by email, inviting anyone without an account |
-| `unshare_page` | remove one person's access |
+| `share_space` | share a whole space, with a warning that it is the bigger grant |
+| `list_space_members` | who is in a space, and who is only invited |
+| `unshare_page` / `remove_from_space` | remove one person's access |
 | `share_page_by_link` / `stop_sharing_by_link` | publish and withdraw, with an explicit warning |
 | `read_public_page` | read a page shared by link, even one belonging to somebody else |
 | `clone_page` | take a private copy |
@@ -155,10 +188,16 @@ an assistant handed a link can read it without being given an account.
 
 ## What is tested
 
-`tests/api/routes/test_sharing.py` (43 tests) covers all of it, including the
+`tests/api/routes/test_sharing.py` (55 tests) covers all of it, including the
 cases where the answer must be *no*: an invitation grants nothing on its own,
 registering with a different address grants nothing, an expired or withdrawn
 invitation does nothing, a withdrawn link stops working immediately, a
 re-published page gets a new link, publishing one page does not publish its
 neighbours or the space's files, a guest editor cannot publish, a copy is
 invisible to the original's owner, and nobody can copy a page they cannot read.
+
+For spaces it also covers the cases that must be *yes*: a shared space appears
+in the space list marked as somebody else's, covers pages added after the share,
+and shows up under "Shared with me" as a space rather than a heap of pages. And
+the ones that must be *no*: only an admin may share a space onwards, the owner
+is skipped rather than demoted, and a withdrawn space invitation stops working.

@@ -19,7 +19,7 @@ from app.api.serializers import (
     to_document_public,
     to_document_summary,
     to_job_public,
-    to_namespace_public,
+    to_namespace_publics,
     user_ref,
 )
 from app.core.config import settings
@@ -161,7 +161,7 @@ def read_shared_with_me(session: SessionDep, auth: AuthDep) -> Any:
         .order_by(col(Document.updated_at).desc())
     ).all()
     return SharedWithMe(
-        namespaces=[to_namespace_public(session, auth.user, ns) for ns in member_ns],
+        namespaces=to_namespace_publics(session, auth.user, member_ns),
         documents=[to_document_summary(d, ShareRole(role)) for d, role in shared_docs],
     )
 
@@ -420,6 +420,7 @@ def clone_document(
         source_namespace_id=source.namespace_id,
         target_namespace_id=target_ns.id,
         uploader_id=auth.user.id,
+        reader=auth.user,
     )
     title = (body.title or f"{source.title} (copy)").strip()[:300]
 
@@ -498,7 +499,7 @@ def share_document(
         raise HTTPException(
             status_code=403, detail="Only space editors can share documents"
         )
-    user = crud.get_user_by_email(session=session, email=share_in.email)
+    user = crud.get_confirmed_user_by_email(session=session, email=share_in.email)
     if user is None:
         # Not an error any more: the address simply has no account yet, so it
         # gets an invitation. Callers that want to know which happened should
@@ -564,7 +565,7 @@ async def share_document_with_many(
         )
     namespace = session.get(Namespace, document.namespace_id)
     sharer = sharing.display_name(auth.user)
-    link = sharing.document_url(document.id)
+    link = sharing.document_url(document.id, namespace.slug if namespace else None)
 
     # The ceiling belongs to whoever owns the space this page lives in: it is
     # their content being distributed, whoever pressed the button.
@@ -599,7 +600,7 @@ async def share_document_with_many(
             )
             continue
 
-        user = crud.get_user_by_email(session=session, email=address)
+        user = crud.get_confirmed_user_by_email(session=session, email=address)
 
         if user is not None:
             if (
@@ -650,7 +651,9 @@ async def share_document_with_many(
             )
             continue
 
-        was_pending = sharing.pending_invitation(session, document.id, address)
+        was_pending = sharing.pending_invitation(
+            session, address, document_id=document.id
+        )
         record, token = sharing.invite(
             session,
             document=document,
@@ -667,6 +670,7 @@ async def share_document_with_many(
                 role=record.role,
                 expires_at=record.expires_at,
                 created_at=record.created_at,
+                target="page",
             )
         )
         await _deliver_quietly(
@@ -706,6 +710,7 @@ def read_document_invitations(
             role=r.role,
             expires_at=r.expires_at,
             created_at=r.created_at,
+            target="page",
         )
         for r in rows
     ]

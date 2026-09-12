@@ -25,6 +25,8 @@ async function freshUserPage(
   return page
 }
 
+// The space side of the share dialog is the same composer as the page side and
+// is covered end to end in space-sharing.spec.ts.
 test.describe("Sharing", () => {
   test("share a page as viewer via the dialog, then upgrade to editor", async ({
     page,
@@ -172,35 +174,6 @@ test.describe("Sharing", () => {
     await memberPage.goto(`/s/${ns.slug}`)
     await expect(memberPage.getByTestId("not-found-state")).toBeVisible()
     await memberPage.context().close()
-  })
-
-  test("Share dialog for a space adds members with the chosen role", async ({
-    page,
-    request,
-  }) => {
-    const token = await adminToken(request)
-    const ns = await createNamespace(request, token)
-    const member = await createTestUser(request)
-    await page.goto(`/s/${ns.slug}`)
-    await page.getByTestId("space-share").click()
-    const dialog = page.getByTestId("share-dialog")
-    await expect(dialog).toContainText(`Share space “${ns.name}”`)
-    await expect(dialog.getByTestId("share-row")).toContainText("Owner")
-    await dialog.getByTestId("share-email").fill(member.email)
-    await dialog.getByTestId("share-role").click()
-    await page.getByRole("option", { name: "Admin" }).click()
-    await dialog.getByTestId("share-submit").click()
-    await expect(page.getByText("Access granted")).toBeVisible()
-    const members = await (
-      await request.get(`${API}/namespaces/${ns.id}/members`, {
-        headers: auth(token),
-      })
-    ).json()
-    expect(
-      members.data.find(
-        (m: { user: { email: string } }) => m.user.email === member.email,
-      ).role,
-    ).toBe("admin")
   })
 
   test("an address with no account is invited rather than refused", async ({

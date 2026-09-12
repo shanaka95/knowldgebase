@@ -17,6 +17,7 @@ from app.api.deps import (
 )
 from app.api.routes.login import send_verification_email
 from app.api.serializers import user_ref
+from app.core import authcodes
 from app.core.config import settings
 from app.core.security import (
     create_access_token,
@@ -24,6 +25,7 @@ from app.core.security import (
     verify_password,
 )
 from app.models import (
+    AuthCodePurpose,
     Message,
     TokenMessage,
     UpdatePassword,
@@ -107,13 +109,19 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
 
 
 @router.patch("/me", response_model=UserPublic)
-def update_user_me(
+async def update_user_me(
     *, session: SessionDep, user_in: UserUpdateMe, current_user: SessionUser
 ) -> Any:
-    """
-    Update own user.
-    """
+    """Update own user.
 
+    Moving to a different address leaves that address **unconfirmed** until a
+    link sent to it is answered, exactly as at sign-up. Being signed in proves
+    control of the account, never of an address somebody typed into it - and
+    the address is the account's identity everywhere else: sharing looks
+    accounts up by it, so an address accepted on an authenticated PATCH alone
+    would let anyone claim somebody else's and be handed their pages.
+    """
+    moved = bool(user_in.email) and user_in.email != current_user.email
     if user_in.email:
         existing_user = crud.get_user_by_email(session=session, email=user_in.email)
         if existing_user and existing_user.id != current_user.id:
@@ -122,9 +130,21 @@ def update_user_me(
             )
     user_data = user_in.model_dump(exclude_unset=True)
     current_user.sqlmodel_update(user_data)
+    if moved:
+        current_user.email_verified_at = None
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
+    if moved and (
+        authcodes.recent_send_count(
+            session, current_user.id, AuthCodePurpose.verify_email
+        )
+        < settings.AUTH_CODE_MAX_SENDS
+    ):
+        # Capped like every other send: the address is whatever the caller just
+        # typed, so without this, changing it in a loop points the product's own
+        # mail at somebody else's inbox.
+        await send_verification_email(session, current_user)
     return current_user
 
 
@@ -169,7 +189,12 @@ def lookup_user(
     auth: AuthDep,  # noqa: ARG001 - signed in, so this cannot be probed anonymously
     email: EmailStr,
 ) -> Any:
-    """Does this exact address have an account here?
+    """Does this exact address have a confirmed account here?
+
+    Confirmed, because that is what sharing will do with the answer: an address
+    whose account never answered a confirmation gets an invitation, not access,
+    and a dialog that promised otherwise would be lying about where the page is
+    about to go.
 
     Used by the share dialog to show who a page is about to go to. **Exact
     matches only, never prefixes**: confirming one address somebody already
@@ -179,7 +204,7 @@ def lookup_user(
     An address with no account is not an error - it can still be invited.
     """
     address = email.strip().lower()
-    user = crud.get_user_by_email(session=session, email=address)
+    user = crud.get_confirmed_user_by_email(session=session, email=address)
     return UserLookup(
         email=address,
         exists=user is not None,

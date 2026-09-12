@@ -342,13 +342,17 @@ def verify_email(session: SessionDep, body: EmailVerificationConfirm) -> Any:
     # Anything shared with this address before the account existed becomes real
     # access now, and not a moment earlier: confirming the address is what
     # proves the person holding this account is the one it was shared with.
-    granted = sharing.redeem_for(session, user)
-    if granted:
+    pages, spaces = sharing.redeem_for(session, user)
+    waiting = []
+    if pages:
+        waiting.append(f"{pages} page{'s' if pages != 1 else ''}")
+    if spaces:
+        waiting.append(f"{spaces} space{'s' if spaces != 1 else ''}")
+    if waiting:
         return Message(
             message=(
-                "Your email address is confirmed, and "
-                f"{len(granted)} page{'s' if len(granted) != 1 else ''} shared "
-                "with you is waiting. You can sign in now."
+                f"Your email address is confirmed, and {' and '.join(waiting)} "
+                "shared with you is waiting. You can sign in now."
             )
         )
     return Message(message="Your email address is confirmed. You can sign in now.")

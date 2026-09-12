@@ -50,7 +50,12 @@ function Dashboard() {
   return (
     <PageContainer className="flex flex-col gap-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        {/*
+          min-w-0 so the greeting can actually truncate: a flex item defaults to
+          min-width:auto and refuses to shrink below its text, which pushed the
+          buttons off the right of the page at tablet widths.
+        */}
+        <div className="min-w-0">
           <h1
             className="max-w-xl truncate text-2xl font-semibold tracking-tight"
             data-testid="dashboard-greeting"
@@ -61,7 +66,9 @@ function Dashboard() {
             Pick up where you left off, or start something new.
           </p>
         </div>
-        <QuickCreate />
+        <div className="shrink-0">
+          <QuickCreate />
+        </div>
       </div>
 
       <WorkerBanner />

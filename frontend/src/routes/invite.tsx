@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router"
-import { CircleCheck, FileText } from "lucide-react"
+import { CircleCheck, FileText, FolderKanban } from "lucide-react"
 import { z } from "zod"
 
 import { AuthAlert } from "@/components/Common/AuthAlert"
@@ -8,7 +8,10 @@ import { AuthLayout } from "@/components/Common/AuthLayout"
 import { APP_NAME } from "@/components/Common/Logo"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { rememberInvitedDocument } from "@/hooks/usePendingInvite"
+import {
+  type PendingInvite,
+  rememberInvitedTarget,
+} from "@/hooks/usePendingInvite"
 import { shortDate } from "@/lib/format"
 import { invitationPreviewQuery } from "@/queries/sharing"
 import { extractErrorMessage } from "@/utils"
@@ -80,23 +83,41 @@ function Invite() {
     )
   }
 
+  // An invitation is for one page or for a whole space, and the two grants are
+  // not the same thing; every sentence below names which one this is.
+  const isSpace = invitation.target === "space"
+  const noun = isSpace ? "space" : "page"
+  const pending: PendingInvite | null = invitation.namespace_id
+    ? { type: "namespace", id: invitation.namespace_id }
+    : invitation.document_id
+      ? { type: "document", id: invitation.document_id }
+      : null
+  const remember = () => {
+    if (pending) rememberInvitedTarget(pending)
+  }
+  const ability = isSpace
+    ? ({
+        admin: "read, edit and manage everything in it",
+        editor: "create and edit pages anywhere in it",
+      }[invitation.role] ?? "read every page in it")
+    : invitation.role === "editor"
+      ? "read and edit it"
+      : "read it"
+
   if (invitation.already_accepted) {
     return (
       <AuthLayout>
         <div className="flex flex-col gap-6" data-testid="invite-accepted">
           <div className="flex flex-col items-center gap-2 text-center">
             <CircleCheck className="size-8 text-muted-foreground" />
-            <h1 className="text-2xl font-bold">You already have this page</h1>
+            <h1 className="text-2xl font-bold">You already have this {noun}</h1>
             <p className="text-sm text-muted-foreground">
               “{invitation.document_title}” is waiting in {APP_NAME}. Log in as{" "}
               {invitation.email} to read it.
             </p>
           </div>
           <Button asChild className="w-full">
-            <RouterLink
-              to="/login"
-              onClick={() => rememberInvitedDocument(invitation.document_id)}
-            >
+            <RouterLink to="/login" onClick={remember}>
               Log in
             </RouterLink>
           </Button>
@@ -109,14 +130,22 @@ function Invite() {
     <AuthLayout>
       <div className="flex flex-col gap-6" data-testid="invite-landing">
         <div className="flex flex-col items-center gap-2 text-center">
-          <FileText className="size-8 text-muted-foreground" />
+          {isSpace ? (
+            <FolderKanban className="size-8 text-muted-foreground" />
+          ) : (
+            <FileText className="size-8 text-muted-foreground" />
+          )}
           <h1 className="text-2xl font-bold">
-            {invitation.shared_by} shared “{invitation.document_title}” with you
+            {invitation.shared_by} shared {isSpace ? "the space " : ""}“
+            {invitation.document_title}” with you
           </h1>
           <p className="text-sm text-muted-foreground">
-            Create a {APP_NAME} account on {invitation.email} and the page opens
-            as soon as you confirm that address. You'll be able to{" "}
-            {invitation.role === "editor" ? "read and edit it" : "read it"}.
+            Create a {APP_NAME} account on {invitation.email} and the {noun}{" "}
+            opens as soon as you confirm that address. You'll be able to{" "}
+            {ability}.
+            {isSpace
+              ? " That covers every page in the space, including ones added later."
+              : ""}
           </p>
         </div>
 
@@ -129,7 +158,7 @@ function Invite() {
             <RouterLink
               to="/signup"
               search={{ email: invitation.email }}
-              onClick={() => rememberInvitedDocument(invitation.document_id)}
+              onClick={remember}
             >
               Create an account
             </RouterLink>
@@ -144,7 +173,7 @@ function Invite() {
           <RouterLink
             to="/login"
             className="underline underline-offset-4"
-            onClick={() => rememberInvitedDocument(invitation.document_id)}
+            onClick={remember}
           >
             Log in
           </RouterLink>

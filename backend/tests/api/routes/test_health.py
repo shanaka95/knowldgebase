@@ -89,3 +89,43 @@ def test_workers_endpoint(client: TestClient, db: Session) -> None:
     body = r.json()
     assert {"workers", "any_online", "queued_jobs", "running_jobs"} <= set(body)
     assert client.get(f"{API}/workers/").status_code == 401
+
+
+def test_the_health_report_keeps_its_diagnostics_from_strangers(
+    client: TestClient, db: Session
+) -> None:
+    """A monitor needs the verdict. Nobody needs the database's error text.
+
+    An unhealthy probe reports the host it tried, the port and the user; the
+    worker probe names the container it runs in. This endpoint has no credential
+    behind it, so none of that can be in the anonymous answer.
+    """
+    from tests.utils.kb import create_user_with_password, login
+
+    anonymous = client.get(f"{API}/health/")
+    assert anonymous.status_code == 200
+    body = anonymous.json()
+    assert set(body["services"]) >= {"db", "qdrant", "minio", "worker"}
+    for name, service in body["services"].items():
+        assert "ok" in service and "latency_ms" in service, name
+        assert service["detail"] in (None, "unavailable"), (
+            f"{name} told an anonymous caller {service['detail']!r}"
+        )
+
+    # Somebody with an account still gets the detail they need to debug.
+    user, password = create_user_with_password(db)
+    headers = login(client, user, password)
+    signed_in = client.get(f"{API}/health/", headers=headers)
+    assert signed_in.status_code == 200
+    worker = signed_in.json()["services"]["worker"]
+    assert worker["detail"] is None or worker["detail"] != "unavailable"
+
+
+def test_a_bad_credential_is_treated_as_no_credential_here(
+    client: TestClient,
+) -> None:
+    """This endpoint guards nothing, so a broken token should not 401 a monitor."""
+    r = client.get(f"{API}/health/", headers={"Authorization": "Bearer nonsense"})
+    assert r.status_code == 200
+    for service in r.json()["services"].values():
+        assert service["detail"] in (None, "unavailable")

@@ -104,11 +104,12 @@ test.describe("Sharing a page with several people", () => {
 
     const dialog = await openShareDialog(page, ns.slug, doc.id)
     const input = dialog.getByTestId("share-email")
-    // typing a partial address must not reach the lookup
+    // typing a partial address must not reach the lookup, nor become a chip
     await input.pressSequentially("colle", { delay: 30 })
+    await expect(dialog.getByTestId("share-chip")).toHaveCount(0)
     await expect(dialog.getByTestId("share-submit")).toBeDisabled()
-    await input.press("Enter")
 
+    await input.press("Enter")
     await expect(dialog.getByTestId("share-chip")).toHaveAttribute(
       "data-status",
       "invalid",
@@ -118,6 +119,14 @@ test.describe("Sharing a page with several people", () => {
     )
     await expect(dialog.getByTestId("share-submit")).toBeDisabled()
     expect(lookups).toEqual([])
+
+    // Backspace takes the bad chip back for editing …
+    await input.press("Backspace")
+    await expect(dialog.getByTestId("share-chip")).toHaveCount(0)
+    // … and a complete address can be sent without pressing Enter at all
+    await input.fill("someone@example.com")
+    await expect(dialog.getByTestId("share-submit")).toBeEnabled()
+    await expect.poll(() => lookups).toEqual(["someone@example.com"])
   })
 })
 

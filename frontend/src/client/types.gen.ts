@@ -605,6 +605,10 @@ export type DocumentPublic = {
      */
     namespace_slug?: string | null;
     /**
+     * Namespace Name
+     */
+    namespace_name?: string | null;
+    /**
      * Folder Id
      */
     folder_id?: string | null;
@@ -761,6 +765,10 @@ export type DocumentSummaryPublic = {
      * Namespace Slug
      */
     namespace_slug?: string | null;
+    /**
+     * Namespace Name
+     */
+    namespace_name?: string | null;
     /**
      * Folder Id
      */
@@ -1309,8 +1317,8 @@ export type ImportStatus = 'queued' | 'rendering' | 'parsing' | 'creating' | 'do
  *
  * What the landing page shows somebody who followed an invitation link.
  *
- * Deliberately thin. Whoever holds the link already knows they were sent a
- * page; they should not learn anything else about the account that sent it.
+ * Deliberately thin. Whoever holds the link already knows what they were sent;
+ * they should not learn anything else about the account that sent it.
  */
 export type InvitationPreview = {
     /**
@@ -1318,9 +1326,17 @@ export type InvitationPreview = {
      */
     email: string;
     /**
+     * Target
+     */
+    target?: string;
+    /**
      * Document Id
      */
-    document_id: string;
+    document_id?: string | null;
+    /**
+     * Namespace Id
+     */
+    namespace_id?: string | null;
     /**
      * Document Title
      */
@@ -1329,7 +1345,10 @@ export type InvitationPreview = {
      * Shared By
      */
     shared_by: string;
-    role: ShareRole;
+    /**
+     * Role
+     */
+    role: string;
     /**
      * Expires At
      */
@@ -1504,6 +1523,10 @@ export type NamespacePublic = {
     owner_id: string;
     owner?: UserRef | null;
     my_role?: NamespaceRole | null;
+    /**
+     * Shared With You
+     */
+    shared_with_you?: boolean;
     /**
      * Document Count
      */
@@ -1969,7 +1992,10 @@ export type ShareInvitationPublic = {
      * Email
      */
     email: string;
-    role: ShareRole;
+    /**
+     * Role
+     */
+    role: string;
     /**
      * Expires At
      */
@@ -1978,6 +2004,10 @@ export type ShareInvitationPublic = {
      * Created At
      */
     created_at?: string | null;
+    /**
+     * Target
+     */
+    target?: string;
 };
 
 /**
@@ -2027,6 +2057,13 @@ export type ShareSkipped = {
 
 /**
  * SharedWithMe
+ *
+ * What other people have given this account access to.
+ *
+ * Two different things, kept apart on purpose. A *space* shared with you
+ * covers everything in it, now and later. A *page* shared with you is one
+ * page, and the space around it stays invisible. Anyone deciding what they can
+ * safely edit needs to know which of the two they are looking at.
  */
 export type SharedWithMe = {
     /**
@@ -2037,6 +2074,53 @@ export type SharedWithMe = {
      * Documents
      */
     documents: Array<DocumentSummaryPublic>;
+};
+
+/**
+ * SpaceShareEmails
+ *
+ * Share a whole space with several addresses at once.
+ *
+ * The same shape as sharing a page, deliberately: the two are the same act at
+ * different scales, and an interface that treats them differently makes people
+ * learn two things instead of one.
+ */
+export type SpaceShareEmails = {
+    /**
+     * Emails
+     */
+    emails: Array<string>;
+    role?: NamespaceRole;
+    /**
+     * Message
+     */
+    message?: string | null;
+};
+
+/**
+ * SpaceShareResult
+ */
+export type SpaceShareResult = {
+    /**
+     * Shared
+     */
+    shared?: Array<NamespaceMemberPublic>;
+    /**
+     * Invited
+     */
+    invited?: Array<ShareInvitationPublic>;
+    /**
+     * Skipped
+     */
+    skipped?: Array<ShareSkipped>;
+    /**
+     * Members
+     */
+    members?: number;
+    /**
+     * Max Members
+     */
+    max_members?: number;
 };
 
 /**
@@ -2194,6 +2278,10 @@ export type UserPublic = {
      * Max Shares Per Document
      */
     max_shares_per_document?: number;
+    /**
+     * Max Members Per Space
+     */
+    max_members_per_space?: number;
 };
 
 /**
@@ -2262,6 +2350,10 @@ export type UserUpdate = {
      * Max Shares Per Document
      */
     max_shares_per_document?: number | null;
+    /**
+     * Max Members Per Space
+     */
+    max_members_per_space?: number | null;
 };
 
 /**
@@ -3157,6 +3249,102 @@ export type namespacesAddNamespaceMemberResponses = {
 };
 
 export type namespacesAddNamespaceMemberResponse = namespacesAddNamespaceMemberResponses[keyof namespacesAddNamespaceMemberResponses];
+
+export type namespacesAddNamespaceMembersData = {
+    body: SpaceShareEmails;
+    path: {
+        /**
+         * Namespace Id
+         */
+        namespace_id: string;
+    };
+    query?: never;
+    url: '/api/v1/namespaces/{namespace_id}/members/batch';
+};
+
+export type namespacesAddNamespaceMembersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type namespacesAddNamespaceMembersError = namespacesAddNamespaceMembersErrors[keyof namespacesAddNamespaceMembersErrors];
+
+export type namespacesAddNamespaceMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: SpaceShareResult;
+};
+
+export type namespacesAddNamespaceMembersResponse = namespacesAddNamespaceMembersResponses[keyof namespacesAddNamespaceMembersResponses];
+
+export type namespacesReadNamespaceInvitationsData = {
+    body?: never;
+    path: {
+        /**
+         * Namespace Id
+         */
+        namespace_id: string;
+    };
+    query?: never;
+    url: '/api/v1/namespaces/{namespace_id}/invitations';
+};
+
+export type namespacesReadNamespaceInvitationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type namespacesReadNamespaceInvitationsError = namespacesReadNamespaceInvitationsErrors[keyof namespacesReadNamespaceInvitationsErrors];
+
+export type namespacesReadNamespaceInvitationsResponses = {
+    /**
+     * Response Namespaces-Read Namespace Invitations
+     *
+     * Successful Response
+     */
+    200: Array<ShareInvitationPublic>;
+};
+
+export type namespacesReadNamespaceInvitationsResponse = namespacesReadNamespaceInvitationsResponses[keyof namespacesReadNamespaceInvitationsResponses];
+
+export type namespacesCancelNamespaceInvitationData = {
+    body?: never;
+    path: {
+        /**
+         * Namespace Id
+         */
+        namespace_id: string;
+        /**
+         * Invitation Id
+         */
+        invitation_id: string;
+    };
+    query?: never;
+    url: '/api/v1/namespaces/{namespace_id}/invitations/{invitation_id}';
+};
+
+export type namespacesCancelNamespaceInvitationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type namespacesCancelNamespaceInvitationError = namespacesCancelNamespaceInvitationErrors[keyof namespacesCancelNamespaceInvitationErrors];
+
+export type namespacesCancelNamespaceInvitationResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type namespacesCancelNamespaceInvitationResponse = namespacesCancelNamespaceInvitationResponses[keyof namespacesCancelNamespaceInvitationResponses];
 
 export type namespacesRemoveNamespaceMemberData = {
     body?: never;

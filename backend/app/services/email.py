@@ -257,6 +257,18 @@ def password_reset_email(to: str, url: str, minutes: int) -> Email:
     )
 
 
+def _safe(value: str) -> str:
+    """Text somebody else wrote, on its way into a message somebody else reads.
+
+    Display names, page titles and space names are all chosen by the sharer and
+    rendered in the recipient's mail client, which is the same shape of problem
+    as the note below. A fully attacker-controlled link inside a signed,
+    correctly branded transactional message is a phishing kit, so none of it
+    reaches the HTML as markup.
+    """
+    return html.escape(value or "")
+
+
 def _quote(note: str | None) -> str:
     """The sharer's own words, as text, never as markup.
 
@@ -295,6 +307,7 @@ def share_invitation_email(
     been invited" is indistinguishable from spam and gets treated as such.
     """
     what = "view and edit" if can_edit else "read"
+    who, what_page = _safe(sharer), _safe(title)
     return Email(
         to=to,
         subject=f"{sharer} shared “{title}” with you on {settings.APP_NAME}",
@@ -306,15 +319,15 @@ def share_invitation_email(
             "it, you can ignore this message."
         ),
         html=_shell(
-            f"{sharer} shared a page with you",
+            f"{who} shared a page with you",
             "<p style='font-size:14px;line-height:1.6;margin:0;'>"
-            f"<strong>{sharer}</strong> shared “{title}” with you on "
+            f"<strong>{who}</strong> shared “{what_page}” with you on "
             f"{settings.APP_NAME}, {settings.APP_TAGLINE}.</p>"
             + _quote(note)
             + "<p style='font-size:14px;line-height:1.6;margin:12px 0 0;'>"
             f"Create an account with this address to {what} it. The page opens "
             "as soon as you have confirmed your address.</p>"
-            + _button(url, f"Create an account and open “{title}”")
+            + _button(url, f"Create an account and open “{what_page}”")
             + f"<p style='font-size:12px;color:#6b7280;margin:16px 0 0;'>The "
             f"invitation is good for {days} days. If you were not expecting it, "
             "ignore this message and nothing will happen.</p>",
@@ -333,6 +346,7 @@ def share_notice_email(
 ) -> Email:
     """Sent to somebody who already has an account. Same facts, shorter path."""
     what = "edit" if can_edit else "read"
+    who, what_page = _safe(sharer), _safe(title)
     return Email(
         to=to,
         subject=f"{sharer} shared “{title}” with you on {settings.APP_NAME}",
@@ -343,9 +357,9 @@ def share_notice_email(
             f"It is also in “Shared with me” in {settings.APP_NAME}."
         ),
         html=_shell(
-            f"{sharer} shared a page with you",
+            f"{who} shared a page with you",
             "<p style='font-size:14px;line-height:1.6;margin:0;'>"
-            f"<strong>{sharer}</strong> shared “{title}” with you. You can "
+            f"<strong>{who}</strong> shared “{what_page}” with you. You can "
             f"{what} it.</p>"
             + _quote(note)
             + _button(url, "Open the page")
@@ -353,6 +367,89 @@ def share_notice_email(
             "It is also waiting under “Shared with me”.</p>",
         ),
     )
+
+
+def space_invitation_email(
+    to: str,
+    *,
+    sharer: str,
+    space: str,
+    url: str,
+    role: str,
+    days: int,
+    note: str | None = None,
+) -> Email:
+    """Sent to an address with no account, because someone shared a whole space."""
+    what = _space_verb(role)
+    who, which_space = _safe(sharer), _safe(space)
+    return Email(
+        to=to,
+        subject=f"{sharer} shared the space “{space}” with you on {settings.APP_NAME}",
+        text=(
+            f"{sharer} shared a whole space with you on {settings.APP_NAME}: “{space}”."
+            f"{_quote_text(note)}\n"
+            f"Create an account with this address to {what}:\n{url}\n\n"
+            f"The invitation is good for {days} days. If you were not expecting "
+            "it, you can ignore this message."
+        ),
+        html=_shell(
+            f"{who} shared a space with you",
+            "<p style='font-size:14px;line-height:1.6;margin:0;'>"
+            f"<strong>{who}</strong> shared the space “{which_space}” with you on "
+            f"{settings.APP_NAME}, {settings.APP_TAGLINE}. That covers everything "
+            "in it, now and later.</p>"
+            + _quote(note)
+            + "<p style='font-size:14px;line-height:1.6;margin:12px 0 0;'>"
+            f"Create an account with this address to {what}. It opens as soon as "
+            "you have confirmed your address.</p>"
+            + _button(url, f"Create an account and open “{which_space}”")
+            + f"<p style='font-size:12px;color:#6b7280;margin:16px 0 0;'>The "
+            f"invitation is good for {days} days.</p>",
+        ),
+    )
+
+
+def space_notice_email(
+    to: str,
+    *,
+    sharer: str,
+    space: str,
+    url: str,
+    role: str,
+    note: str | None = None,
+) -> Email:
+    """Sent to somebody who already has an account."""
+    what = _space_verb(role)
+    who, which_space = _safe(sharer), _safe(space)
+    return Email(
+        to=to,
+        subject=f"{sharer} shared the space “{space}” with you on {settings.APP_NAME}",
+        text=(
+            f"{sharer} shared a whole space with you: “{space}”."
+            f"{_quote_text(note)}\n"
+            f"You can {what} here:\n{url}\n\n"
+            f"It is also under “Shared with me” in {settings.APP_NAME}."
+        ),
+        html=_shell(
+            f"{who} shared a space with you",
+            "<p style='font-size:14px;line-height:1.6;margin:0;'>"
+            f"<strong>{who}</strong> shared the space “{which_space}” with you. "
+            f"You can {what}, including anything added to it later.</p>"
+            + _quote(note)
+            + _button(url, "Open the space")
+            + "<p style='font-size:12px;color:#6b7280;margin:16px 0 0;'>"
+            "It is also waiting under “Shared with me”.</p>",
+        ),
+    )
+
+
+def _space_verb(role: str) -> str:
+    """What this role actually lets somebody do, in plain words."""
+    if role == "admin":
+        return "manage it and everything in it"
+    if role == "editor":
+        return "read and change everything in it"
+    return "read everything in it"
 
 
 def password_changed_email(to: str) -> Email:

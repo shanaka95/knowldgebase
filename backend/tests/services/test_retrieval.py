@@ -100,6 +100,9 @@ class StubEmbeddings:
         self.calls += 1
         return [[float(len(t) % 7), 1.0, 0.5, 0.25] for t in texts]
 
+    async def embed_query(self, text: str) -> list[float]:
+        return (await self.embed([text]))[0]
+
 
 async def _store_with(document_id: uuid.UUID, text: str) -> InMemoryVectorStore:
     store = InMemoryVectorStore()

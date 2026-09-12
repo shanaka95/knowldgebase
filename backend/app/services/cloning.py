@@ -22,7 +22,12 @@ from pathlib import PurePosixPath
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.models import Attachment
+from app.core.permissions import (
+    get_document_role,
+    get_namespace_role,
+    has_min_role,
+)
+from app.models import Attachment, Document, Namespace, User
 from app.services.storage import ObjectStorage
 
 logger = logging.getLogger(__name__)
@@ -52,6 +57,27 @@ def referenced_attachment_ids(html: str) -> list[uuid.UUID]:
     return found
 
 
+def _may_read(session: Session, user: User, attachment: Attachment) -> bool:
+    """Whether this person could download this file through the normal route.
+
+    Copying must not be a way around the download check. Markup is editable by
+    anyone with editor access to a page, so a guest on one page could name an
+    attachment belonging to a *different* page in the same space; without this,
+    cloning would hand them bytes the download endpoint refuses.
+    """
+    if user.is_superuser:
+        return True
+    if attachment.document_id is not None:
+        document = session.get(Document, attachment.document_id)
+        if document is None:
+            return False
+        return has_min_role(get_document_role(session, user, document), "viewer")
+    namespace = session.get(Namespace, attachment.namespace_id)
+    if namespace is None:
+        return False
+    return has_min_role(get_namespace_role(session, user, namespace), "viewer")
+
+
 def copy_embedded_attachments(
     session: Session,
     storage: ObjectStorage,
@@ -60,6 +86,7 @@ def copy_embedded_attachments(
     source_namespace_id: uuid.UUID,
     target_namespace_id: uuid.UUID,
     uploader_id: uuid.UUID | None,
+    reader: User,
 ) -> tuple[str, list[Attachment]]:
     """Duplicate the images a page embeds, and rewrite the page to use them.
 
@@ -67,9 +94,11 @@ def copy_embedded_attachments(
     attaches to the new page once it has an id.
 
     Attachments that belong to a different space than the page are skipped
-    rather than copied: they are not the page's to duplicate. An object missing
-    from storage is skipped too, leaving that one image pointing at the original
-    - a copy with one broken image beats refusing to copy at all.
+    rather than copied: they are not the page's to duplicate. So is anything
+    ``reader`` could not download directly, because a copy must not reach past
+    what its maker can already see. An object missing from storage is skipped
+    too, leaving that one image pointing at the original - a copy with one
+    broken image beats refusing to copy at all.
     """
     if not html:
         return html, []
@@ -92,6 +121,12 @@ def copy_embedded_attachments(
     for old_id in ids:
         original = by_id.get(old_id)
         if original is None:
+            continue
+        if not _may_read(session, reader, original):
+            logger.info(
+                "clone: %s is not readable by the person copying, leaving it alone",
+                original.id,
+            )
             continue
         try:
             stored = storage.open(original.object_key)

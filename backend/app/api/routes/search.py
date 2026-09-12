@@ -441,6 +441,11 @@ async def retrieve_documents(
         )
     if not targets:
         raise HTTPException(status_code=422, detail="Select at least one search target")
+    # Every (method, target) pair is its own query against the vector store, all
+    # fired at once, so a target named a thousand times would turn one cheap
+    # request into a thousand expensive ones. Order is kept so the reply names
+    # the targets in the order they were asked for.
+    targets = list(dict.fromkeys(targets))
 
     started = time.perf_counter()
     namespace_ids, document_ids = _access_scope(session, auth.user, namespace_id)
