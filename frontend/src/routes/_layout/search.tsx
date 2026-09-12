@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_layout/search")({
     k: z.number().optional().catch(undefined),
     depth: z.number().optional().catch(undefined),
   }),
-  head: () => ({ meta: [{ title: "Search - Knowledge Base" }] }),
+  head: () => ({ meta: [{ title: "Search - PlusGPT" }] }),
 })
 
 function SearchPage() {

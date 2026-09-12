@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router"
 import { AlertCircle, FileText, Loader2, Puzzle, Search } from "lucide-react"
 
 import type { RetrievalResults } from "@/client"
+import { DocumentTypeBadge } from "@/components/Documents/DocumentTypeBadge"
 import { EmbeddingStatusIcon } from "@/components/Embeddings/EmbeddingStatusIcon"
 import { EmptyState } from "@/components/Layout/EmptyState"
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
@@ -110,10 +111,11 @@ export function HybridSearchResults({
                   >
                     <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
+                      <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-medium">
                           {hit.title}
                         </span>
+                        <DocumentTypeBadge type={hit.doc_type} />
                         <EmbeddingStatusIcon
                           state={deriveEmbeddingState(hit)}
                         />

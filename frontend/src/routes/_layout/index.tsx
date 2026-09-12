@@ -14,7 +14,7 @@ import { sharedWithMeQuery } from "@/queries/shared"
 export const Route = createFileRoute("/_layout/")({
   component: Dashboard,
   staticData: { crumb: "Dashboard" },
-  head: () => ({ meta: [{ title: "Dashboard - Knowledge Base" }] }),
+  head: () => ({ meta: [{ title: "Dashboard - PlusGPT" }] }),
 })
 
 function greetingForNow() {

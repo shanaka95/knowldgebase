@@ -91,6 +91,14 @@ class EmbeddingKind(StrEnum):
     chunk = "chunk"
 
 
+class AuthCodePurpose(StrEnum):
+    """What a one-time secret is for. One table, three very different lifetimes."""
+
+    verify_email = "verify_email"
+    two_factor = "two_factor"
+    password_reset = "password_reset"
+
+
 class ApiKeyScope(StrEnum):
     read = "read"
     write = "write"
@@ -151,6 +159,7 @@ class UserUpdate(SQLModel):
     is_superuser: bool | None = None
     full_name: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
 
 
 class UserUpdateMe(SQLModel):
@@ -167,6 +176,21 @@ class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+    # Until this is set the account exists but cannot sign in. It is the only
+    # evidence that whoever registered controls the address.
+    email_verified_at: datetime | None = _tz_datetime(default=None)
+    # Stamped into every access token. Raising it invalidates every token issued
+    # before now, which is what makes "sign out everywhere" real after a
+    # password change rather than a hopeful message in the interface.
+    session_epoch: int = Field(default=0)
+    # Set while an account is refusing password attempts after too many failures.
+    locked_until: datetime | None = _tz_datetime(default=None)
+    failed_logins: int = Field(default=0)
+    last_failed_login_at: datetime | None = _tz_datetime(default=None)
+    # How many people one of this account's pages may be shared with, counting
+    # invitations that have not been accepted yet. Per account rather than
+    # global so it can follow a plan later without another migration.
+    max_shares_per_document: int = Field(default=50)
 
     namespaces: list[Namespace] = Relationship(
         back_populates="owner", cascade_delete=True
@@ -177,6 +201,8 @@ class User(UserBase, table=True):
 class UserPublic(UserBase):
     id: uuid.UUID
     created_at: datetime | None = None
+    email_verified_at: datetime | None = None
+    max_shares_per_document: int = 50
 
 
 class UsersPublic(SQLModel):
@@ -250,7 +276,9 @@ class NamespacePublic(NamespaceBase):
     owner: UserRef | None = None
     my_role: NamespaceRole | None = None
     document_count: int = 0
-    member_count: int = 0
+    # None when the caller only holds shares on individual pages: they are
+    # not a member, so the size of the membership is not theirs to know.
+    member_count: int | None = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -370,18 +398,59 @@ class FoldersPublic(SQLModel):
 # ---------------------------------------------------------------------------
 
 
+# Offered in the interface as a starting point. Not a closed set: a type is
+# whatever the person filing the page calls it, and a knowledge base that
+# refuses "Tax assessment" because it was not on a list is a worse one.
+COMMON_DOCUMENT_TYPES: tuple[str, ...] = (
+    "Document",
+    "Letter",
+    "Email",
+    "Note",
+    "Report",
+    "Contract",
+    "Invoice",
+    "Receipt",
+    "Statement",
+    "Policy",
+    "Guide",
+    "Meeting notes",
+    "Specification",
+    "Form",
+    "Certificate",
+)
+
+DOCUMENT_TYPE_MAX = 60
+
+
+def clean_document_type(value: str | None) -> str | None:
+    """Normalise a type so the same thing is not stored three ways.
+
+    Whitespace collapsed and the first letter capitalised, so "  invoice " and
+    "Invoice" end up as one entry in the list people pick from. The rest of the
+    casing is left alone: "PDF export" and "VAT return" should not become "Pdf
+    export" and "Vat return".
+    """
+    text = " ".join((value or "").split())[:DOCUMENT_TYPE_MAX]
+    if not text:
+        return None
+    return text[0].upper() + text[1:]
+
+
 class DocumentCreate(SQLModel):
     namespace_id: uuid.UUID
     folder_id: uuid.UUID | None = None
     title: str = Field(min_length=1, max_length=300)
     content: str = ""
     content_format: ContentFormat = ContentFormat.html
+    doc_type: str | None = Field(default=None, max_length=DOCUMENT_TYPE_MAX)
 
 
 class DocumentUpdate(SQLModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
     content: str | None = None
     content_format: ContentFormat = ContentFormat.html
+    # Sent as an empty string to clear it; left out entirely to leave it alone.
+    doc_type: str | None = Field(default=None, max_length=DOCUMENT_TYPE_MAX)
     # optimistic locking: reject the update if the stored version differs
     expected_version: int | None = None
 
@@ -407,6 +476,20 @@ class Document(SQLModel, table=True):
         default=None, foreign_key="folder.id", ondelete="CASCADE"
     )
     title: str = Field(min_length=1, max_length=300)
+    # What kind of thing this is - a letter, an invoice, a runbook. Free text
+    # with suggestions rather than an enum, so nobody has to file a request to
+    # add a category.
+    doc_type: str | None = Field(default=None, max_length=DOCUMENT_TYPE_MAX, index=True)
+    # Set while the page is readable by anyone holding its link. A random slug
+    # rather than the page id, so that turning sharing off and on again breaks
+    # the old link instead of silently re-publishing to whoever kept it.
+    public_slug: str | None = Field(
+        default=None, unique=True, index=True, max_length=32
+    )
+    public_shared_at: datetime | None = _tz_datetime(default=None)
+    public_shared_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
     content_html: str = Field(default="", sa_type=Text)
     content_text: str = Field(default="", sa_type=Text)
     summary: str | None = Field(default=None, sa_type=Text)
@@ -472,6 +555,10 @@ class DocumentSummaryPublic(SQLModel):
     namespace_slug: str | None = None
     folder_id: uuid.UUID | None = None
     title: str
+    doc_type: str | None = None
+    # Present only while the page is shared by link, so the interface can show
+    # that it is public without a second request.
+    public_slug: str | None = None
     version: int
     created_by: uuid.UUID | None = None
     updated_by: uuid.UUID | None = None
@@ -503,6 +590,18 @@ class DocumentsPublic(SQLModel):
     count: int
 
 
+class DocumentTypeCount(SQLModel):
+    name: str
+    # How many of your own pages already carry it. Zero for a suggestion nobody
+    # has used yet, which is how the interface sorts the familiar to the top.
+    count: int = 0
+
+
+class DocumentTypesPublic(SQLModel):
+    data: list[DocumentTypeCount]
+    count: int
+
+
 class NamespaceTree(SQLModel):
     namespace: NamespacePublic
     folders: list[FolderPublic]
@@ -526,6 +625,141 @@ class DocumentShareCreate(SQLModel):
 
 class DocumentShareUpdate(SQLModel):
     role: ShareRole
+
+
+class ShareInvitation(SQLModel, table=True):
+    """A page shared with an address that has no account yet.
+
+    Sharing should not depend on whether the other person has signed up already.
+    An invitation records the intent; it turns into a real share the moment that
+    address is *confirmed* on an account, which is the first point at which we
+    know the person reading the email is the person who owns it.
+
+    The token in the emailed link is stored only as a hash, like every other
+    one-time secret here, and it grants nothing on its own: it identifies which
+    page to open afterwards, while access comes from confirming the address.
+    """
+
+    __table_args__ = (
+        Index("ix_shareinvitation_email", "email"),
+        Index("ix_shareinvitation_document", "document_id"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    document_id: uuid.UUID = Field(
+        foreign_key="document.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    # Stored lowercased: addresses are matched, not displayed, and a person who
+    # was invited as "Sam@Example.com" signs up as "sam@example.com".
+    email: str = Field(max_length=255)
+    role: ShareRole = Field(default=ShareRole.viewer, sa_type=String(32))  # type: ignore
+    invited_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    token_hash: str = Field(index=True, max_length=64)
+    expires_at: datetime = _tz_datetime(nullable=False)
+    accepted_at: datetime | None = _tz_datetime(default=None)
+    accepted_user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class ShareInvitationPublic(SQLModel):
+    id: uuid.UUID
+    email: str
+    role: ShareRole
+    expires_at: datetime
+    created_at: datetime | None = None
+
+
+class InvitationPreview(SQLModel):
+    """What the landing page shows somebody who followed an invitation link.
+
+    Deliberately thin. Whoever holds the link already knows they were sent a
+    page; they should not learn anything else about the account that sent it.
+    """
+
+    email: str
+    document_id: uuid.UUID
+    document_title: str
+    shared_by: str  # a name, or the address if no name was set
+    role: ShareRole
+    expires_at: datetime
+    already_accepted: bool = False
+
+
+class ShareEmails(SQLModel):
+    """Share one page with several addresses at once.
+
+    Batched because the interface asks for several and has to report back which
+    were known and which will be invited - which it cannot do one call at a time
+    without inventing its own error handling.
+    """
+
+    emails: list[EmailStr] = Field(min_length=1, max_length=50)
+    role: ShareRole = ShareRole.viewer
+    # Goes into the email, in the sharer's own words. Optional, and plain text:
+    # it is quoted into a message sent on their behalf, so it must not be able
+    # to carry markup into somebody else's mail client.
+    message: str | None = Field(default=None, max_length=1000)
+
+
+class ShareSkipped(SQLModel):
+    email: str
+    reason: str
+
+
+class ShareResult(SQLModel):
+    shared: list[DocumentSharePublic] = []
+    invited: list[ShareInvitationPublic] = []
+    skipped: list[ShareSkipped] = []
+    # Where this page stands against the owner's limit, so the interface can
+    # show it before someone runs into it.
+    recipients: int = 0
+    max_recipients: int = 0
+
+
+class PublicDocument(SQLModel):
+    """A page as it looks to somebody who only has the link.
+
+    Nothing here identifies anything else in the knowledge base. No folder, no
+    space id, no author id, no version history - because the link was shared,
+    not the account behind it.
+    """
+
+    id: uuid.UUID
+    slug: str
+    title: str
+    doc_type: str | None = None
+    content_html: str
+    updated_at: datetime | None = None
+    shared_by: str | None = None
+
+
+class PublicLink(SQLModel):
+    slug: str
+    url: str
+    shared_at: datetime | None = None
+
+
+class UserLookup(SQLModel):
+    """Whether one exact address has an account here.
+
+    Exact matches only, never prefixes: the interface wants to confirm the
+    address someone typed, and a prefix search would turn this into a way to
+    read the user list.
+    """
+
+    email: str
+    exists: bool
+    user: UserRef | None = None
+
+
+class DocumentClone(SQLModel):
+    namespace_id: uuid.UUID
+    folder_id: uuid.UUID | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=300)
 
 
 class DocumentShare(SQLModel, table=True):
@@ -777,6 +1011,29 @@ class ImportJobCreate(SQLModel):
     prompt: str | None = Field(default=None, max_length=2000)
 
 
+class ImportFile(SQLModel, table=True):
+    """One uploaded file belonging to an import.
+
+    An import used to be one file, and most still are - those keep using the
+    job's own ``object_key`` and have no rows here. Rows appear when several
+    files are being combined into a single page, where order matters and each
+    original has to stay downloadable afterwards.
+    """
+
+    __table_args__ = (Index("ix_importfile_job_position", "job_id", "position"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    job_id: uuid.UUID = Field(
+        foreign_key="importjob.id", nullable=False, ondelete="CASCADE"
+    )
+    # The order the person chose, which is the order they read in.
+    position: int = Field(default=0)
+    filename: str = Field(max_length=255)
+    content_type: str = Field(max_length=127)
+    size: int = Field(default=0, sa_type=BigInteger)
+    object_key: str = Field(max_length=512)
+
+
 class ImportJob(SQLModel, table=True):
     __table_args__ = (
         Index("ix_importjob_status_created", "status", "created_at"),
@@ -801,6 +1058,9 @@ class ImportJob(SQLModel, table=True):
     )
 
     title: str | None = Field(default=None, max_length=300)
+    # One type for everything in this upload: someone filing a batch of scans is
+    # filing one kind of thing.
+    doc_type: str | None = Field(default=None, max_length=DOCUMENT_TYPE_MAX)
     prompt: str | None = Field(default=None, sa_type=Text)
     filename: str = Field(max_length=255)
     content_type: str = Field(max_length=127)
@@ -832,10 +1092,15 @@ class ImportJobPublic(SQLModel):
     document_id: uuid.UUID | None = None
     attachment_id: uuid.UUID | None = None
     title: str | None = None
+    doc_type: str | None = None
     prompt: str | None = None
     filename: str
     content_type: str
     size: int
+    # More than one when several uploads are being combined into a single page.
+    # `filename` then reads as a summary, and these are the parts in order.
+    file_count: int = 1
+    filenames: list[str] = []
     status: ImportStatus
     parser: ImportParser | None = None
     pages_total: int = 0
@@ -881,6 +1146,7 @@ class RetrievalSourceReport(SQLModel):
 class RetrievalHit(SQLModel):
     document_id: uuid.UUID
     title: str
+    doc_type: str | None = None
     namespace_id: uuid.UUID
     namespace_slug: str
     namespace_name: str
@@ -902,6 +1168,7 @@ class RetrievalResults(SQLModel):
     query_tokens: list[str] = []
     used_bm25: bool
     used_vector: bool
+    used_rerank: bool = False
     targets: list[str] = []
     rrf_k: int
     sources: list[RetrievalSourceReport] = []
@@ -944,6 +1211,7 @@ class AskAnswer(SQLModel):
     searched: int = 0  # pages the hybrid search returned
     used: int = 0  # distinct pages that contributed an excerpt
     passages: int = 0  # excerpts sent to the model; a long page can give several
+    reranked: bool = False  # whether a cross-encoder chose the pages that were read
     truncated: bool = False
     model: str = ""
     retrieval_ms: float = 0.0
@@ -982,6 +1250,31 @@ class ApiKey(SQLModel, table=True):
     user: User | None = Relationship(back_populates="api_keys")
 
 
+class AuthCode(SQLModel, table=True):
+    """A one-time secret sent to an address, stored only as a hash.
+
+    The same shape serves all three flows, because the security properties they
+    need are identical: single use, short life, a guessing budget, and no way to
+    read the secret back out of the database. What differs is only the shape of
+    the secret - six digits a person types for two-factor, a long random token
+    inside a link for the two email flows - and how long it lives.
+    """
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    purpose: AuthCodePurpose = Field(sa_type=String(32))  # type: ignore
+    code_hash: str = Field(index=True, max_length=64)
+    # The address it was sent to, which is not always the account's current one:
+    # a verification sent before an email change must not confirm the new one.
+    sent_to: str = Field(max_length=255)
+    expires_at: datetime = _tz_datetime(nullable=False)
+    consumed_at: datetime | None = _tz_datetime(default=None)
+    attempts: int = Field(default=0)
+    created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+
+
 class ApiKeyPublic(SQLModel):
     id: uuid.UUID
     name: str
@@ -1010,6 +1303,7 @@ class ApiKeysPublic(SQLModel):
 class SearchResult(SQLModel):
     document_id: uuid.UUID
     title: str
+    doc_type: str | None = None
     namespace_id: uuid.UUID
     namespace_slug: str
     namespace_name: str
@@ -1053,3 +1347,60 @@ class Token(SQLModel):
 
 class TokenPayload(SQLModel):
     sub: str | None = None
+    # Present only on tokens that are not sessions, such as the short-lived
+    # challenge issued between a correct password and its emailed code.
+    typ: str | None = None
+    # Session epoch the token was minted under. A token whose epoch is behind
+    # the account's has been revoked, which is how a password change signs out
+    # every other device.
+    sev: int | None = None
+
+
+class TokenMessage(Message):
+    """A message plus a replacement session, for actions that revoke the old one."""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
+class LoginChallenge(SQLModel):
+    """What a correct password buys: the right to be asked for a code.
+
+    No part of this is a credential. It names the pending login and says where
+    the code went, with the address masked so a borrowed screen does not give
+    away the whole mailbox.
+    """
+
+    challenge_token: str
+    expires_at: datetime
+    sent_to: str  # masked, e.g. "s••••••5@gmail.com"
+    code_length: int
+    # False when the code could not be emailed. The login cannot continue, and
+    # saying so beats leaving someone waiting for a message that will not come.
+    delivered: bool = True
+
+
+class TwoFactorVerify(SQLModel):
+    challenge_token: str
+    code: str = Field(min_length=4, max_length=12)
+
+
+class TwoFactorResend(SQLModel):
+    challenge_token: str
+
+
+class EmailVerificationRequest(SQLModel):
+    email: EmailStr = Field(max_length=255)
+
+
+class EmailVerificationConfirm(SQLModel):
+    token: str = Field(min_length=16, max_length=256)
+
+
+class PasswordRecoveryRequest(SQLModel):
+    email: EmailStr = Field(max_length=255)
+
+
+class NewPassword(SQLModel):
+    token: str = Field(min_length=16, max_length=256)
+    new_password: str = Field(min_length=8, max_length=128)

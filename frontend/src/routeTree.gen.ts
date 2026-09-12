@@ -10,8 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutAskRouteImport } from './routes/_layout/ask'
@@ -20,6 +24,7 @@ import { Route as LayoutPlaygroundRouteImport } from './routes/_layout/playgroun
 import { Route as LayoutSearchRouteImport } from './routes/_layout/search'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSharedRouteImport } from './routes/_layout/shared'
+import { Route as PSlugRouteImport } from './routes/p.$slug'
 import { Route as LayoutSNamespaceSlugRouteImport } from './routes/_layout/s/$namespaceSlug'
 import { Route as LayoutSNamespaceSlugIndexRouteImport } from './routes/_layout/s/$namespaceSlug/index'
 import { Route as LayoutSNamespaceSlugSettingsRouteImport } from './routes/_layout/s/$namespaceSlug/settings'
@@ -30,14 +35,34 @@ const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
@@ -80,6 +105,11 @@ const LayoutSharedRoute = LayoutSharedRouteImport.update({
   path: '/shared',
   getParentRoute: () => LayoutRoute,
 } as any)
+const PSlugRoute = PSlugRouteImport.update({
+  id: '/p/$slug',
+  path: '/p/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LayoutSNamespaceSlugRoute = LayoutSNamespaceSlugRouteImport.update({
   id: '/s/$namespaceSlug',
   path: '/s/$namespaceSlug',
@@ -112,8 +142,12 @@ const LayoutSNamespaceSlugFFolderIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/admin': typeof LayoutAdminRoute
   '/ask': typeof LayoutAskRoute
   '/imports': typeof LayoutImportsRoute
@@ -121,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof LayoutSearchRoute
   '/settings': typeof LayoutSettingsRoute
   '/shared': typeof LayoutSharedRoute
+  '/p/$slug': typeof PSlugRoute
   '/s/$namespaceSlug': typeof LayoutSNamespaceSlugRouteWithChildren
   '/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/s/$namespaceSlug/': typeof LayoutSNamespaceSlugIndexRoute
@@ -128,8 +163,12 @@ export interface FileRoutesByFullPath {
   '/s/$namespaceSlug/f/$folderId': typeof LayoutSNamespaceSlugFFolderIdRoute
 }
 export interface FileRoutesByTo {
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/admin': typeof LayoutAdminRoute
   '/ask': typeof LayoutAskRoute
   '/imports': typeof LayoutImportsRoute
@@ -137,6 +176,7 @@ export interface FileRoutesByTo {
   '/search': typeof LayoutSearchRoute
   '/settings': typeof LayoutSettingsRoute
   '/shared': typeof LayoutSharedRoute
+  '/p/$slug': typeof PSlugRoute
   '/': typeof LayoutIndexRoute
   '/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/s/$namespaceSlug': typeof LayoutSNamespaceSlugIndexRoute
@@ -146,8 +186,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/_layout/admin': typeof LayoutAdminRoute
   '/_layout/ask': typeof LayoutAskRoute
   '/_layout/imports': typeof LayoutImportsRoute
@@ -155,6 +199,7 @@ export interface FileRoutesById {
   '/_layout/search': typeof LayoutSearchRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/shared': typeof LayoutSharedRoute
+  '/p/$slug': typeof PSlugRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/s/$namespaceSlug': typeof LayoutSNamespaceSlugRouteWithChildren
   '/_layout/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
@@ -166,8 +211,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/forgot-password'
+    | '/invite'
     | '/login'
+    | '/reset-password'
     | '/signup'
+    | '/verify-email'
     | '/admin'
     | '/ask'
     | '/imports'
@@ -175,6 +224,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/shared'
+    | '/p/$slug'
     | '/s/$namespaceSlug'
     | '/s/$namespaceSlug/settings'
     | '/s/$namespaceSlug/'
@@ -182,8 +232,12 @@ export interface FileRouteTypes {
     | '/s/$namespaceSlug/f/$folderId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/forgot-password'
+    | '/invite'
     | '/login'
+    | '/reset-password'
     | '/signup'
+    | '/verify-email'
     | '/admin'
     | '/ask'
     | '/imports'
@@ -191,6 +245,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/shared'
+    | '/p/$slug'
     | '/'
     | '/s/$namespaceSlug/settings'
     | '/s/$namespaceSlug'
@@ -199,8 +254,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_layout'
+    | '/forgot-password'
+    | '/invite'
     | '/login'
+    | '/reset-password'
     | '/signup'
+    | '/verify-email'
     | '/_layout/admin'
     | '/_layout/ask'
     | '/_layout/imports'
@@ -208,6 +267,7 @@ export interface FileRouteTypes {
     | '/_layout/search'
     | '/_layout/settings'
     | '/_layout/shared'
+    | '/p/$slug'
     | '/_layout/'
     | '/_layout/s/$namespaceSlug'
     | '/_layout/s/$namespaceSlug/settings'
@@ -218,8 +278,13 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
+  InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
+  PSlugRoute: typeof PSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -231,6 +296,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -238,11 +317,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_layout/': {
@@ -300,6 +393,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/shared'
       preLoaderRoute: typeof LayoutSharedRouteImport
       parentRoute: typeof LayoutRoute
+    }
+    '/p/$slug': {
+      id: '/p/$slug'
+      path: '/p/$slug'
+      fullPath: '/p/$slug'
+      preLoaderRoute: typeof PSlugRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_layout/s/$namespaceSlug': {
       id: '/_layout/s/$namespaceSlug'
@@ -385,8 +485,13 @@ const LayoutRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
+  InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
+  PSlugRoute: PSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

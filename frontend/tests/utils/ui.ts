@@ -1,10 +1,28 @@
 import { expect, type Locator, type Page } from "@playwright/test"
+import { twoFactorCode } from "./mail.ts"
+
+/**
+ * Answer the emailed sign-in code on the second pane of /login. The single
+ * input auto-submits once it holds a full-length code.
+ */
+export async function enterTwoFactorCode(
+  page: Page,
+  email: string,
+  options: { not?: string } = {},
+) {
+  const input = page.getByTestId("code-input")
+  await expect(input).toBeVisible()
+  const code = await twoFactorCode(page.request, email, options)
+  await input.fill(code)
+  return code
+}
 
 export async function loginAs(page: Page, email: string, password: string) {
   await page.goto("/login")
   await page.getByTestId("email-input").fill(email)
   await page.getByTestId("password-input").fill(password)
   await page.getByRole("button", { name: "Log In" }).click()
+  await enterTwoFactorCode(page, email)
   await page.waitForURL("/")
   await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
 }

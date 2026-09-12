@@ -15,6 +15,14 @@ const SERVICE_LABELS: Record<string, string> = {
   worker: "Worker",
 }
 
+/*
+ * The tiles render both full width and inside the narrow dashboard side
+ * column, so the track count follows the available width rather than a
+ * viewport breakpoint — at any width the numbers keep a readable tile.
+ */
+const TILE_GRID =
+  "grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr))]"
+
 function Tile({
   label,
   value,
@@ -32,8 +40,10 @@ function Tile({
     destructive: "text-destructive",
   }
   return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="min-w-0 rounded-lg border bg-card p-3">
+      <p className="truncate text-xs text-muted-foreground" title={label}>
+        {label}
+      </p>
       <p
         className={cn("mt-1 text-2xl font-semibold tabular-nums", tones[tone])}
       >
@@ -67,7 +77,7 @@ export function IndexHealth() {
 
   if (summary.isPending) {
     return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className={TILE_GRID}>
         {[0, 1, 2, 3, 4].map((i) => (
           <Skeleton key={i} className="h-20 w-full" />
         ))}
@@ -77,7 +87,7 @@ export function IndexHealth() {
   const s = summary.data
   return (
     <div className="flex flex-col gap-3" data-testid="index-health">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className={TILE_GRID}>
         <Tile label="Pages" value={s?.total ?? 0} tone="muted" />
         <Tile label="Indexed" value={s?.ready ?? 0} tone="success" />
         <Tile

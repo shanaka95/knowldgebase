@@ -24,6 +24,7 @@ dependencies = [
     "python-slugify>=8.0.0,<9.0.0",
     "mineru-vl-utils>=2.0.3",
     "pypdfium2>=5.13.0",
+    "boto3>=1.40,<2.0",
 ]
 
 [dependency-groups]
@@ -44,6 +45,12 @@ build-backend = "hatchling.build"
 [tool.mypy]
 strict = true
 exclude = ["venv", ".venv", "alembic"]
+
+# boto3 ships no type information. It is used in one file, behind a protocol, so
+# the untyped surface is a single client object rather than the whole codebase.
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py314"

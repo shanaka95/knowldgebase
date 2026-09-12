@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_layout/s/$namespaceSlug")({
   head: ({ loaderData }) => ({
     meta: [
       {
-        title: `${loaderData?.namespace.name ?? "Space"} - Knowledge Base`,
+        title: `${loaderData?.namespace.name ?? "Space"} - PlusGPT`,
       },
     ],
   }),

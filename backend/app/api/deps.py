@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import ApiKey, ApiKeyScope, TokenPayload, User
 from app.services.embeddings import EmbeddingClient
+from app.services.reranking import RerankClient, Reranker
 from app.services.storage import ObjectStorage
 from app.services.vectors import VectorStore
 
@@ -104,11 +105,29 @@ def _user_from_jwt(session: Session, token: str) -> AuthContext:
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # A session token carries no type. Anything else signed with the same key -
+    # above all the challenge handed out after a correct password - must not be
+    # usable as a session, or two-factor would be decorative.
+    if token_data.typ is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user = session.get(User, token_data.sub)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    # A token minted before the account's current epoch was revoked - by a
+    # password change, a reset, or a deliberate sign-out-everywhere. Treat it as
+    # if it had never existed.
+    if (token_data.sev or 0) < user.session_epoch:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session ended. Sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return AuthContext(
         user=user,
         api_key=None,
@@ -184,6 +203,26 @@ def get_embedding_client() -> EmbeddingClient:
 
 
 EmbeddingsDep = Annotated[EmbeddingClient, Depends(get_embedding_client)]
+
+
+_rerank_client: RerankClient | None = None
+
+
+def get_reranker() -> Reranker | None:
+    """The reranker, or None when the deployment has not configured one.
+
+    Returning None rather than raising is deliberate: reranking sharpens
+    retrieval, and search has to keep working without it.
+    """
+    global _rerank_client
+    if not settings.rerank_enabled:
+        return None
+    if _rerank_client is None:
+        _rerank_client = RerankClient()
+    return _rerank_client
+
+
+RerankerDep = Annotated[Reranker | None, Depends(get_reranker)]
 
 
 def get_storage(request: Request) -> ObjectStorage:

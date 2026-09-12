@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_layout/ask")({
     q: z.string().catch(""),
     space: z.string().optional().catch(undefined),
   }),
-  head: () => ({ meta: [{ title: "Ask - Knowledge Base" }] }),
+  head: () => ({ meta: [{ title: "Ask - PlusGPT" }] }),
 })
 
 function AskPage() {

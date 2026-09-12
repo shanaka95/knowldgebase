@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -9,6 +10,7 @@ from app import crud
 from app.api.deps import (
     AuthDep,
     SessionDep,
+    StorageDep,
     WriteAuth,
     get_current_active_superuser,
 )
@@ -20,7 +22,8 @@ from app.api.serializers import (
     to_namespace_public,
     user_ref,
 )
-from app.core.content import normalize_content
+from app.core.config import settings
+from app.core.content import html_to_text, normalize_content
 from app.core.permissions import (
     accessible_documents_filter,
     can_delete_document,
@@ -31,11 +34,13 @@ from app.core.permissions import (
     require_namespace,
 )
 from app.models import (
+    COMMON_DOCUMENT_TYPES,
     CleanupKind,
     CleanupTask,
     Document,
     DocumentChunk,
     DocumentChunkPublic,
+    DocumentClone,
     DocumentCreate,
     DocumentEmbeddingsPublic,
     DocumentMove,
@@ -46,6 +51,8 @@ from app.models import (
     DocumentSharesPublic,
     DocumentShareUpdate,
     DocumentsPublic,
+    DocumentTypeCount,
+    DocumentTypesPublic,
     DocumentUpdate,
     EmbeddingJob,
     EmbeddingJobPublic,
@@ -56,10 +63,28 @@ from app.models import (
     Message,
     Namespace,
     NamespaceMember,
+    PublicLink,
     SharedWithMe,
+    ShareEmails,
+    ShareInvitation,
+    ShareInvitationPublic,
+    ShareResult,
     ShareRole,
+    ShareSkipped,
     User,
+    clean_document_type,
 )
+from app.services import sharing
+from app.services.cloning import copy_embedded_attachments
+from app.services.email import (
+    Email,
+    EmailError,
+    get_email_sender,
+    share_invitation_email,
+    share_notice_email,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -199,6 +224,7 @@ def create_document(
         namespace_id=namespace.id,
         folder_id=document_in.folder_id,
         title=document_in.title.strip(),
+        doc_type=clean_document_type(document_in.doc_type),
         content_html=html,
         content_text=text,
         version=1,
@@ -211,6 +237,38 @@ def create_document(
     session.commit()
     session.refresh(document)
     return to_document_public(session, auth.user, document)
+
+
+@router.get("/types", response_model=DocumentTypesPublic)
+def read_document_types(session: SessionDep, auth: AuthDep) -> Any:
+    """The types worth offering: the ones you already use, then the usual ones.
+
+    Counted across the pages you can see, so the list reflects how this person
+    actually files things rather than a fixed vocabulary.
+    """
+    rows = session.exec(
+        select(Document.doc_type, func.count())
+        .where(
+            col(Document.doc_type).is_not(None),
+            accessible_documents_filter(session, auth.user),
+        )
+        .group_by(col(Document.doc_type))
+    ).all()
+
+    counts: dict[str, int] = {}
+    for name, total in rows:
+        if name:
+            counts[name] = int(total)
+
+    used = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))
+    data = [DocumentTypeCount(name=name, count=total) for name, total in used]
+    seen = {name.lower() for name in counts}
+    data += [
+        DocumentTypeCount(name=name, count=0)
+        for name in COMMON_DOCUMENT_TYPES
+        if name.lower() not in seen
+    ]
+    return DocumentTypesPublic(data=data, count=len(data))
 
 
 # --- single document -----------------------------------------------------------
@@ -265,6 +323,11 @@ def update_document(
     document.title = new_title
     document.content_html = new_html
     document.content_text = new_text
+    if document_in.doc_type is not None:
+        # An empty string clears it; leaving the field out leaves it alone. The
+        # type is metadata, not content, so changing it alone does not make the
+        # page stale or re-run the AI index.
+        document.doc_type = clean_document_type(document_in.doc_type)
     document.updated_by = auth.user.id
     document.updated_at = datetime.now(UTC)
     if changed:
@@ -323,7 +386,78 @@ def delete_document(
     return Message(message="Document deleted successfully")
 
 
+@router.post("/{document_id}/clone", response_model=DocumentPublic)
+def clone_document(
+    session: SessionDep,
+    auth: WriteAuth,
+    storage: StorageDep,
+    document_id: uuid.UUID,
+    body: DocumentClone,
+) -> Any:
+    """Copy a page you can read into a space you can write to.
+
+    The copy belongs to you. It is a separate page from the moment it exists:
+    editing it does not touch the original, the original's shares do not follow
+    it, and nobody else can see it until you share it yourself. That is the
+    point - it is how somebody keeps a copy of something shared with them
+    without depending on the sharer leaving it in place.
+
+    Images embedded in the page are copied into the destination space too.
+    Pointing the copy at the original's files would leave it broken for anyone
+    who cannot read the original, which is most of the reason to clone.
+    """
+    source, _ = require_document(session, auth.user, document_id, "viewer")
+    target_ns, _ = require_namespace(session, auth.user, body.namespace_id, "editor")
+    if body.folder_id is not None:
+        folder = session.get(Folder, body.folder_id)
+        if folder is None or folder.namespace_id != target_ns.id:
+            raise HTTPException(status_code=400, detail="Folder not in this namespace")
+
+    html, attachments = copy_embedded_attachments(
+        session,
+        storage,
+        html=source.content_html,
+        source_namespace_id=source.namespace_id,
+        target_namespace_id=target_ns.id,
+        uploader_id=auth.user.id,
+    )
+    title = (body.title or f"{source.title} (copy)").strip()[:300]
+
+    clone = Document(
+        namespace_id=target_ns.id,
+        folder_id=body.folder_id,
+        title=title,
+        doc_type=source.doc_type,
+        content_html=html,
+        content_text=html_to_text(html),
+        version=1,
+        created_by=auth.user.id,
+        updated_by=auth.user.id,
+    )
+    session.add(clone)
+    session.flush()
+    for attachment in attachments:
+        attachment.document_id = clone.id
+        session.add(attachment)
+    crud.enqueue_embedding_job(session=session, document=clone)
+    session.commit()
+    session.refresh(clone)
+    return to_document_public(session, auth.user, clone)
+
+
 # --- shares -------------------------------------------------------------------
+
+
+async def _deliver_quietly(message: Email) -> None:
+    """Tell somebody they were given access; never fail the share over it.
+
+    The access has already been granted by the time this runs. A mail outage
+    should not be reported back as though the share did not happen.
+    """
+    try:
+        await get_email_sender().send(message)
+    except EmailError as exc:
+        logger.error("could not send %r: %s", message.subject, exc)
 
 
 def _share_public(session: SessionDep, share: DocumentShare) -> DocumentSharePublic:
@@ -366,7 +500,16 @@ def share_document(
         )
     user = crud.get_user_by_email(session=session, email=share_in.email)
     if user is None:
-        raise HTTPException(status_code=404, detail="No user with this email")
+        # Not an error any more: the address simply has no account yet, so it
+        # gets an invitation. Callers that want to know which happened should
+        # use /shares/batch, whose reply says so.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No account for this address yet. Use /shares/batch to invite "
+                "them by email."
+            ),
+        )
     namespace = session.get(Namespace, document.namespace_id)
     if (
         namespace is not None
@@ -395,6 +538,237 @@ def share_document(
     session.commit()
     session.refresh(share)
     return _share_public(session, share)
+
+
+@router.post("/{document_id}/shares/batch", response_model=ShareResult)
+async def share_document_with_many(
+    session: SessionDep,
+    auth: WriteAuth,
+    document_id: uuid.UUID,
+    body: ShareEmails,
+) -> Any:
+    """Share one page with several addresses at once.
+
+    Addresses that already have an account get access immediately and an email
+    saying so. Addresses that do not get an invitation: still no access, but a
+    branded message telling them who shared what, and a link to create an
+    account. The invitation becomes real access when that address is confirmed.
+
+    The reply separates the three outcomes - `shared`, `invited`, `skipped` -
+    so the interface can say plainly which is which rather than guessing.
+    """
+    document, _ = require_document(session, auth.user, document_id, "editor")
+    if not can_share_document(session, auth.user, document):
+        raise HTTPException(
+            status_code=403, detail="Only space editors can share documents"
+        )
+    namespace = session.get(Namespace, document.namespace_id)
+    sharer = sharing.display_name(auth.user)
+    link = sharing.document_url(document.id)
+
+    # The ceiling belongs to whoever owns the space this page lives in: it is
+    # their content being distributed, whoever pressed the button.
+    owner = session.get(User, namespace.owner_id) if namespace else None
+    limit = owner.max_shares_per_document if owner else settings.SHARE_MAX_RECIPIENTS
+    used = sharing.recipient_count(session, document.id)
+
+    result = ShareResult(recipients=used, max_recipients=limit)
+    seen: set[str] = set()
+
+    for raw in body.emails:
+        address = sharing.normalise_email(str(raw))
+        if address in seen:
+            continue
+        seen.add(address)
+
+        if address == sharing.normalise_email(auth.user.email):
+            result.skipped.append(
+                ShareSkipped(email=address, reason="That is your own address")
+            )
+            continue
+
+        if used >= limit:
+            result.skipped.append(
+                ShareSkipped(
+                    email=address,
+                    reason=(
+                        f"This page has reached its limit of {limit} people. "
+                        "Remove someone, or share it by link instead."
+                    ),
+                )
+            )
+            continue
+
+        user = crud.get_user_by_email(session=session, email=address)
+
+        if user is not None:
+            if (
+                namespace is not None
+                and get_namespace_role(session, user, namespace) is not None
+            ):
+                result.skipped.append(
+                    ShareSkipped(
+                        email=address,
+                        reason="Already has access through the space",
+                    )
+                )
+                continue
+            existing = session.exec(
+                select(DocumentShare).where(
+                    DocumentShare.document_id == document.id,
+                    DocumentShare.user_id == user.id,
+                )
+            ).first()
+            if existing is not None:
+                existing.role = body.role
+                session.add(existing)
+                session.commit()
+                session.refresh(existing)
+                result.shared.append(_share_public(session, existing))
+                continue
+
+            share = DocumentShare(
+                document_id=document.id,
+                user_id=user.id,
+                role=body.role,
+                created_by=auth.user.id,
+            )
+            session.add(share)
+            session.commit()
+            session.refresh(share)
+            result.shared.append(_share_public(session, share))
+            used += 1
+            await _deliver_quietly(
+                share_notice_email(
+                    user.email,
+                    sharer=sharer,
+                    title=document.title,
+                    url=link,
+                    can_edit=body.role == ShareRole.editor,
+                    note=body.message,
+                )
+            )
+            continue
+
+        was_pending = sharing.pending_invitation(session, document.id, address)
+        record, token = sharing.invite(
+            session,
+            document=document,
+            email=address,
+            role=body.role,
+            invited_by=auth.user,
+        )
+        if was_pending is None:
+            used += 1
+        result.invited.append(
+            ShareInvitationPublic(
+                id=record.id,
+                email=record.email,
+                role=record.role,
+                expires_at=record.expires_at,
+                created_at=record.created_at,
+            )
+        )
+        await _deliver_quietly(
+            share_invitation_email(
+                address,
+                sharer=sharer,
+                title=document.title,
+                url=sharing.invitation_url(token),
+                can_edit=body.role == ShareRole.editor,
+                days=settings.SHARE_INVITE_TTL_DAYS,
+                note=body.message,
+            )
+        )
+
+    result.recipients = used
+    return result
+
+
+@router.get("/{document_id}/invitations", response_model=list[ShareInvitationPublic])
+def read_document_invitations(
+    session: SessionDep, auth: AuthDep, document_id: uuid.UUID
+) -> Any:
+    """Invitations on this page that nobody has accepted yet."""
+    document, _ = require_document(session, auth.user, document_id, "viewer")
+    rows = session.exec(
+        select(ShareInvitation)
+        .where(
+            ShareInvitation.document_id == document.id,
+            col(ShareInvitation.accepted_at).is_(None),
+        )
+        .order_by(col(ShareInvitation.created_at))
+    ).all()
+    return [
+        ShareInvitationPublic(
+            id=r.id,
+            email=r.email,
+            role=r.role,
+            expires_at=r.expires_at,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.delete("/{document_id}/invitations/{invitation_id}")
+def cancel_invitation(
+    session: SessionDep,
+    auth: WriteAuth,
+    document_id: uuid.UUID,
+    invitation_id: uuid.UUID,
+) -> Message:
+    """Withdraw an invitation. The emailed link stops working immediately."""
+    document, _ = require_document(session, auth.user, document_id, "editor")
+    if not can_share_document(session, auth.user, document):
+        raise HTTPException(
+            status_code=403, detail="Only space editors can share documents"
+        )
+    record = session.get(ShareInvitation, invitation_id)
+    if record is None or record.document_id != document.id:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    session.delete(record)
+    session.commit()
+    return Message(message="Invitation withdrawn")
+
+
+# --- public links --------------------------------------------------------------
+
+
+@router.post("/{document_id}/public", response_model=PublicLink)
+def publish_document(
+    session: SessionDep, auth: WriteAuth, document_id: uuid.UUID
+) -> Any:
+    """Make this page readable by anyone holding its link.
+
+    The link is the only credential, so treat it as one. Publishing twice keeps
+    the existing link rather than invalidating a copy already sent.
+    """
+    document, _ = require_document(session, auth.user, document_id, "editor")
+    if not can_share_document(session, auth.user, document):
+        raise HTTPException(
+            status_code=403, detail="Only space editors can share documents"
+        )
+    slug = sharing.publish(session, document, auth.user)
+    return PublicLink(
+        slug=slug,
+        url=sharing.public_url(slug),
+        shared_at=document.public_shared_at,
+    )
+
+
+@router.delete("/{document_id}/public")
+def unpublish_document(
+    session: SessionDep, auth: WriteAuth, document_id: uuid.UUID
+) -> Message:
+    """Withdraw the public link. Anyone still holding it gets nothing."""
+    document, _ = require_document(session, auth.user, document_id, "editor")
+    if not can_share_document(session, auth.user, document):
+        raise HTTPException(
+            status_code=403, detail="Only space editors can share documents"
+        )
+    sharing.unpublish(session, document)
+    return Message(message="This page is no longer shared by link")
 
 
 @router.patch("/{document_id}/shares/{user_id}", response_model=DocumentSharePublic)

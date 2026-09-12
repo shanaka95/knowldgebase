@@ -23,6 +23,7 @@ export interface SourceHit {
 
 export interface HitSpec {
   title: string
+  doc_type?: string | null
   score?: number
   snippet?: string
   sources: SourceHit[]
@@ -47,6 +48,7 @@ function buildHit(spec: HitSpec) {
   return {
     document_id: spec.document_id ?? `11111111-1111-4111-8111-${uid()}00000`,
     title: spec.title,
+    doc_type: spec.doc_type ?? null,
     namespace_id: "22222222-2222-4222-8222-222222222222",
     namespace_slug: spec.namespace_slug ?? "office",
     namespace_name: spec.namespace_name ?? "Office",
@@ -94,7 +96,10 @@ export function parseRetrieve(request: Request): RetrieveParams {
 export async function mockRetrieve(
   page: Page,
   hits: (params: RetrieveParams) => HitSpec[],
-  options: { usedBm25?: (p: RetrieveParams) => boolean } = {},
+  options: {
+    usedBm25?: (p: RetrieveParams) => boolean
+    usedRerank?: boolean
+  } = {},
 ) {
   const requests: RetrieveParams[] = []
 
@@ -137,6 +142,7 @@ export async function mockRetrieve(
         query_tokens: params.q.split(/\s+/).filter(Boolean),
         used_bm25: usedBm25,
         used_vector: params.vector,
+        used_rerank: options.usedRerank ?? false,
         targets,
         rrf_k: params.k ?? 60,
         sources,

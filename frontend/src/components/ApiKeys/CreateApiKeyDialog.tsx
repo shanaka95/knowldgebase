@@ -61,7 +61,38 @@ const SCOPES: { value: ApiKeyScope; label: string; hint: string }[] = [
   },
 ]
 
-export function CreateApiKeyDialog() {
+interface CreateApiKeyDialogProps {
+  /** Replaces the default "Create API key" button. */
+  trigger?: React.ReactNode
+  title?: string
+  description?: string
+  nameLabel?: string
+  namePlaceholder?: string
+  defaultName?: string
+  /**
+   * Prepended to the submitted name. The MCP tab uses it so its connections
+   * stay recognisable among the account's other keys.
+   */
+  namePrefix?: string
+  /** Fixes the scope and hides the permission chooser. */
+  scope?: ApiKeyScope
+  submitLabel?: string
+  /** Extra content shown beside the created key, e.g. a ready-to-paste config. */
+  renderCreated?: (key: ApiKeyCreated) => React.ReactNode
+}
+
+export function CreateApiKeyDialog({
+  trigger,
+  title = "Create API key",
+  description = "Personal keys let scripts and third-party apps use the API on your behalf.",
+  nameLabel = "Name",
+  namePlaceholder = "e.g. Zapier integration",
+  defaultName = "",
+  namePrefix = "",
+  scope,
+  submitLabel = "Create key",
+  renderCreated,
+}: CreateApiKeyDialogProps = {}) {
   const [open, setOpen] = useState(false)
   const [created, setCreated] = useState<ApiKeyCreated | null>(null)
   const [copied, copy] = useCopyToClipboard()
@@ -70,7 +101,11 @@ export function CreateApiKeyDialog() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", scope: "read", expires: "never" },
+    defaultValues: {
+      name: defaultName,
+      scope: scope ?? "read",
+      expires: "never",
+    },
   })
 
   const mutation = useMutation({
@@ -78,8 +113,8 @@ export function CreateApiKeyDialog() {
       (
         await ApiKeysService.createApiKey({
           body: {
-            name: d.name,
-            scope: d.scope,
+            name: `${namePrefix}${d.name}`,
+            scope: scope ?? d.scope,
             expires_in_days: d.expires === "never" ? null : Number(d.expires),
           },
         })
@@ -94,7 +129,7 @@ export function CreateApiKeyDialog() {
   const close = () => {
     setOpen(false)
     setCreated(null)
-    form.reset()
+    form.reset({ name: defaultName, scope: scope ?? "read", expires: "never" })
   }
 
   return (
@@ -108,10 +143,12 @@ export function CreateApiKeyDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button data-testid="create-api-key">
-          <Plus />
-          Create API key
-        </Button>
+        {trigger ?? (
+          <Button data-testid="create-api-key">
+            <Plus />
+            Create API key
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent
         className="sm:max-w-lg"
@@ -149,6 +186,7 @@ export function CreateApiKeyDialog() {
                   {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
+              {renderCreated?.(created)}
               <Alert className="border-warning/50 bg-warning/10">
                 <ShieldAlert className="text-warning-foreground dark:text-warning" />
                 <AlertTitle>You won't see this key again</AlertTitle>
@@ -167,11 +205,8 @@ export function CreateApiKeyDialog() {
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Create API key</DialogTitle>
-              <DialogDescription>
-                Personal keys let scripts and third-party apps use the API on
-                your behalf.
-              </DialogDescription>
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription>{description}</DialogDescription>
             </DialogHeader>
             <Form {...form}>
               <form
@@ -183,10 +218,10 @@ export function CreateApiKeyDialog() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>{nameLabel}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="e.g. Zapier integration"
+                          placeholder={namePlaceholder}
                           autoFocus
                           data-testid="api-key-name"
                           {...field}
@@ -196,39 +231,41 @@ export function CreateApiKeyDialog() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="scope"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Permissions</FormLabel>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {SCOPES.map((s) => {
-                          const selected = field.value === s.value
-                          return (
-                            <button
-                              key={s.value}
-                              type="button"
-                              aria-pressed={selected}
-                              onClick={() => field.onChange(s.value)}
-                              data-testid={`api-key-scope-${s.value}`}
-                              className={cn(
-                                "flex flex-col items-start gap-1 rounded-md border p-3 text-left text-sm transition hover:bg-accent",
-                                selected &&
-                                  "border-primary bg-primary/5 ring-1 ring-primary",
-                              )}
-                            >
-                              <span className="font-medium">{s.label}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {s.hint}
-                              </span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </FormItem>
-                  )}
-                />
+                {scope === undefined && (
+                  <FormField
+                    control={form.control}
+                    name="scope"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Permissions</FormLabel>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {SCOPES.map((s) => {
+                            const selected = field.value === s.value
+                            return (
+                              <button
+                                key={s.value}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => field.onChange(s.value)}
+                                data-testid={`api-key-scope-${s.value}`}
+                                className={cn(
+                                  "flex flex-col items-start gap-1 rounded-md border p-3 text-left text-sm transition hover:bg-accent",
+                                  selected &&
+                                    "border-primary bg-primary/5 ring-1 ring-primary",
+                                )}
+                              >
+                                <span className="font-medium">{s.label}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {s.hint}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="expires"
@@ -274,7 +311,7 @@ export function CreateApiKeyDialog() {
                     loading={mutation.isPending}
                     data-testid="api-key-submit"
                   >
-                    Create key
+                    {submitLabel}
                   </LoadingButton>
                 </DialogFooter>
               </form>

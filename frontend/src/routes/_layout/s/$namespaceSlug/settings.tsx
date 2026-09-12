@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_layout/s/$namespaceSlug/settings")({
     ]
     return { crumbs }
   },
-  head: () => ({ meta: [{ title: "Space settings - Knowledge Base" }] }),
+  head: () => ({ meta: [{ title: "Space settings - PlusGPT" }] }),
 })
 
 function SpaceSettingsContent() {

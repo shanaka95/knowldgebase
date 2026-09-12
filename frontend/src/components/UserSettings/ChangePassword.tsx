@@ -52,9 +52,13 @@ const ChangePassword = () => {
   })
 
   const mutation = useMutation({
-    mutationFn: (data: UpdatePassword) =>
-      UsersService.updatePasswordMe({ body: data }),
-    onSuccess: () => {
+    mutationFn: async (data: UpdatePassword) =>
+      (await UsersService.updatePasswordMe({ body: data })).data,
+    onSuccess: (data) => {
+      // Changing the password revokes every token issued before it, this one
+      // included. The reply carries a replacement; without storing it the user
+      // would be signed out by their own successful password change.
+      localStorage.setItem("access_token", data.access_token)
       showSuccessToast("Password updated successfully")
       form.reset()
     },
@@ -137,6 +141,15 @@ const ChangePassword = () => {
           >
             Update Password
           </LoadingButton>
+
+          {mutation.isSuccess && (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="password-changed-note"
+            >
+              {mutation.data.message} You are still signed in here.
+            </p>
+          )}
         </form>
       </Form>
     </div>

@@ -17,6 +17,8 @@ import type { EmbeddingState } from "@/lib/embeddingState"
 import { getInitials } from "@/utils"
 import { DocumentMenu } from "./DocumentMenu"
 import { DocumentTitle } from "./DocumentTitle"
+import { DocumentTypeBadge } from "./DocumentTypeBadge"
+import { DocumentTypePicker } from "./DocumentTypePicker"
 import { SaveIndicator } from "./SaveIndicator"
 
 interface DocumentHeaderProps {
@@ -26,6 +28,8 @@ interface DocumentHeaderProps {
   onTitleChange: (value: string) => void
   onTitleSubmit: () => void
   mode: "view" | "edit"
+  docType: string | null
+  onDocTypeChange: (value: string | null) => void
   canEdit: boolean
   onEdit: () => void
   onDone: () => void
@@ -53,6 +57,8 @@ export function DocumentHeader({
   onTitleChange,
   onTitleSubmit,
   mode,
+  docType,
+  onDocTypeChange,
   canEdit,
   onEdit,
   onDone,
@@ -138,6 +144,11 @@ export function DocumentHeader({
       />
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {mode === "edit" ? (
+          <DocumentTypePicker value={docType} onChange={onDocTypeChange} />
+        ) : (
+          <DocumentTypeBadge type={docType} />
+        )}
         {updatedBy && (
           <Avatar className="size-5">
             <AvatarFallback className="text-[9px]">

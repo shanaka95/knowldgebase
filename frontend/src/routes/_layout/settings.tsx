@@ -3,9 +3,10 @@ import { z } from "zod"
 import ApiKeysTable from "@/components/ApiKeys/ApiKeysTable"
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
 import AppearanceSettings from "@/components/UserSettings/AppearanceSettings"
-import ChangePassword from "@/components/UserSettings/ChangePassword"
 import DeleteAccount from "@/components/UserSettings/DeleteAccount"
 import Developer from "@/components/UserSettings/Developer"
+import McpSettings from "@/components/UserSettings/McpSettings"
+import SecuritySettings from "@/components/UserSettings/SecuritySettings"
 import UserInformation from "@/components/UserSettings/UserInformation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import useAuth from "@/hooks/useAuth"
@@ -15,6 +16,7 @@ const TAB_VALUES = [
   "password",
   "appearance",
   "api-keys",
+  "mcp",
   "developer",
   "danger",
 ] as const
@@ -22,9 +24,10 @@ type TabValue = (typeof TAB_VALUES)[number]
 
 const tabsConfig: { value: TabValue; title: string; component: React.FC }[] = [
   { value: "profile", title: "My profile", component: UserInformation },
-  { value: "password", title: "Password", component: ChangePassword },
+  { value: "password", title: "Password", component: SecuritySettings },
   { value: "appearance", title: "Appearance", component: AppearanceSettings },
   { value: "api-keys", title: "API keys", component: ApiKeysTable },
+  { value: "mcp", title: "MCP", component: McpSettings },
   { value: "developer", title: "Developer", component: Developer },
   { value: "danger", title: "Danger zone", component: DeleteAccount },
 ]
@@ -38,7 +41,7 @@ export const Route = createFileRoute("/_layout/settings")({
   head: () => ({
     meta: [
       {
-        title: "Settings - Knowledge Base",
+        title: "Settings - PlusGPT",
       },
     ],
   }),

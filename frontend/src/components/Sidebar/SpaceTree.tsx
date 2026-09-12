@@ -207,7 +207,7 @@ function DocumentRow({
       }}
     />
   ) : (
-    <span className="truncate">{doc.title}</span>
+    <span className="min-w-0 truncate">{doc.title}</span>
   )
 
   return (
@@ -292,7 +292,7 @@ function FolderRow({ folder, ctx }: { folder: FolderPublic; ctx: RowContext }) {
       }}
     />
   ) : (
-    <span className="truncate">{folder.name}</span>
+    <span className="min-w-0 truncate">{folder.name}</span>
   )
 
   return (

@@ -46,7 +46,7 @@ export const Route = createFileRoute("/_layout/s/$namespaceSlug/f/$folderId")({
     }
     return { crumbs }
   },
-  head: () => ({ meta: [{ title: "Folder - Knowledge Base" }] }),
+  head: () => ({ meta: [{ title: "Folder - PlusGPT" }] }),
 })
 
 function FolderPageContent() {

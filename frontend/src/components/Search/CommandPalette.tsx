@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from "react"
 
 import type { SearchResult } from "@/client"
+import { DocumentTypeBadge } from "@/components/Documents/DocumentTypeBadge"
 import { EmbeddingStatusIcon } from "@/components/Embeddings/EmbeddingStatusIcon"
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
 import { useTheme } from "@/components/theme-provider"
@@ -156,10 +157,11 @@ export function CommandPalette() {
                     >
                       <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
                           <span className="truncate font-medium">
                             {r.title}
                           </span>
+                          <DocumentTypeBadge type={r.doc_type} />
                           <EmbeddingStatusIcon
                             state={deriveEmbeddingState(r)}
                           />

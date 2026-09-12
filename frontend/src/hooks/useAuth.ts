@@ -1,15 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
+import { useState } from "react"
 
 import {
   type Body_login_login_access_token as AccessToken,
+  type LoginChallenge,
   LoginService,
   type UserPublic,
   type UserRegister,
   UsersService,
 } from "@/client"
-import { handleError } from "@/utils"
-import useCustomToast from "./useCustomToast"
 
 const isLoggedIn = () => {
   return localStorage.getItem("access_token") !== null
@@ -18,7 +18,11 @@ const isLoggedIn = () => {
 const useAuth = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { showErrorToast } = useCustomToast()
+
+  // A correct password buys a challenge, not a session. It lives in memory for
+  // the length of one screen: writing it to localStorage would leave a usable
+  // half-credential behind on a shared machine long after the user walked away.
+  const [challenge, setChallenge] = useState<LoginChallenge | null>(null)
 
   const { data: user } = useQuery<UserPublic | null, Error>({
     queryKey: ["currentUser"],
@@ -27,31 +31,51 @@ const useAuth = () => {
   })
 
   const signUpMutation = useMutation({
-    mutationFn: (data: UserRegister) =>
-      UsersService.registerUser({ body: data }),
-    onSuccess: () => {
-      navigate({ to: "/login" })
-    },
-    onError: handleError.bind(showErrorToast),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] })
-    },
+    mutationFn: async (data: UserRegister) =>
+      (await UsersService.registerUser({ body: data })).data,
   })
 
-  const login = async (data: AccessToken) => {
-    const response = await LoginService.loginAccessToken({
-      body: data,
-    })
-    localStorage.setItem("access_token", response.data.access_token)
-  }
-
+  // Step one: the password. Never returns a token.
   const loginMutation = useMutation({
-    mutationFn: login,
-    onSuccess: () => {
+    mutationFn: async (data: AccessToken) =>
+      (await LoginService.loginAccessToken({ body: data })).data,
+    onSuccess: (data) => setChallenge(data),
+  })
+
+  // Step two: the emailed code, exchanged for the session.
+  const verifyCodeMutation = useMutation({
+    mutationFn: async (code: string) => {
+      if (!challenge) throw new Error("There is no sign-in in progress.")
+      const response = await LoginService.verifyTwoFactor({
+        body: { challenge_token: challenge.challenge_token, code },
+      })
+      return response.data
+    },
+    onSuccess: (data) => {
+      localStorage.setItem("access_token", data.access_token)
+      setChallenge(null)
+      queryClient.invalidateQueries({ queryKey: ["currentUser"] })
       navigate({ to: "/" })
     },
-    onError: handleError.bind(showErrorToast),
   })
+
+  const resendCodeMutation = useMutation({
+    mutationFn: async () => {
+      if (!challenge) throw new Error("There is no sign-in in progress.")
+      const response = await LoginService.resendTwoFactor({
+        body: { challenge_token: challenge.challenge_token },
+      })
+      return response.data
+    },
+    onSuccess: (data) => setChallenge(data),
+  })
+
+  const clearChallenge = () => {
+    setChallenge(null)
+    loginMutation.reset()
+    verifyCodeMutation.reset()
+    resendCodeMutation.reset()
+  }
 
   const logout = () => {
     localStorage.removeItem("access_token")
@@ -61,6 +85,10 @@ const useAuth = () => {
   return {
     signUpMutation,
     loginMutation,
+    verifyCodeMutation,
+    resendCodeMutation,
+    challenge,
+    clearChallenge,
     logout,
     user,
   }

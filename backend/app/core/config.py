@@ -49,6 +49,52 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
+    # --- Product identity ----------------------------------------------------
+    # Used in emails and anywhere the product names itself to a person.
+    APP_NAME: str = "PlusGPT"
+    APP_TAGLINE: str = "a personal knowledge management system"
+
+    # --- Email (AWS SES) -----------------------------------------------------
+    # Registration, two-factor codes and password resets all depend on email, so
+    # a deployment without it can only be used by accounts that already exist.
+    # EMAIL_ENABLED=false keeps development and tests offline: codes are written
+    # to the log instead of sent.
+    EMAIL_ENABLED: bool = False
+    EMAIL_FROM: str = "noreply@plusgpt.io"
+    EMAIL_FROM_NAME: str = "PlusGPT"
+    AWS_REGION: str = "eu-west-1"
+    AWS_ACCESS_KEY: str = ""
+    AWS_ACCESS_SECRET: str = ""
+    EMAIL_TIMEOUT_SECONDS: float = 15.0
+
+    # --- Account security ----------------------------------------------------
+    # Every login is confirmed with a code emailed to the account's address.
+    TWO_FACTOR_CODE_LENGTH: int = 6
+    TWO_FACTOR_TTL_MINUTES: int = 10
+    # A login challenge is worthless on its own, but it should not outlive the
+    # code it is waiting for.
+    LOGIN_CHALLENGE_TTL_MINUTES: int = 15
+    EMAIL_VERIFICATION_TTL_HOURS: int = 48
+    PASSWORD_RESET_TTL_MINUTES: int = 60
+    # Guessing budget for one emailed code before it is destroyed.
+    AUTH_CODE_MAX_ATTEMPTS: int = 5
+    # How many codes of one kind may be requested in the window, so the mailbox
+    # of a known address cannot be used as a weapon.
+    AUTH_CODE_MAX_SENDS: int = 5
+    AUTH_CODE_SEND_WINDOW_MINUTES: int = 15
+    # Failed password attempts before the account stops answering for a while.
+    LOGIN_MAX_FAILURES: int = 10
+    LOGIN_FAILURE_WINDOW_MINUTES: int = 15
+    LOGIN_LOCKOUT_MINUTES: int = 15
+
+    # --- Sharing --------------------------------------------------------------
+    # How long an invitation to someone without an account stays good. Long
+    # enough to survive a holiday, short enough that a forwarded mailbox from
+    # last year is not a way in.
+    SHARE_INVITE_TTL_DAYS: int = 14
+    # Addresses one share request may name at once.
+    SHARE_MAX_RECIPIENTS: int = 50
+
     # --- API keys -----------------------------------------------------------
     API_KEY_PREFIX: str = "kb_"
 
@@ -89,7 +135,13 @@ class Settings(BaseSettings):
     EMBEDDING_BATCH_SIZE: int = Field(
         default_factory=lambda: int(model_setting("embeddings", "batch_size", 16))
     )
-    EMBEDDING_MAX_CHARS: int = 24000
+    # How much of a document is fed to the embedding model. This is a property
+    # of the deployed model, not of the app: the local Jina model takes a few
+    # thousand tokens, while qwen3-embedding-8b takes 32k. Characters rather
+    # than tokens because that is what the providers actually enforce.
+    EMBEDDING_MAX_CHARS: int = Field(
+        default_factory=lambda: int(model_setting("embeddings", "max_chars", 24000))
+    )
     EMBEDDING_TIMEOUT_SECONDS: float = Field(
         default_factory=lambda: float(
             model_setting("embeddings", "timeout_seconds", 180.0)
@@ -113,7 +165,18 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = Field(
         default_factory=lambda: float(model_setting("llm", "timeout_seconds", 300.0))
     )
-    LLM_WINDOW_CHARS: int = 20000
+    # Largest slice of a document sent to the chat model in one call. Anything
+    # longer is summarised window by window, which is slower and loses the
+    # thread, so a model with a big context should set this high enough that
+    # ordinary documents go through in a single pass.
+    LLM_WINDOW_CHARS: int = Field(
+        default_factory=lambda: int(model_setting("llm", "window_chars", 20000))
+    )
+    # Ceiling for the larger retry when a model returns an empty completion
+    # because it spent everything on hidden reasoning.
+    LLM_MAX_OUTPUT_TOKENS: int = Field(
+        default_factory=lambda: int(model_setting("llm", "max_output_tokens", 8192))
+    )
     LLM_DISABLE_THINKING: bool = Field(
         default_factory=lambda: bool(model_setting("llm", "disable_thinking", True))
     )
@@ -169,8 +232,61 @@ class Settings(BaseSettings):
     # prompt is a slow prompt, and relevance drops off fast after the top hits.
     ASK_CONTEXT_CHARS: int = 12000
     ASK_PASSAGE_CHARS: int = 2400
+    # With a reranker the answering model sees the reranked top few. Without
+    # one there is no confidence signal to cut on, so every retrieved page is
+    # offered and the context budget does the trimming.
+    ASK_DOCUMENTS_WITHOUT_RERANK: int = 10
     ASK_MAX_TOKENS: int = 900
     ASK_TEMPERATURE: float = 0.2
+
+    # --- Reranking -----------------------------------------------------------
+    # Fusion decides which pages are worth looking at; a cross-encoder decides
+    # which of those actually answer the question. It reads the query and each
+    # candidate together, so it catches relevance that neither keyword overlap
+    # nor a single embedding can. Leave the model empty to turn it off.
+    RERANK_MODEL: str = Field(
+        default_factory=lambda: str(model_setting("rerank", "model", "") or "")
+    )
+    RERANK_BASE_URL: HttpUrl | None = Field(
+        default_factory=lambda: (
+            HttpUrl(str(model_setting("rerank", "base_url", "")))
+            if str(model_setting("rerank", "base_url", "") or "")
+            else None
+        )
+    )
+    RERANK_API_KEY: str = Field(
+        default_factory=lambda: str(model_setting("rerank", "api_key", "") or "")
+    )
+    RERANK_TIMEOUT_SECONDS: float = Field(
+        default_factory=lambda: float(model_setting("rerank", "timeout_seconds", 30.0))
+    )
+    # Candidates handed to the reranker. Billing is per call, not per document,
+    # so a full pool costs exactly what a short one does.
+    RERANK_CANDIDATES: int = 10
+    # Below this there is nothing to reorder worth paying for.
+    RERANK_MIN_CANDIDATES: int = 3
+    # Characters of each candidate sent for scoring. Ten of these must fit the
+    # reranker's own context window, which is 32k tokens for Cohere rerank 4.
+    RERANK_DOC_CHARS: int = 4000
+    RERANK_TOTAL_CHARS: int = 100000
+    # How many pages reach the answering model. Three is the default because a
+    # fourth rarely adds anything a confident top three missed; the extras are
+    # admitted only when the reranker scores them nearly as highly.
+    RERANK_KEEP_DEFAULT: int = 3
+    RERANK_KEEP_MAX: int = 5
+    # An extra page is kept only when it is both *close to* the third page and
+    # convincing on its own. Both conditions are needed, and the second does most
+    # of the work: measured against this reranker, irrelevant pages cluster
+    # tightly (0.10-0.21) and score ~0.85 of each other, so a ratio test alone
+    # would wave through a run of equally useless pages. Relevant pages sit at
+    # 0.25 and above. At a 0.25 floor, 10 of 12 known-relevant pages were kept
+    # and none of 18 known-irrelevant ones got in.
+    RERANK_KEEP_RATIO: float = 0.8
+    RERANK_KEEP_MIN_SCORE: float = 0.25
+
+    @property
+    def rerank_enabled(self) -> bool:
+        return bool(self.RERANK_MODEL and self.RERANK_BASE_URL)
 
     # --- Hybrid retrieval ----------------------------------------------------
     RRF_K: int = 60

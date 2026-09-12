@@ -1,15 +1,23 @@
 import html
+import logging
 import re
 import time
 import uuid
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import Float, desc, func, literal, or_
 from sqlmodel import Session, col, select
 
-from app.api.deps import AuthDep, EmbeddingsDep, SessionDep, VectorsDep
+from app.api.deps import (
+    AuthDep,
+    EmbeddingsDep,
+    RerankerDep,
+    SessionDep,
+    VectorsDep,
+)
 from app.core.config import settings
 from app.core.permissions import (
     accessible_documents_filter,
@@ -30,8 +38,16 @@ from app.models import (
     SearchResults,
     User,
 )
+from app.services.model_client import ModelServerError
+from app.services.reranking import (
+    Reranker,
+    build_candidate_text,
+    fit_to_budget,
+)
 from app.services.retrieval import FusedHit, retrieve
 from app.services.sparse import tokenize
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -84,6 +100,7 @@ def search_documents(
         SearchResult(
             document_id=doc.id,
             title=doc.title,
+            doc_type=doc.doc_type,
             namespace_id=ns.id,
             namespace_slug=ns.slug,
             namespace_name=ns.name,
@@ -230,6 +247,7 @@ def _hydrate(
             RetrievalHit(
                 document_id=doc.id,
                 title=doc.title,
+                doc_type=doc.doc_type,
                 namespace_id=ns.id,
                 namespace_slug=ns.slug,
                 namespace_name=ns.name,
@@ -256,6 +274,105 @@ def _hydrate(
             )
         )
     return results
+
+
+async def rerank_hits(
+    session: Session,
+    user: User,
+    query: str,
+    hits: Sequence[FusedHit],
+    reranker: Reranker | None,
+) -> tuple[list[FusedHit], list[float]]:
+    """Reorder the leading candidates by how well each answers the query.
+
+    Only the front of the list is rescored: fusion is already reliable about
+    what belongs in the running, and the reranker is there to settle the order
+    at the top, which is the part anyone reads. Anything past the pool keeps its
+    fused position behind the rescored block.
+
+    Returns the hits and the reranker's scores, which are empty when it did not
+    run - unconfigured, too few candidates to be worth a call, or a failure. A
+    reranker that is down must degrade search, not break it.
+    """
+    ordered = list(hits)
+    if reranker is None or len(ordered) < settings.RERANK_MIN_CANDIDATES:
+        return ordered, []
+
+    pool = ordered[: settings.RERANK_CANDIDATES]
+    tail = ordered[settings.RERANK_CANDIDATES :]
+    texts = _candidate_texts(session, user, pool)
+    documents = fit_to_budget([texts.get(h.document_id, "") for h in pool])
+    if not any(documents):
+        return ordered, []
+
+    try:
+        scored = await reranker.rerank(query, documents)
+    except (ModelServerError, httpx.HTTPError) as exc:
+        logger.warning("rerank failed, keeping fused order: %s", exc)
+        return ordered, []
+
+    seen: set[int] = set()
+    reordered: list[FusedHit] = []
+    scores: list[float] = []
+    for result in scored:
+        if 0 <= result.index < len(pool) and result.index not in seen:
+            seen.add(result.index)
+            reordered.append(pool[result.index])
+            scores.append(result.score)
+    # A provider that returns fewer results than it was given must not make
+    # candidates disappear from the page.
+    for i, hit in enumerate(pool):
+        if i not in seen:
+            reordered.append(hit)
+            scores.append(0.0)
+    return reordered + tail, scores
+
+
+def _candidate_texts(
+    session: Session, user: User, hits: Sequence[FusedHit]
+) -> dict[uuid.UUID, str]:
+    """What each candidate looks like to the reranker: title plus its best text."""
+    if not hits:
+        return {}
+    ids = [h.document_id for h in hits]
+    rows = session.exec(
+        select(Document).where(
+            col(Document.id).in_(ids),
+            accessible_documents_filter(session, user),
+        )
+    ).all()
+    by_id = {doc.id: doc for doc in rows}
+
+    wanted = {
+        (h.document_id, h.best_chunk_index)
+        for h in hits
+        if h.best_chunk_index is not None and h.document_id in by_id
+    }
+    chunks: dict[tuple[uuid.UUID, int, int], DocumentChunk] = {}
+    if wanted:
+        chunk_rows = session.exec(
+            select(DocumentChunk).where(
+                col(DocumentChunk.document_id).in_({d for d, _ in wanted}),
+                col(DocumentChunk.chunk_index).in_({i for _, i in wanted}),
+            )
+        ).all()
+        chunks = {(c.document_id, c.doc_version, c.chunk_index): c for c in chunk_rows}
+
+    out: dict[uuid.UUID, str] = {}
+    for hit in hits:
+        doc = by_id.get(hit.document_id)
+        if doc is None:
+            continue
+        chunk = None
+        if hit.best_chunk_index is not None and doc.embedding_version is not None:
+            chunk = chunks.get((doc.id, doc.embedding_version, hit.best_chunk_index))
+        out[doc.id] = build_candidate_text(
+            doc.title,
+            passage=chunk.text if chunk else None,
+            summary=doc.summary,
+            body=doc.content_text,
+        )
+    return out
 
 
 def _lexical_source(
@@ -298,6 +415,7 @@ async def retrieve_documents(
     auth: AuthDep,
     vectors: VectorsDep,
     embeddings: EmbeddingsDep,
+    reranker: RerankerDep,
     q: str = Query(min_length=1, max_length=1000),
     bm25: bool = True,
     vector: bool = True,
@@ -306,6 +424,7 @@ async def retrieve_documents(
     ),
     namespace_id: uuid.UUID | None = None,
     limit: int = Query(default=20, le=100),
+    rerank: bool = True,
     rrf_k: int | None = Query(default=None, ge=1, le=1000),
     candidates_per_source: int | None = Query(default=None, ge=1, le=500),
 ) -> Any:
@@ -338,7 +457,12 @@ async def retrieve_documents(
         rrf_k=rrf_k,
         lexical=_lexical_source(session, auth.user, namespace_id),
     )
-    data = _hydrate(session, auth.user, result.hits[:limit], result.query_tokens)
+    # Rerank before trimming to `limit`: the point is to decide which pages
+    # deserve the top places, and that cannot be done after they are cut.
+    hits, rerank_scores = await rerank_hits(
+        session, auth.user, q.strip(), result.hits, reranker if rerank else None
+    )
+    data = _hydrate(session, auth.user, hits[:limit], result.query_tokens)
     return RetrievalResults(
         data=data,
         count=len(data),
@@ -347,6 +471,7 @@ async def retrieve_documents(
         # what actually ran: an all-stopword query has no BM25 terms to search
         used_bm25=result.ran_bm25,
         used_vector=result.ran_vector,
+        used_rerank=bool(rerank_scores),
         targets=[str(t) for t in targets],
         rrf_k=settings.RRF_K if rrf_k is None else rrf_k,
         sources=[

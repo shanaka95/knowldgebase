@@ -402,3 +402,225 @@ def test_delete_keeps_the_file_when_an_attachment_owns_it(
 def test_import_endpoints_require_authentication(client: TestClient) -> None:
     assert client.get(IMPORTS).status_code == 401
     assert client.get(f"{IMPORTS}{uuid.uuid4()}").status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Several files at once
+# ---------------------------------------------------------------------------
+
+BATCH = f"{API}/imports/batch"
+
+
+def _upload_many(
+    client: TestClient,
+    headers: dict[str, str],
+    namespace_id: str,
+    names: list[str],
+    **form: str,
+):
+    form["namespace_id"] = namespace_id
+    return client.post(
+        BATCH,
+        headers=headers,
+        data=form,
+        files=[
+            ("files", (name, io.BytesIO(png_bytes()), "image/png")) for name in names
+        ],
+    )
+
+
+def test_each_file_becomes_its_own_page_by_default(
+    client: TestClient, db: Session
+) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(client, h, str(ns.id), ["one.png", "two.png", "three.png"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["count"] == 3
+    assert [j["filename"] for j in body["data"]] == ["one.png", "two.png", "three.png"]
+    # Three separate uploads, three separate objects.
+    assert len({j["id"] for j in body["data"]}) == 3
+    for job in body["data"]:
+        assert job["file_count"] == 1
+
+
+def test_separate_pages_are_each_named_by_their_own_content(
+    client: TestClient, db: Session
+) -> None:
+    """A shared title across separate pages would just produce duplicates."""
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(
+        client, h, str(ns.id), ["one.png", "two.png"], title="Ignored on purpose"
+    )
+    assert r.status_code == 200
+    assert all(j["title"] is None for j in r.json()["data"])
+
+
+def test_a_title_is_honoured_for_a_single_file(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(client, h, str(ns.id), ["only.png"], title="Chosen by hand")
+    assert r.status_code == 200
+    assert r.json()["data"][0]["title"] == "Chosen by hand"
+
+
+def test_combining_makes_one_job_holding_every_file(
+    client: TestClient, db: Session, storage: InMemoryStorage
+) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(
+        client, h, str(ns.id), ["page1.png", "page2.png", "page3.png"], combine="true"
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["count"] == 1
+
+    job = body["data"][0]
+    assert job["file_count"] == 3
+    assert job["filenames"] == ["page1.png", "page2.png", "page3.png"]
+    # The label says what it is without pretending to be a single filename.
+    assert "page1.png" in job["filename"] and "2 more" in job["filename"]
+
+    from app.models import ImportFile
+
+    parts = db.exec(
+        select(ImportFile).where(ImportFile.job_id == uuid.UUID(job["id"]))
+    ).all()
+    assert [p.position for p in sorted(parts, key=lambda p: p.position)] == [0, 1, 2]
+    for part in parts:
+        assert part.object_key in storage.objects
+
+
+def test_combining_honours_a_title(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(
+        client,
+        h,
+        str(ns.id),
+        ["a.png", "b.png"],
+        combine="true",
+        title="Quarterly report",
+    )
+    assert r.status_code == 200
+    assert r.json()["data"][0]["title"] == "Quarterly report"
+
+
+def test_combining_a_single_file_is_just_an_ordinary_import(
+    client: TestClient, db: Session
+) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(client, h, str(ns.id), ["only.png"], combine="true")
+    assert r.status_code == 200
+    job = r.json()["data"][0]
+    assert job["file_count"] == 1
+    assert job["filename"] == "only.png"
+
+
+def test_a_batch_with_no_files_is_refused(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = client.post(BATCH, headers=h, data={"namespace_id": str(ns.id)}, files=[])
+    assert r.status_code == 422
+
+
+def test_one_unsupported_file_rejects_the_whole_batch(
+    client: TestClient, db: Session
+) -> None:
+    """Half-importing a set someone chose together would be worse than refusing."""
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = client.post(
+        BATCH,
+        headers=h,
+        data={"namespace_id": str(ns.id)},
+        files=[
+            ("files", ("fine.png", io.BytesIO(png_bytes()), "image/png")),
+            ("files", ("notes.txt", io.BytesIO(b"plain"), "text/plain")),
+        ],
+    )
+    assert r.status_code == 415
+    assert "notes.txt" in r.json()["detail"]
+
+
+def test_a_batch_respects_the_namespace_permission(
+    client: TestClient, db: Session
+) -> None:
+    owner, _ = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    stranger, pw = create_user_with_password(db)
+    h = login(client, stranger, pw)
+
+    r = _upload_many(client, h, str(ns.id), ["a.png"])
+    assert r.status_code in (403, 404)
+
+
+def test_a_read_scoped_key_cannot_batch_upload(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+    key = client.post(
+        f"{API}/api-keys/", headers=h, json={"name": "read", "scope": "read"}
+    ).json()["key"]
+
+    r = _upload_many(client, {"Authorization": f"Bearer {key}"}, str(ns.id), ["a.png"])
+    assert r.status_code == 403
+
+
+def test_one_type_applies_to_every_file_in_a_batch(
+    client: TestClient, db: Session
+) -> None:
+    """Files chosen together are the same kind of thing, so one selector serves."""
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(
+        client, h, str(ns.id), ["a.png", "b.png", "c.png"], doc_type="payslip"
+    )
+    assert r.status_code == 200, r.text
+    assert [j["doc_type"] for j in r.json()["data"]] == ["Payslip"] * 3
+
+
+def test_a_combined_import_carries_the_type_too(
+    client: TestClient, db: Session
+) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload_many(
+        client, h, str(ns.id), ["a.png", "b.png"], combine="true", doc_type="Contract"
+    )
+    assert r.status_code == 200
+    assert r.json()["data"][0]["doc_type"] == "Contract"
+
+
+def test_a_single_upload_can_carry_a_type(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = _upload(client, h, str(ns.id), doc_type="Receipt")
+    assert r.status_code == 200
+    assert r.json()["doc_type"] == "Receipt"

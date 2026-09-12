@@ -49,6 +49,12 @@ from app.services.vectors import InMemoryVectorStore  # noqa: E402
 from tests.utils.user import authentication_token_from_email  # noqa: E402
 from tests.utils.utils import get_superuser_token_headers  # noqa: E402
 
+# Signing in costs an emailed code, and the product allows only a handful per
+# quarter hour. A test run signs in far more often than any person would, so the
+# allowance is lifted here; the limit itself is covered in test_login.py, which
+# sets it back for the duration of that test.
+settings.AUTH_CODE_MAX_SENDS = 10_000
+
 TABLES_TO_TRUNCATE = [
     "cleanuptask",
     "workerheartbeat",
@@ -98,6 +104,12 @@ def client() -> Generator[TestClient]:
 
 @pytest.fixture(scope="module")
 def superuser_token_headers(client: TestClient) -> dict[str, str]:
+    """One administrator session per module.
+
+    Shared deliberately: signing in now costs an emailed code, and the product
+    only allows a handful of those per quarter hour. A test that needs to change
+    a password must therefore do it to an account of its own, not this one.
+    """
     return get_superuser_token_headers(client)
 
 

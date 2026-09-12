@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { FilePlus2, FileText } from "lucide-react"
 
+import { DocumentTypeBadge } from "@/components/Documents/DocumentTypeBadge"
 import { EmbeddingStatusIcon } from "@/components/Embeddings/EmbeddingStatusIcon"
 import { EmptyState } from "@/components/Layout/EmptyState"
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
@@ -44,8 +45,11 @@ export function RecentDocuments({ limit = 12 }: { limit?: number }) {
               >
                 <FileText className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {d.title}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {d.title}
+                    </span>
+                    <DocumentTypeBadge type={d.doc_type} />
                   </span>
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     {ns ? (

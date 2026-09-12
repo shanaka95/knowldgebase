@@ -1,6 +1,8 @@
 import { expect, type Page, test } from "@playwright/test"
-import { firstSuperuser, firstSuperuserPassword } from "./config.ts"
+import { firstSuperuser } from "./config.ts"
+import { createTestUser } from "./utils/api.ts"
 import { randomPassword } from "./utils/random.ts"
+import { enterTwoFactorCode } from "./utils/ui.ts"
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -14,6 +16,19 @@ const verifyInput = async (page: Page, testId: string) => {
   await expect(input).toBeVisible()
   await expect(input).toHaveText("")
   await expect(input).toBeEditable()
+}
+
+/**
+ * Each of these signs in for real, and every sign-in emails a code the backend
+ * counts against a per-account limit — so they use a throwaway account rather
+ * than spending the superuser's budget, which the shared session already uses.
+ */
+const signIn = async (page: Page, email: string, password: string) => {
+  await page.goto("/login")
+  await fillForm(page, email, password)
+  await page.getByRole("button", { name: "Log In" }).click()
+  await enterTwoFactorCode(page, email)
+  await page.waitForURL("/")
 }
 
 test("Inputs are visible, empty and editable", async ({ page }) => {
@@ -30,11 +45,17 @@ test("Log In button is visible", async ({ page }) => {
 })
 
 test("Log in with valid email and password ", async ({ page }) => {
-  await page.goto("/login")
+  const user = await createTestUser(page.request)
 
-  await fillForm(page, firstSuperuser, firstSuperuserPassword)
+  await page.goto("/login")
+  await fillForm(page, user.email, user.password)
   await page.getByRole("button", { name: "Log In" }).click()
 
+  // the password alone never signs anyone in: a code is asked for first
+  await expect(page.getByTestId("code-input")).toBeVisible()
+  await expect(page).toHaveURL(/\/login$/)
+
+  await enterTwoFactorCode(page, user.email)
   await page.waitForURL("/")
 
   await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
@@ -43,7 +64,7 @@ test("Log in with valid email and password ", async ({ page }) => {
 test("Log in with invalid email", async ({ page }) => {
   await page.goto("/login")
 
-  await fillForm(page, "invalidemail", firstSuperuserPassword)
+  await fillForm(page, "invalidemail", randomPassword())
   await page.getByRole("button", { name: "Log In" }).click()
 
   await expect(page.getByText("Invalid email address")).toBeVisible()
@@ -60,12 +81,8 @@ test("Log in with invalid password", async ({ page }) => {
 })
 
 test("Successful log out", async ({ page }) => {
-  await page.goto("/login")
-
-  await fillForm(page, firstSuperuser, firstSuperuserPassword)
-  await page.getByRole("button", { name: "Log In" }).click()
-
-  await page.waitForURL("/")
+  const user = await createTestUser(page.request)
+  await signIn(page, user.email, user.password)
 
   await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
 
@@ -75,12 +92,8 @@ test("Successful log out", async ({ page }) => {
 })
 
 test("Logged-out user cannot access protected routes", async ({ page }) => {
-  await page.goto("/login")
-
-  await fillForm(page, firstSuperuser, firstSuperuserPassword)
-  await page.getByRole("button", { name: "Log In" }).click()
-
-  await page.waitForURL("/")
+  const user = await createTestUser(page.request)
+  await signIn(page, user.email, user.password)
 
   await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
 

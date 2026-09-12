@@ -426,3 +426,168 @@ def test_source_attachment_is_exposed_on_an_imported_document(
     assert body["source_attachment"]["download_url"].endswith(
         f"/attachments/{attachment.id}/download"
     )
+
+
+# ---------------------------------------------------------------------------
+# Document types
+# ---------------------------------------------------------------------------
+
+
+def test_a_page_can_be_given_a_type(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = client.post(
+        f"{API}/documents/",
+        headers=h,
+        json={
+            "namespace_id": str(ns.id),
+            "title": "Termination letter",
+            "content": "<p>Body.</p>",
+            "doc_type": "Letter",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["doc_type"] == "Letter"
+
+
+def test_any_type_is_accepted_not_just_the_suggested_ones(
+    client: TestClient, db: Session
+) -> None:
+    """The suggestions are a starting point, not a permitted list."""
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = client.post(
+        f"{API}/documents/",
+        headers=h,
+        json={
+            "namespace_id": str(ns.id),
+            "title": "2026 assessment",
+            "content": "<p>Body.</p>",
+            "doc_type": "Tax assessment",
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["doc_type"] == "Tax assessment"
+
+
+def test_a_type_is_tidied_so_the_same_thing_is_stored_once(
+    client: TestClient, db: Session
+) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+
+    r = client.post(
+        f"{API}/documents/",
+        headers=h,
+        json={
+            "namespace_id": str(ns.id),
+            "title": "A page",
+            "content": "<p>Body.</p>",
+            "doc_type": "  invoice  ",
+        },
+    )
+    assert r.json()["doc_type"] == "Invoice"
+
+
+def test_a_type_can_be_changed_and_cleared(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    doc = create_document(db, ns, owner, title="A page")
+    db.commit()
+    h = login(client, owner, pw)
+
+    r = client.put(f"{API}/documents/{doc.id}", headers=h, json={"doc_type": "Report"})
+    assert r.status_code == 200
+    assert r.json()["doc_type"] == "Report"
+
+    cleared = client.put(f"{API}/documents/{doc.id}", headers=h, json={"doc_type": ""})
+    assert cleared.status_code == 200
+    assert cleared.json()["doc_type"] is None
+
+
+def test_leaving_the_type_out_leaves_it_alone(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    doc = create_document(db, ns, owner, title="A page")
+    db.commit()
+    h = login(client, owner, pw)
+
+    client.put(f"{API}/documents/{doc.id}", headers=h, json={"doc_type": "Contract"})
+    r = client.put(
+        f"{API}/documents/{doc.id}", headers=h, json={"title": "Renamed only"}
+    )
+    assert r.status_code == 200
+    assert r.json()["doc_type"] == "Contract"
+
+
+def test_changing_only_the_type_does_not_reindex_the_page(
+    client: TestClient, db: Session
+) -> None:
+    """The type is metadata. Re-reading the whole page over it would be waste."""
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    doc = create_document(db, ns, owner, title="A page")
+    db.commit()
+    h = login(client, owner, pw)
+    before = client.get(f"{API}/documents/{doc.id}", headers=h).json()["version"]
+
+    r = client.put(f"{API}/documents/{doc.id}", headers=h, json={"doc_type": "Note"})
+    assert r.json()["version"] == before
+
+
+def test_the_type_list_puts_what_you_use_before_the_suggestions(
+    client: TestClient, db: Session
+) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+    for title in ("One", "Two"):
+        client.post(
+            f"{API}/documents/",
+            headers=h,
+            json={
+                "namespace_id": str(ns.id),
+                "title": title,
+                "content": "<p>x</p>",
+                "doc_type": "Tax assessment",
+            },
+        )
+
+    r = client.get(f"{API}/documents/types", headers=h)
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data[0] == {"name": "Tax assessment", "count": 2}
+    names = [t["name"] for t in data]
+    assert "Letter" in names and "Invoice" in names, "the suggestions are still offered"
+    assert names.count("Tax assessment") == 1, "used types are not repeated"
+
+
+def test_the_type_list_only_counts_pages_you_can_see(
+    client: TestClient, db: Session
+) -> None:
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    h = login(client, owner, pw)
+    client.post(
+        f"{API}/documents/",
+        headers=h,
+        json={
+            "namespace_id": str(ns.id),
+            "title": "Private",
+            "content": "<p>x</p>",
+            "doc_type": "Payslip",
+        },
+    )
+
+    stranger, spw = create_user_with_password(db)
+    sh = login(client, stranger, spw)
+    names = [
+        t["name"]
+        for t in client.get(f"{API}/documents/types", headers=sh).json()["data"]
+    ]
+    assert "Payslip" not in names

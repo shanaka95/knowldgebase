@@ -22,6 +22,78 @@ function isExpired(k: ApiKeyPublic) {
   return Boolean(k.expires_at && new Date(k.expires_at).getTime() < Date.now())
 }
 
+/** The keys table on its own, so other settings tabs can list a subset. */
+export function ApiKeyList({
+  keys,
+  rowTestId = "api-key-row",
+}: {
+  keys: ApiKeyPublic[]
+  rowTestId?: string
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Name</TableHead>
+            <TableHead>Key</TableHead>
+            <TableHead>Scope</TableHead>
+            <TableHead className="hidden md:table-cell">Created</TableHead>
+            <TableHead className="hidden md:table-cell">Expires</TableHead>
+            <TableHead className="hidden lg:table-cell">Last used</TableHead>
+            <TableHead className="w-12" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {keys.map((k) => {
+            const expired = isExpired(k)
+            return (
+              <TableRow key={k.id} data-testid={rowTestId}>
+                <TableCell className="font-medium">{k.name}</TableCell>
+                <TableCell>
+                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                    {k.key_prefix}…
+                  </code>
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={k.scope === "write" ? "default" : "secondary"}
+                  >
+                    {k.scope === "write" ? "read & write" : "read"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="hidden text-muted-foreground md:table-cell">
+                  {shortDate(k.created_at)}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {k.expires_at ? (
+                    <span
+                      className={
+                        expired ? "text-destructive" : "text-muted-foreground"
+                      }
+                    >
+                      {expired ? "Expired " : ""}
+                      {shortDate(k.expires_at)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Never</span>
+                  )}
+                </TableCell>
+                <TableCell className="hidden text-muted-foreground lg:table-cell">
+                  {k.last_used_at ? relativeTime(k.last_used_at) : "Never"}
+                </TableCell>
+                <TableCell className="text-right">
+                  <RevokeApiKeyDialog apiKey={k} />
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
 export function ApiKeysTable() {
   const { data, isPending } = useQuery(apiKeysQuery())
   const keys = (data?.data ?? []).filter((k) => !k.revoked_at)
@@ -48,70 +120,7 @@ export function ApiKeysTable() {
           description="Create a key to connect an integration, then follow the examples in the Developer tab."
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Name</TableHead>
-                <TableHead>Key</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead className="hidden md:table-cell">Created</TableHead>
-                <TableHead className="hidden md:table-cell">Expires</TableHead>
-                <TableHead className="hidden lg:table-cell">
-                  Last used
-                </TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {keys.map((k) => {
-                const expired = isExpired(k)
-                return (
-                  <TableRow key={k.id} data-testid="api-key-row">
-                    <TableCell className="font-medium">{k.name}</TableCell>
-                    <TableCell>
-                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                        {k.key_prefix}…
-                      </code>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={k.scope === "write" ? "default" : "secondary"}
-                      >
-                        {k.scope === "write" ? "read & write" : "read"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {shortDate(k.created_at)}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {k.expires_at ? (
-                        <span
-                          className={
-                            expired
-                              ? "text-destructive"
-                              : "text-muted-foreground"
-                          }
-                        >
-                          {expired ? "Expired " : ""}
-                          {shortDate(k.expires_at)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">Never</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground lg:table-cell">
-                      {k.last_used_at ? relativeTime(k.last_used_at) : "Never"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <RevokeApiKeyDialog apiKey={k} />
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <ApiKeyList keys={keys} />
       )}
     </div>
   )

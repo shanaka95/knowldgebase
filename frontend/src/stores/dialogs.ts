@@ -63,6 +63,10 @@ export type DialogRequest =
       target: Extract<DialogTarget, { type: "document" | "namespace" }>
     }
   | {
+      kind: "copy"
+      target: Extract<DialogTarget, { type: "document" }>
+    }
+  | {
       kind: "import"
       /** Prefills the pickers; omitted when opened from a global action. */
       namespaceId?: string | null

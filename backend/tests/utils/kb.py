@@ -22,7 +22,7 @@ from app.models import (
     User,
     UserCreate,
 )
-from tests.utils.user import user_authentication_headers
+from tests.utils.user import user_authentication_headers, verify_email
 from tests.utils.utils import random_email, random_lower_string
 
 API = settings.API_V1_STR
@@ -34,7 +34,9 @@ def create_user_with_password(db: Session) -> tuple[User, str]:
     user = crud.create_user(
         session=db, user_create=UserCreate(email=email, password=password)
     )
-    return user, password
+    # Every test account is a confirmed one. Confirmation is exercised
+    # deliberately in the auth tests rather than incidentally in all the others.
+    return verify_email(db, user), password
 
 
 def login(client: TestClient, user: User, password: str) -> dict[str, str]:

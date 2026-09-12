@@ -55,7 +55,9 @@ export function NamespaceCards() {
           <NamespaceIcon icon={ns.icon} color={ns.color} size="md" />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium">{ns.name}</span>
+              <span className="min-w-0 truncate text-sm font-medium">
+                {ns.name}
+              </span>
               <RoleBadge role={ns.my_role} />
             </span>
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">

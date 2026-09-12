@@ -94,7 +94,7 @@ function ImportRow({ job }: { job: ImportJobPublic }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-sm font-medium">
+            <span className="min-w-0 truncate text-sm font-medium">
               {job.title || job.filename}
             </span>
             <ImportStatusPill job={job} />

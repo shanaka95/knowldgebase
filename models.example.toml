@@ -32,6 +32,16 @@ dimensions = 1024
 batch_size = 16
 timeout_seconds = 180
 
+# --- Reranker: reorders search results before they are shown or answered -----
+# A cross-encoder reads the query and each candidate page together, which fusion
+# never does, so it settles the order at the top of the results. Optional: leave
+# `model` empty and search falls back to fused order.
+# Billing is per request, not per document, so one call carries every candidate.
+[rerank]
+model = ""
+# base_url = "https://openrouter.ai/api/v1"
+timeout_seconds = 30
+
 # --- Document parser: PDF / image -> text ------------------------------------
 # MinerU2.5 is a document-parsing vision model. vMLX's bundled engine cannot load
 # it (its mlx-vlm is too old for the qwen2_vl vision stack), so it runs in its

@@ -53,6 +53,12 @@ test("Sign up with valid name, email, and password", async ({ page }) => {
   await page.goto("/signup")
   await fillForm(page, full_name, email, password, password)
   await page.getByRole("button", { name: "Sign Up" }).click()
+
+  // no session is created: the address has to be confirmed first
+  await expect(page.getByTestId("check-your-inbox")).toBeVisible()
+  expect(
+    await page.evaluate(() => localStorage.getItem("access_token")),
+  ).toBeNull()
 })
 
 test("Sign up with invalid email", async ({ page }) => {
@@ -70,25 +76,25 @@ test("Sign up with invalid email", async ({ page }) => {
   await expect(page.getByText("Invalid email address")).toBeVisible()
 })
 
-test("Sign up with existing email", async ({ page }) => {
+test("Sign up with an existing email is answered identically", async ({
+  page,
+}) => {
   const fullName = "Test User"
   const email = randomEmail()
   const password = randomPassword()
 
   await page.goto("/signup")
-
   await fillForm(page, fullName, email, password, password)
   await page.getByRole("button", { name: "Sign Up" }).click()
-  await expect(page).toHaveURL(/\/login$/)
+  const first = await page.getByTestId("check-your-inbox").textContent()
 
   await page.goto("/signup")
-
   await fillForm(page, fullName, email, password, password)
   await page.getByRole("button", { name: "Sign Up" }).click()
 
-  await expect(
-    page.getByText("The user with this email already exists in the system"),
-  ).toBeVisible()
+  // the reply must not reveal that the address is already taken, or the form
+  // becomes a way to find out who has an account here
+  await expect(page.getByTestId("check-your-inbox")).toHaveText(first ?? "")
 })
 
 test("Sign up with weak password", async ({ page }) => {

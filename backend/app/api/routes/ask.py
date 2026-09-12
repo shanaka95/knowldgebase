@@ -17,8 +17,14 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, col, select
 
-from app.api.deps import AuthDep, EmbeddingsDep, SessionDep, VectorsDep
-from app.api.routes.search import _access_scope, _lexical_source
+from app.api.deps import (
+    AuthDep,
+    EmbeddingsDep,
+    RerankerDep,
+    SessionDep,
+    VectorsDep,
+)
+from app.api.routes.search import _access_scope, _lexical_source, rerank_hits
 from app.core.config import settings
 from app.core.permissions import accessible_documents_filter
 from app.models import (
@@ -40,6 +46,7 @@ from app.services.answering import (
     stream_answer,
 )
 from app.services.llm import LLMClient
+from app.services.reranking import Reranker, keep_count
 from app.services.retrieval import FusedHit, retrieve
 from app.services.sparse import encode_query
 from app.services.vectors import ScoredPoint
@@ -247,12 +254,23 @@ async def _search(
     auth: AuthDep,
     vectors: VectorsDep,
     embeddings: EmbeddingsDep,
+    reranker: Reranker | None,
     body: AskRequest,
-) -> tuple[list[Passage], float, int]:
+) -> tuple[list[Passage], float, int, bool]:
+    """Find the pages worth reading, then narrow them to the ones worth quoting.
+
+    Fusion casts a wide net - ten pages - because recall is what decides whether
+    the answer is in the room at all. The reranker then reads the question
+    against each of those pages and keeps the few that actually address it.
+    Sending all ten to the model would bury the answer in near misses and pay
+    for the privilege; sending the reranked top three keeps the prompt short and
+    the citations honest.
+    """
     started = time.perf_counter()
+    question = body.q.strip()
     namespace_ids, document_ids = _access_scope(session, auth.user, body.namespace_id)
     result = await retrieve(
-        body.q.strip(),
+        question,
         vectors=vectors,
         embeddings=embeddings,
         use_bm25=True,
@@ -262,12 +280,26 @@ async def _search(
         lexical=_lexical_source(session, auth.user, body.namespace_id),
     )
     top_k = body.top_k or settings.ASK_TOP_K
-    hits = result.hits[:top_k]
+    candidates = result.hits[:top_k]
+
+    ranked, scores = await rerank_hits(
+        session, auth.user, question, candidates, reranker
+    )
+    if scores:
+        hits = ranked[: keep_count(scores)]
+    else:
+        hits = ranked[: settings.ASK_DOCUMENTS_WITHOUT_RERANK]
+
     chunks_by_document = await _matching_chunks(
-        vectors, embeddings, body.q.strip(), [h.document_id for h in hits]
+        vectors, embeddings, question, [h.document_id for h in hits]
     )
     passages = _passages_for(session, auth.user, hits, chunks_by_document)
-    return passages, (time.perf_counter() - started) * 1000, len(result.hits)
+    return (
+        passages,
+        (time.perf_counter() - started) * 1000,
+        len(result.hits),
+        bool(scores),
+    )
 
 
 @router.post("/", response_model=AskAnswer)
@@ -276,6 +308,7 @@ async def ask_question(
     auth: AuthDep,
     vectors: VectorsDep,
     embeddings: EmbeddingsDep,
+    reranker: RerankerDep,
     body: AskRequest,
 ) -> AskAnswer:
     """Answer a question from the knowledge base, with citations."""
@@ -283,8 +316,8 @@ async def ask_question(
         raise HTTPException(status_code=422, detail="Ask a question")
 
     started = time.perf_counter()
-    passages, retrieval_ms, searched = await _search(
-        session, auth, vectors, embeddings, body
+    passages, retrieval_ms, searched, reranked = await _search(
+        session, auth, vectors, embeddings, reranker, body
     )
     context = build_context(passages)
     llm = LLMClient()
@@ -300,6 +333,7 @@ async def ask_question(
         searched=searched,
         used=len({p.document_id for p in context.passages}),
         passages=len(context.passages),
+        reranked=reranked,
         truncated=context.truncated,
         model=settings.LLM_MODEL,
         retrieval_ms=retrieval_ms,
@@ -313,6 +347,7 @@ async def ask_question_stream(
     auth: AuthDep,
     vectors: VectorsDep,
     embeddings: EmbeddingsDep,
+    reranker: RerankerDep,
     body: AskRequest,
 ) -> StreamingResponse:
     """The same answer, streamed as server-sent events.
@@ -326,8 +361,8 @@ async def ask_question_stream(
         raise HTTPException(status_code=422, detail="Ask a question")
 
     started = time.perf_counter()
-    passages, retrieval_ms, searched = await _search(
-        session, auth, vectors, embeddings, body
+    passages, retrieval_ms, searched, reranked = await _search(
+        session, auth, vectors, embeddings, reranker, body
     )
     context = build_context(passages)
     # Citations are resolved up front so they can be shown while the answer is
@@ -345,6 +380,7 @@ async def ask_question_stream(
                 "searched": searched,
                 "used": len({p.document_id for p in context.passages}),
                 "passages": len(context.passages),
+                "reranked": reranked,
                 "truncated": context.truncated,
                 "retrieval_ms": retrieval_ms,
                 "model": settings.LLM_MODEL,

@@ -58,17 +58,33 @@ export function NamespaceSwitcher() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              /*
+               * Collapsed, this button is a 32px square with no padding, so its
+               * contents would otherwise sit hard against the left edge while
+               * every navigation icon below is centred by padding. Centring
+               * here, and shrinking the tile a little, puts it on the same axis
+               * at the same visual weight.
+               */
+              className="group-data-[collapsible=icon]:justify-center data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               data-testid="namespace-switcher"
             >
               {active ? (
-                <NamespaceIcon icon={active.icon} color={active.color} />
+                <NamespaceIcon
+                  icon={active.icon}
+                  color={active.color}
+                  className="group-data-[collapsible=icon]:size-7"
+                />
               ) : (
-                <span className="flex aspect-square size-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                <span className="flex aspect-square size-8 items-center justify-center rounded-md bg-muted text-muted-foreground group-data-[collapsible=icon]:size-7">
                   <FolderKanban className="size-4" />
                 </span>
               )}
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              {/*
+                Hidden outright when collapsed rather than merely clipped: they
+                are flex siblings, so leaving them in the layout squeezes the
+                tile down to a sliver inside the 32px button.
+              */}
+              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-medium">
                   {active?.name ?? "No spaces yet"}
                 </span>
@@ -80,7 +96,7 @@ export function NamespaceSwitcher() {
                     : "Create your first space"}
                 </span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4 text-muted-foreground" />
+              <ChevronsUpDown className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

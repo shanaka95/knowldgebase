@@ -1,5 +1,6 @@
 import {
   BrainCircuit,
+  Copy,
   FolderInput,
   Link2,
   MoreHorizontal,
@@ -93,6 +94,13 @@ export function DocumentMenu({
         <DropdownMenuItem onSelect={() => void copyLink()}>
           <Link2 />
           Copy link
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => openDialog({ kind: "copy", target })}
+          data-testid="document-make-a-copy"
+        >
+          <Copy />
+          Make a copy
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onToggleAiPanel}>
           <BrainCircuit />

@@ -1,5 +1,5 @@
 import { Appearance } from "@/components/Common/Appearance"
-import { Logo } from "@/components/Common/Logo"
+import { APP_NAME, APP_TAGLINE, Logo } from "@/components/Common/Logo"
 
 interface AuthLayoutProps {
   children: React.ReactNode
@@ -16,7 +16,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         <Logo variant="full" asLink={false} />
         <div className="relative max-w-md space-y-3">
           <h2 className="text-3xl font-semibold tracking-tight">
-            Your team's knowledge, organised.
+            {APP_NAME} — {APP_TAGLINE}.
           </h2>
           <p className="text-muted-foreground">
             Spaces, folders and beautifully written pages — searchable,
@@ -24,7 +24,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           </p>
         </div>
         <p className="relative text-xs text-muted-foreground">
-          Knowledge Base · {new Date().getFullYear()}
+          {APP_NAME} · {new Date().getFullYear()}
         </p>
       </div>
       <div className="flex flex-col gap-4 p-6 md:p-10">

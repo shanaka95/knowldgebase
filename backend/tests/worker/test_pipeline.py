@@ -44,8 +44,19 @@ def n_blocks(doc: Document) -> int:
 
 
 def claim(job_id: Any, worker: str = "test-worker") -> EmbeddingJob:
-    [job] = [j for j in queue.claim_jobs(worker, 50) if j.id == job_id]
-    return job
+    """Claim until this job comes up.
+
+    Other tests leave queued indexing jobs behind, and claiming is first-come,
+    so a single batch can fill up with jobs that are not this one.
+    """
+    for _ in range(50):
+        batch = queue.claim_jobs(worker, 50)
+        if not batch:
+            break
+        for job in batch:
+            if job.id == job_id:
+                return job
+    raise AssertionError(f"job {job_id} was never claimable")
 
 
 def kinds(store: InMemoryVectorStore, document_id: Any) -> dict[str, int]:

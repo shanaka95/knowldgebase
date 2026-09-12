@@ -151,6 +151,10 @@ export type AskAnswer = {
      */
     passages?: number;
     /**
+     * Reranked
+     */
+    reranked?: boolean;
+    /**
      * Truncated
      */
     truncated?: boolean;
@@ -341,9 +345,47 @@ export type Body_imports_create_import = {
      */
     title?: string | null;
     /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
      * Prompt
      */
     prompt?: string | null;
+};
+
+/**
+ * Body_imports-create_imports
+ */
+export type Body_imports_create_imports = {
+    /**
+     * Files
+     */
+    files: Array<Blob | File>;
+    /**
+     * Namespace Id
+     */
+    namespace_id: string;
+    /**
+     * Folder Id
+     */
+    folder_id?: string | null;
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
+     * Prompt
+     */
+    prompt?: string | null;
+    /**
+     * Combine
+     */
+    combine?: boolean;
 };
 
 /**
@@ -374,6 +416,26 @@ export type Body_login_login_access_token = {
      * Client Secret
      */
     client_secret?: string | null;
+};
+
+/**
+ * CapturedEmail
+ *
+ * A message the logging sender kept instead of sending.
+ */
+export type CapturedEmail = {
+    /**
+     * To
+     */
+    to: string;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Text
+     */
+    text: string;
 };
 
 /**
@@ -408,6 +470,24 @@ export type DocumentChunkPublic = {
 };
 
 /**
+ * DocumentClone
+ */
+export type DocumentClone = {
+    /**
+     * Namespace Id
+     */
+    namespace_id: string;
+    /**
+     * Folder Id
+     */
+    folder_id?: string | null;
+    /**
+     * Title
+     */
+    title?: string | null;
+};
+
+/**
  * DocumentCreate
  */
 export type DocumentCreate = {
@@ -428,6 +508,10 @@ export type DocumentCreate = {
      */
     content?: string;
     content_format?: ContentFormat;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
 };
 
 /**
@@ -528,6 +612,14 @@ export type DocumentPublic = {
      * Title
      */
     title: string;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
+     * Public Slug
+     */
+    public_slug?: string | null;
     /**
      * Version
      */
@@ -678,6 +770,14 @@ export type DocumentSummaryPublic = {
      */
     title: string;
     /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
+     * Public Slug
+     */
+    public_slug?: string | null;
+    /**
      * Version
      */
     version: number;
@@ -734,6 +834,34 @@ export type DocumentSummaryPublic = {
 };
 
 /**
+ * DocumentTypeCount
+ */
+export type DocumentTypeCount = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Count
+     */
+    count?: number;
+};
+
+/**
+ * DocumentTypesPublic
+ */
+export type DocumentTypesPublic = {
+    /**
+     * Data
+     */
+    data: Array<DocumentTypeCount>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * DocumentUpdate
  */
 export type DocumentUpdate = {
@@ -746,6 +874,10 @@ export type DocumentUpdate = {
      */
     content?: string | null;
     content_format?: ContentFormat;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
     /**
      * Expected Version
      */
@@ -764,6 +896,26 @@ export type DocumentsPublic = {
      * Count
      */
     count: number;
+};
+
+/**
+ * EmailVerificationConfirm
+ */
+export type EmailVerificationConfirm = {
+    /**
+     * Token
+     */
+    token: string;
+};
+
+/**
+ * EmailVerificationRequest
+ */
+export type EmailVerificationRequest = {
+    /**
+     * Email
+     */
+    email: string;
 };
 
 /**
@@ -1065,6 +1217,10 @@ export type ImportJobPublic = {
      */
     title?: string | null;
     /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
      * Prompt
      */
     prompt?: string | null;
@@ -1080,6 +1236,14 @@ export type ImportJobPublic = {
      * Size
      */
     size: number;
+    /**
+     * File Count
+     */
+    file_count?: number;
+    /**
+     * Filenames
+     */
+    filenames?: Array<string>;
     status: ImportStatus;
     parser?: ImportParser | null;
     /**
@@ -1141,6 +1305,42 @@ export type ImportParser = 'mineru' | 'llm';
 export type ImportStatus = 'queued' | 'rendering' | 'parsing' | 'creating' | 'done' | 'failed' | 'cancelled';
 
 /**
+ * InvitationPreview
+ *
+ * What the landing page shows somebody who followed an invitation link.
+ *
+ * Deliberately thin. Whoever holds the link already knows they were sent a
+ * page; they should not learn anything else about the account that sent it.
+ */
+export type InvitationPreview = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Document Title
+     */
+    document_title: string;
+    /**
+     * Shared By
+     */
+    shared_by: string;
+    role: ShareRole;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Already Accepted
+     */
+    already_accepted?: boolean;
+};
+
+/**
  * JobStage
  */
 export type JobStage = 'claimed' | 'loading' | 'chunking' | 'summarizing' | 'embedding' | 'writing' | 'done';
@@ -1149,6 +1349,38 @@ export type JobStage = 'claimed' | 'loading' | 'chunking' | 'summarizing' | 'emb
  * JobStatus
  */
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'superseded';
+
+/**
+ * LoginChallenge
+ *
+ * What a correct password buys: the right to be asked for a code.
+ *
+ * No part of this is a credential. It names the pending login and says where
+ * the code went, with the address masked so a borrowed screen does not give
+ * away the whole mailbox.
+ */
+export type LoginChallenge = {
+    /**
+     * Challenge Token
+     */
+    challenge_token: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Sent To
+     */
+    sent_to: string;
+    /**
+     * Code Length
+     */
+    code_length: number;
+    /**
+     * Delivered
+     */
+    delivered?: boolean;
+};
 
 /**
  * Message
@@ -1279,7 +1511,7 @@ export type NamespacePublic = {
     /**
      * Member Count
      */
-    member_count?: number;
+    member_count?: number | null;
     /**
      * Created At
      */
@@ -1347,6 +1579,30 @@ export type NamespacesPublic = {
 };
 
 /**
+ * NewPassword
+ */
+export type NewPassword = {
+    /**
+     * Token
+     */
+    token: string;
+    /**
+     * New Password
+     */
+    new_password: string;
+};
+
+/**
+ * PasswordRecoveryRequest
+ */
+export type PasswordRecoveryRequest = {
+    /**
+     * Email
+     */
+    email: string;
+};
+
+/**
  * PrivateUserCreate
  */
 export type PrivateUserCreate = {
@@ -1369,6 +1625,64 @@ export type PrivateUserCreate = {
 };
 
 /**
+ * PublicDocument
+ *
+ * A page as it looks to somebody who only has the link.
+ *
+ * Nothing here identifies anything else in the knowledge base. No folder, no
+ * space id, no author id, no version history - because the link was shared,
+ * not the account behind it.
+ */
+export type PublicDocument = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
+     * Content Html
+     */
+    content_html: string;
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
+    /**
+     * Shared By
+     */
+    shared_by?: string | null;
+};
+
+/**
+ * PublicLink
+ */
+export type PublicLink = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Shared At
+     */
+    shared_at?: string | null;
+};
+
+/**
  * RetrievalHit
  */
 export type RetrievalHit = {
@@ -1380,6 +1694,10 @@ export type RetrievalHit = {
      * Title
      */
     title: string;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
     /**
      * Namespace Id
      */
@@ -1455,6 +1773,10 @@ export type RetrievalResults = {
      * Used Vector
      */
     used_vector: boolean;
+    /**
+     * Used Rerank
+     */
+    used_rerank?: boolean;
     /**
      * Targets
      */
@@ -1548,6 +1870,10 @@ export type SearchResult = {
      */
     title: string;
     /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
      * Namespace Id
      */
     namespace_id: string;
@@ -1611,9 +1937,93 @@ export type ServiceHealth = {
 };
 
 /**
+ * ShareEmails
+ *
+ * Share one page with several addresses at once.
+ *
+ * Batched because the interface asks for several and has to report back which
+ * were known and which will be invited - which it cannot do one call at a time
+ * without inventing its own error handling.
+ */
+export type ShareEmails = {
+    /**
+     * Emails
+     */
+    emails: Array<string>;
+    role?: ShareRole;
+    /**
+     * Message
+     */
+    message?: string | null;
+};
+
+/**
+ * ShareInvitationPublic
+ */
+export type ShareInvitationPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Email
+     */
+    email: string;
+    role: ShareRole;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
+ * ShareResult
+ */
+export type ShareResult = {
+    /**
+     * Shared
+     */
+    shared?: Array<DocumentSharePublic>;
+    /**
+     * Invited
+     */
+    invited?: Array<ShareInvitationPublic>;
+    /**
+     * Skipped
+     */
+    skipped?: Array<ShareSkipped>;
+    /**
+     * Recipients
+     */
+    recipients?: number;
+    /**
+     * Max Recipients
+     */
+    max_recipients?: number;
+};
+
+/**
  * ShareRole
  */
 export type ShareRole = 'viewer' | 'editor';
+
+/**
+ * ShareSkipped
+ */
+export type ShareSkipped = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Reason
+     */
+    reason: string;
+};
 
 /**
  * SharedWithMe
@@ -1641,6 +2051,50 @@ export type Token = {
      * Token Type
      */
     token_type?: string;
+};
+
+/**
+ * TokenMessage
+ *
+ * A message plus a replacement session, for actions that revoke the old one.
+ */
+export type TokenMessage = {
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Access Token
+     */
+    access_token: string;
+    /**
+     * Token Type
+     */
+    token_type?: string;
+};
+
+/**
+ * TwoFactorResend
+ */
+export type TwoFactorResend = {
+    /**
+     * Challenge Token
+     */
+    challenge_token: string;
+};
+
+/**
+ * TwoFactorVerify
+ */
+export type TwoFactorVerify = {
+    /**
+     * Challenge Token
+     */
+    challenge_token: string;
+    /**
+     * Code
+     */
+    code: string;
 };
 
 /**
@@ -1684,6 +2138,27 @@ export type UserCreate = {
 };
 
 /**
+ * UserLookup
+ *
+ * Whether one exact address has an account here.
+ *
+ * Exact matches only, never prefixes: the interface wants to confirm the
+ * address someone typed, and a prefix search would turn this into a way to
+ * read the user list.
+ */
+export type UserLookup = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Exists
+     */
+    exists: boolean;
+    user?: UserRef | null;
+};
+
+/**
  * UserPublic
  */
 export type UserPublic = {
@@ -1711,6 +2186,14 @@ export type UserPublic = {
      * Created At
      */
     created_at?: string | null;
+    /**
+     * Email Verified At
+     */
+    email_verified_at?: string | null;
+    /**
+     * Max Shares Per Document
+     */
+    max_shares_per_document?: number;
 };
 
 /**
@@ -1775,6 +2258,10 @@ export type UserUpdate = {
      * Password
      */
     password?: string | null;
+    /**
+     * Max Shares Per Document
+     */
+    max_shares_per_document?: number | null;
 };
 
 /**
@@ -1913,10 +2400,160 @@ export type loginLoginAccessTokenResponses = {
     /**
      * Successful Response
      */
-    200: Token;
+    200: LoginChallenge;
 };
 
 export type loginLoginAccessTokenResponse = loginLoginAccessTokenResponses[keyof loginLoginAccessTokenResponses];
+
+export type loginVerifyTwoFactorData = {
+    body: TwoFactorVerify;
+    path?: never;
+    query?: never;
+    url: '/api/v1/login/two-factor';
+};
+
+export type loginVerifyTwoFactorErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type loginVerifyTwoFactorError = loginVerifyTwoFactorErrors[keyof loginVerifyTwoFactorErrors];
+
+export type loginVerifyTwoFactorResponses = {
+    /**
+     * Successful Response
+     */
+    200: Token;
+};
+
+export type loginVerifyTwoFactorResponse = loginVerifyTwoFactorResponses[keyof loginVerifyTwoFactorResponses];
+
+export type loginResendTwoFactorData = {
+    body: TwoFactorResend;
+    path?: never;
+    query?: never;
+    url: '/api/v1/login/two-factor/resend';
+};
+
+export type loginResendTwoFactorErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type loginResendTwoFactorError = loginResendTwoFactorErrors[keyof loginResendTwoFactorErrors];
+
+export type loginResendTwoFactorResponses = {
+    /**
+     * Successful Response
+     */
+    200: LoginChallenge;
+};
+
+export type loginResendTwoFactorResponse = loginResendTwoFactorResponses[keyof loginResendTwoFactorResponses];
+
+export type loginVerifyEmailData = {
+    body: EmailVerificationConfirm;
+    path?: never;
+    query?: never;
+    url: '/api/v1/login/verify-email';
+};
+
+export type loginVerifyEmailErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type loginVerifyEmailError = loginVerifyEmailErrors[keyof loginVerifyEmailErrors];
+
+export type loginVerifyEmailResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type loginVerifyEmailResponse = loginVerifyEmailResponses[keyof loginVerifyEmailResponses];
+
+export type loginResendVerificationData = {
+    body: EmailVerificationRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/login/verify-email/resend';
+};
+
+export type loginResendVerificationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type loginResendVerificationError = loginResendVerificationErrors[keyof loginResendVerificationErrors];
+
+export type loginResendVerificationResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type loginResendVerificationResponse = loginResendVerificationResponses[keyof loginResendVerificationResponses];
+
+export type loginRecoverPasswordData = {
+    body: PasswordRecoveryRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/login/password-recovery';
+};
+
+export type loginRecoverPasswordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type loginRecoverPasswordError = loginRecoverPasswordErrors[keyof loginRecoverPasswordErrors];
+
+export type loginRecoverPasswordResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type loginRecoverPasswordResponse = loginRecoverPasswordResponses[keyof loginRecoverPasswordResponses];
+
+export type loginResetPasswordData = {
+    body: NewPassword;
+    path?: never;
+    query?: never;
+    url: '/api/v1/login/reset-password';
+};
+
+export type loginResetPasswordErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type loginResetPasswordError = loginResetPasswordErrors[keyof loginResetPasswordErrors];
+
+export type loginResetPasswordResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type loginResetPasswordResponse = loginResetPasswordResponses[keyof loginResetPasswordResponses];
 
 export type loginTestTokenData = {
     body?: never;
@@ -1933,6 +2570,22 @@ export type loginTestTokenResponses = {
 };
 
 export type loginTestTokenResponse = loginTestTokenResponses[keyof loginTestTokenResponses];
+
+export type loginSignOutEverywhereData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/login/sign-out-everywhere';
+};
+
+export type loginSignOutEverywhereResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type loginSignOutEverywhereResponse = loginSignOutEverywhereResponses[keyof loginSignOutEverywhereResponses];
 
 export type usersReadUsersData = {
     body?: never;
@@ -2070,10 +2723,40 @@ export type usersUpdatePasswordMeResponses = {
     /**
      * Successful Response
      */
-    200: Message;
+    200: TokenMessage;
 };
 
 export type usersUpdatePasswordMeResponse = usersUpdatePasswordMeResponses[keyof usersUpdatePasswordMeResponses];
+
+export type usersLookupUserData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Email
+         */
+        email: string;
+    };
+    url: '/api/v1/users/lookup';
+};
+
+export type usersLookupUserErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type usersLookupUserError = usersLookupUserErrors[keyof usersLookupUserErrors];
+
+export type usersLookupUserResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserLookup;
+};
+
+export type usersLookupUserResponse = usersLookupUserResponses[keyof usersLookupUserResponses];
 
 export type usersRegisterUserData = {
     body: UserRegister;
@@ -2095,7 +2778,7 @@ export type usersRegisterUserResponses = {
     /**
      * Successful Response
      */
-    200: UserPublic;
+    200: Message;
 };
 
 export type usersRegisterUserResponse = usersRegisterUserResponses[keyof usersRegisterUserResponses];
@@ -2791,6 +3474,22 @@ export type documentsReadEmbeddingSummaryResponses = {
 
 export type documentsReadEmbeddingSummaryResponse = documentsReadEmbeddingSummaryResponses[keyof documentsReadEmbeddingSummaryResponses];
 
+export type documentsReadDocumentTypesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/documents/types';
+};
+
+export type documentsReadDocumentTypesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentTypesPublic;
+};
+
+export type documentsReadDocumentTypesResponse = documentsReadDocumentTypesResponses[keyof documentsReadDocumentTypesResponses];
+
 export type documentsDeleteDocumentData = {
     body?: never;
     path: {
@@ -2911,6 +3610,36 @@ export type documentsMoveDocumentResponses = {
 
 export type documentsMoveDocumentResponse = documentsMoveDocumentResponses[keyof documentsMoveDocumentResponses];
 
+export type documentsCloneDocumentData = {
+    body: DocumentClone;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/clone';
+};
+
+export type documentsCloneDocumentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsCloneDocumentError = documentsCloneDocumentErrors[keyof documentsCloneDocumentErrors];
+
+export type documentsCloneDocumentResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentPublic;
+};
+
+export type documentsCloneDocumentResponse = documentsCloneDocumentResponses[keyof documentsCloneDocumentResponses];
+
 export type documentsReadDocumentSharesData = {
     body?: never;
     path: {
@@ -2970,6 +3699,162 @@ export type documentsShareDocumentResponses = {
 };
 
 export type documentsShareDocumentResponse = documentsShareDocumentResponses[keyof documentsShareDocumentResponses];
+
+export type documentsShareDocumentWithManyData = {
+    body: ShareEmails;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/shares/batch';
+};
+
+export type documentsShareDocumentWithManyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsShareDocumentWithManyError = documentsShareDocumentWithManyErrors[keyof documentsShareDocumentWithManyErrors];
+
+export type documentsShareDocumentWithManyResponses = {
+    /**
+     * Successful Response
+     */
+    200: ShareResult;
+};
+
+export type documentsShareDocumentWithManyResponse = documentsShareDocumentWithManyResponses[keyof documentsShareDocumentWithManyResponses];
+
+export type documentsReadDocumentInvitationsData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/invitations';
+};
+
+export type documentsReadDocumentInvitationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsReadDocumentInvitationsError = documentsReadDocumentInvitationsErrors[keyof documentsReadDocumentInvitationsErrors];
+
+export type documentsReadDocumentInvitationsResponses = {
+    /**
+     * Response Documents-Read Document Invitations
+     *
+     * Successful Response
+     */
+    200: Array<ShareInvitationPublic>;
+};
+
+export type documentsReadDocumentInvitationsResponse = documentsReadDocumentInvitationsResponses[keyof documentsReadDocumentInvitationsResponses];
+
+export type documentsCancelInvitationData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+        /**
+         * Invitation Id
+         */
+        invitation_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/invitations/{invitation_id}';
+};
+
+export type documentsCancelInvitationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsCancelInvitationError = documentsCancelInvitationErrors[keyof documentsCancelInvitationErrors];
+
+export type documentsCancelInvitationResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type documentsCancelInvitationResponse = documentsCancelInvitationResponses[keyof documentsCancelInvitationResponses];
+
+export type documentsUnpublishDocumentData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/public';
+};
+
+export type documentsUnpublishDocumentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsUnpublishDocumentError = documentsUnpublishDocumentErrors[keyof documentsUnpublishDocumentErrors];
+
+export type documentsUnpublishDocumentResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type documentsUnpublishDocumentResponse = documentsUnpublishDocumentResponses[keyof documentsUnpublishDocumentResponses];
+
+export type documentsPublishDocumentData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/public';
+};
+
+export type documentsPublishDocumentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsPublishDocumentError = documentsPublishDocumentErrors[keyof documentsPublishDocumentErrors];
+
+export type documentsPublishDocumentResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicLink;
+};
+
+export type documentsPublishDocumentResponse = documentsPublishDocumentResponses[keyof documentsPublishDocumentResponses];
 
 export type documentsUnshareDocumentData = {
     body?: never;
@@ -3329,6 +4214,31 @@ export type importsCreateImportResponses = {
 
 export type importsCreateImportResponse = importsCreateImportResponses[keyof importsCreateImportResponses];
 
+export type importsCreateImportsData = {
+    body: Body_imports_create_imports;
+    path?: never;
+    query?: never;
+    url: '/api/v1/imports/batch';
+};
+
+export type importsCreateImportsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type importsCreateImportsError = importsCreateImportsErrors[keyof importsCreateImportsErrors];
+
+export type importsCreateImportsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportJobsPublic;
+};
+
+export type importsCreateImportsResponse = importsCreateImportsResponses[keyof importsCreateImportsResponses];
+
 export type importsDeleteImportData = {
     body?: never;
     path: {
@@ -3621,6 +4531,10 @@ export type searchRetrieveDocumentsData = {
          */
         limit?: number;
         /**
+         * Rerank
+         */
+        rerank?: boolean;
+        /**
          * Rrf K
          */
         rrf_k?: number | null;
@@ -3714,6 +4628,100 @@ export type workersReadWorkersResponses = {
 
 export type workersReadWorkersResponse = workersReadWorkersResponses[keyof workersReadWorkersResponses];
 
+export type publicReadPublicDocumentData = {
+    body?: never;
+    path: {
+        /**
+         * Identifier
+         */
+        identifier: string;
+    };
+    query?: never;
+    url: '/api/v1/public/documents/{identifier}';
+};
+
+export type publicReadPublicDocumentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type publicReadPublicDocumentError = publicReadPublicDocumentErrors[keyof publicReadPublicDocumentErrors];
+
+export type publicReadPublicDocumentResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublicDocument;
+};
+
+export type publicReadPublicDocumentResponse = publicReadPublicDocumentResponses[keyof publicReadPublicDocumentResponses];
+
+export type publicReadPublicAttachmentData = {
+    body?: never;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+        /**
+         * Attachment Id
+         */
+        attachment_id: string;
+    };
+    query?: never;
+    url: '/api/v1/public/{slug}/attachments/{attachment_id}';
+};
+
+export type publicReadPublicAttachmentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type publicReadPublicAttachmentError = publicReadPublicAttachmentErrors[keyof publicReadPublicAttachmentErrors];
+
+export type publicReadPublicAttachmentResponses = {
+    /**
+     * Response Public-Read Public Attachment
+     *
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type publicReadInvitationData = {
+    body?: never;
+    path: {
+        /**
+         * Token
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/api/v1/public/invitations/{token}';
+};
+
+export type publicReadInvitationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type publicReadInvitationError = publicReadInvitationErrors[keyof publicReadInvitationErrors];
+
+export type publicReadInvitationResponses = {
+    /**
+     * Successful Response
+     */
+    200: InvitationPreview;
+};
+
+export type publicReadInvitationResponse = publicReadInvitationResponses[keyof publicReadInvitationResponses];
+
 export type privateCreateUserData = {
     body: PrivateUserCreate;
     path?: never;
@@ -3738,3 +4746,39 @@ export type privateCreateUserResponses = {
 };
 
 export type privateCreateUserResponse = privateCreateUserResponses[keyof privateCreateUserResponses];
+
+export type privateReadEmailsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * To
+         */
+        to?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/private/emails/';
+};
+
+export type privateReadEmailsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type privateReadEmailsError = privateReadEmailsErrors[keyof privateReadEmailsErrors];
+
+export type privateReadEmailsResponses = {
+    /**
+     * Response Private-Read Emails
+     *
+     * Successful Response
+     */
+    200: Array<CapturedEmail>;
+};
+
+export type privateReadEmailsResponse = privateReadEmailsResponses[keyof privateReadEmailsResponses];

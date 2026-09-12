@@ -21,11 +21,24 @@
 		max_size 64MB
 	}
 
-	reverse_proxy backend:8000 {
-		# Answers stream as server-sent events; buffering would hold them back.
-		flush_interval -1
-		# Cloudflare puts the visitor's address here; pass on something truthful.
-		header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+	# The MCP server is a separate container. It mounts at /mcp, so the path is
+	# passed through unchanged. This must come before the catch-all, which would
+	# otherwise hand /mcp to the single-page app.
+	handle /mcp* {
+		reverse_proxy mcp:8000 {
+			# MCP streams its responses; buffering would stall every tool call.
+			flush_interval -1
+			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		}
+	}
+
+	handle {
+		reverse_proxy backend:8000 {
+			# Answers stream as server-sent events; buffering would hold them back.
+			flush_interval -1
+			# Cloudflare puts the visitor's address here; pass on something truthful.
+			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		}
 	}
 }
 

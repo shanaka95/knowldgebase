@@ -9,6 +9,7 @@ import {
   createTestUser,
   getDocument,
   getEmbeddings,
+  getToken,
   shareDocument,
   TINY_PNG,
   uid,
@@ -184,6 +185,8 @@ test.describe("Document API consistency", () => {
     expect(r.ok()).toBeTruthy()
     r = await shareDocument(request, token, doc.id, guest.email, "viewer")
     expect(r.status()).toBe(409)
+    // An address with no account is no longer a dead end: the single-share
+    // endpoint says so and points at the batch one, which invites instead.
     r = await shareDocument(
       request,
       token,
@@ -191,7 +194,8 @@ test.describe("Document API consistency", () => {
       "nobody@example.com",
       "viewer",
     )
-    expect(r.status()).toBe(404)
+    expect(r.status()).toBe(409)
+    expect(await r.text()).toContain("/shares/batch")
 
     const list = await (
       await request.get(`${API}/documents/${doc.id}/shares`, {
@@ -286,14 +290,14 @@ test.describe("Document API consistency", () => {
     expect(anon.status()).toBe(401)
 
     const stranger = await createTestUser(request)
-    const strangerToken = await (
-      await request.post(`${API}/login/access-token`, {
-        form: { username: stranger.email, password: stranger.password },
-      })
-    ).json()
+    const strangerToken = await getToken(
+      request,
+      stranger.email,
+      stranger.password,
+    )
     const forbidden = await request.get(
       `${API}/attachments/${att.id}/download`,
-      { headers: auth(strangerToken.access_token) },
+      { headers: auth(strangerToken) },
     )
     expect(forbidden.status()).toBe(404)
 

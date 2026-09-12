@@ -1,12 +1,19 @@
-# Knowledge Base
+# PlusGPT
 
-A self-hosted, Confluence-style knowledge base. Organise pages in **spaces** (namespaces such as
-*Personal* or *Office*) and nested **folders**, write them in a rich editor, share spaces or single
-pages with colleagues, and attach images. A background worker indexes every page with **LLM-driven
-semantic chunking** and embeddings, so you can search it **lexically (BM25) and semantically at the
-same time**, fused with Reciprocal Rank Fusion. You can also **import PDFs and images** - a
-document-parsing vision model turns them into editable pages while keeping the original file.
-Third-party apps use the same REST API with personal API keys.
+**A personal knowledge management system.** Organise pages in **spaces** (such as *Personal* or
+*Office*) and nested **folders**, write them in a rich editor, file each page under a **type**
+(Letter, Invoice, Runbook - your own vocabulary), share spaces or single pages with other people,
+and attach images. A background worker indexes every page with **LLM-driven semantic chunking** and
+embeddings, so you can search it **lexically (BM25) and semantically at the same time**, fused with
+Reciprocal Rank Fusion and then **reranked** by a cross-encoder that reads your query against each
+candidate. **Ask** turns that into a written answer with citations. You can also **import PDFs and
+images** - singly or many at once, as a page each or combined into one - and a document-parsing
+vision model turns them into editable pages while keeping the originals attached.
+
+Accounts are production-grade: email confirmation on sign-up, **a code emailed on every sign-in**,
+password reset, session revocation and per-user API keys. Those keys are what an AI assistant uses
+to reach the knowledge base over **MCP**, scoped to exactly one person's spaces. See
+[docs/AUTH.md](docs/AUTH.md).
 
 Everything except the AI models runs in Docker, and the models are configured in a single file
 (`models.toml`) that points at any OpenAI-compatible endpoint.
@@ -54,6 +61,9 @@ shadcn/ui + Tiptap on the frontend; Postgres, Qdrant and MinIO as services.
   answer, and refuses rather than guessing when the knowledge base has no answer.
 * **Imports** (see [docs/IMPORTS.md](docs/IMPORTS.md)): upload a PDF or image, MinerU2.5 parses it
   into headings, text and tables, and the original file stays attached to the page.
+* **Sharing** (see [docs/SHARING.md](docs/SHARING.md)): share a page with named people,
+  invite addresses that have no account yet, publish a read-only link, or take a private copy
+  of something somebody shared with you.
 * **API** (see [docs/API.md](docs/API.md)): the same endpoints serve the web UI (JWT) and
   integrations (personal API keys with read/write scopes).
 

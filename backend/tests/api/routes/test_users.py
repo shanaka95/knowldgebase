@@ -7,7 +7,12 @@ from app import crud
 from app.core.config import settings
 from app.core.security import verify_password
 from app.models import User, UserCreate
-from tests.utils.user import create_random_user
+from tests.utils.kb import create_user_with_password, login
+from tests.utils.user import (
+    create_random_user,
+    user_authentication_headers,
+    verify_email,
+)
 from tests.utils.utils import random_email, random_lower_string
 
 
@@ -86,16 +91,12 @@ def test_get_existing_user_current_user(client: TestClient, db: Session) -> None
     password = random_lower_string()
     user_in = UserCreate(email=username, password=password)
     user = crud.create_user(session=db, user_create=user_in)
+    verify_email(db, user)
     user_id = user.id
 
-    login_data = {
-        "username": username,
-        "password": password,
-    }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    tokens = r.json()
-    a_token = tokens["access_token"]
-    headers = {"Authorization": f"Bearer {a_token}"}
+    headers = user_authentication_headers(
+        client=client, email=username, password=password
+    )
 
     r = client.get(
         f"{settings.API_V1_STR}/users/{user_id}",
@@ -215,46 +216,39 @@ def test_update_user_me(
     assert user_db.full_name == full_name
 
 
-def test_update_password_me(
-    client: TestClient, superuser_token_headers: dict[str, str], db: Session
-) -> None:
+def test_update_password_me(client: TestClient, db: Session) -> None:
+    """Changing a password ends the sessions it opened, and issues a new one.
+
+    Done on a throwaway account: the administrator session is shared across this
+    module, and revoking it here would sign the rest of the module out.
+    """
+    user, password = create_user_with_password(db)
+    headers = login(client, user, password)
     new_password = random_lower_string()
-    data = {
-        "current_password": settings.FIRST_SUPERUSER_PASSWORD,
-        "new_password": new_password,
-    }
+
     r = client.patch(
         f"{settings.API_V1_STR}/users/me/password",
-        headers=superuser_token_headers,
-        json=data,
+        headers=headers,
+        json={"current_password": password, "new_password": new_password},
     )
-    assert r.status_code == 200
-    updated_user = r.json()
-    assert updated_user["message"] == "Password updated successfully"
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "signed out" in body["message"]
 
-    user_query = select(User).where(User.email == settings.FIRST_SUPERUSER)
-    user_db = db.exec(user_query).first()
-    assert user_db
-    assert user_db.email == settings.FIRST_SUPERUSER
-    verified, _ = verify_password(new_password, user_db.hashed_password)
-    assert verified
-
-    # Revert to the old password to keep consistency in test
-    old_data = {
-        "current_password": new_password,
-        "new_password": settings.FIRST_SUPERUSER_PASSWORD,
-    }
-    r = client.patch(
-        f"{settings.API_V1_STR}/users/me/password",
-        headers=superuser_token_headers,
-        json=old_data,
+    # The token used to make the change is gone with the rest.
+    assert (
+        client.get(f"{settings.API_V1_STR}/users/me", headers=headers).status_code
+        == 401
     )
-    db.refresh(user_db)
 
-    assert r.status_code == 200
-    verified, _ = verify_password(
-        settings.FIRST_SUPERUSER_PASSWORD, user_db.hashed_password
+    # And the caller is not left stranded: the reply carries a replacement.
+    fresh = {"Authorization": f"Bearer {body['access_token']}"}
+    assert (
+        client.get(f"{settings.API_V1_STR}/users/me", headers=fresh).status_code == 200
     )
+
+    db.refresh(user)
+    verified, _ = verify_password(new_password, user.hashed_password)
     assert verified
 
 
@@ -320,9 +314,9 @@ def test_register_user(client: TestClient, db: Session) -> None:
         json=data,
     )
     assert r.status_code == 200
-    created_user = r.json()
-    assert created_user["email"] == username
-    assert created_user["full_name"] == full_name
+    # The reply says nothing about the account, on purpose: an unauthenticated
+    # endpoint that confirms an address is registered is an enumeration tool.
+    assert "message" in r.json()
 
     user_query = select(User).where(User.email == username)
     user_db = db.exec(user_query).first()
@@ -333,20 +327,39 @@ def test_register_user(client: TestClient, db: Session) -> None:
     assert verified
 
 
-def test_register_user_already_exists_error(client: TestClient) -> None:
-    password = random_lower_string()
-    full_name = random_lower_string()
-    data = {
-        "email": settings.FIRST_SUPERUSER,
-        "password": password,
-        "full_name": full_name,
-    }
-    r = client.post(
+def test_registering_a_taken_address_looks_like_success(
+    client: TestClient, db: Session
+) -> None:
+    """Signing up must not become a way to discover who has an account.
+
+    The person who owns the address finds out from their inbox; anyone else
+    learns nothing, and in particular cannot overwrite the existing account.
+    """
+    existing = crud.get_user_by_email(session=db, email=settings.FIRST_SUPERUSER)
+    assert existing is not None
+    original_hash = existing.hashed_password
+
+    fresh = client.post(
         f"{settings.API_V1_STR}/users/signup",
-        json=data,
+        json={
+            "email": random_email(),
+            "password": random_lower_string(),
+            "full_name": random_lower_string(),
+        },
     )
-    assert r.status_code == 400
-    assert r.json()["detail"] == "The user with this email already exists in the system"
+    taken = client.post(
+        f"{settings.API_V1_STR}/users/signup",
+        json={
+            "email": settings.FIRST_SUPERUSER,
+            "password": random_lower_string(),
+            "full_name": random_lower_string(),
+        },
+    )
+    assert fresh.status_code == taken.status_code == 200
+    assert fresh.json() == taken.json()
+
+    db.refresh(existing)
+    assert existing.hashed_password == original_hash, "the account was untouched"
 
 
 def test_update_user(
@@ -416,16 +429,12 @@ def test_delete_user_me(client: TestClient, db: Session) -> None:
     password = random_lower_string()
     user_in = UserCreate(email=username, password=password)
     user = crud.create_user(session=db, user_create=user_in)
+    verify_email(db, user)
     user_id = user.id
 
-    login_data = {
-        "username": username,
-        "password": password,
-    }
-    r = client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    tokens = r.json()
-    a_token = tokens["access_token"]
-    headers = {"Authorization": f"Bearer {a_token}"}
+    headers = user_authentication_headers(
+        client=client, email=username, password=password
+    )
 
     r = client.delete(
         f"{settings.API_V1_STR}/users/me",

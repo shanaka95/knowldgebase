@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react"
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,6 @@ import { useCreateImport } from "@/hooks/useImports"
 import { canEditNamespace, useNamespaces } from "@/hooks/useNamespaces"
 import { treeQuery } from "@/queries/namespaces"
 import { FileDropzone } from "./FileDropzone"
-import { filenameStem } from "./fileHelpers"
 
 interface Props {
   open: boolean
@@ -56,11 +56,25 @@ export function ImportDialog({
     () => namespaceId ?? editable[0]?.id ?? "",
   )
   const [folder, setFolder] = useState<string | null>(folderId ?? null)
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [title, setTitle] = useState("")
-  const [titleTouched, setTitleTouched] = useState(false)
+  /**
+   * On by default, because the model reads the document's own opening heading
+   * and that names the page better than a filename like "scan_0007.pdf" ever
+   * will. Unticking it hands the decision back.
+   */
+  const [autoTitle, setAutoTitle] = useState(true)
+  const [combine, setCombine] = useState(false)
   const [prompt, setPrompt] = useState("")
   const [rejection, setRejection] = useState<string | null>(null)
+
+  const many = files.length > 1
+  /**
+   * Several files becoming several pages cannot share one title: that would
+   * produce a list of pages with identical names. Combining them into a single
+   * page makes a title meaningful again.
+   */
+  const titleAvailable = !many || combine
 
   /*
    * The spaces list is usually still loading on the first render, so the
@@ -75,23 +89,23 @@ export function ImportDialog({
   const { data: tree } = useQuery({ ...treeQuery(spaceId), enabled: !!spaceId })
   const folders = tree?.raw.folders ?? []
 
-  const chooseFile = (next: File | null) => {
-    setFile(next)
+  const chooseFiles = (next: File[]) => {
+    setFiles(next)
     setRejection(null)
-    // the filename is a good default title until the user edits it themselves
-    if (next && !titleTouched) setTitle(filenameStem(next.name))
-    if (!next && !titleTouched) setTitle("")
   }
 
   const submit = () => {
-    if (!file || !spaceId) return
+    if (files.length === 0 || !spaceId) return
     createImport.mutate(
       {
-        file,
+        files,
         namespaceId: spaceId,
         folderId: folder,
-        title,
+        // An empty title is the instruction to derive one, so a manual title is
+        // sent only when it is both wanted and possible.
+        title: autoTitle || !titleAvailable ? null : title,
         prompt,
+        combine: many && combine,
       },
       {
         onSuccess: () => {
@@ -106,40 +120,94 @@ export function ImportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" data-testid="import-dialog">
         <DialogHeader>
-          <DialogTitle>Import a PDF or image</DialogTitle>
+          <DialogTitle>Import PDFs or images</DialogTitle>
           <DialogDescription>
-            The file is read by a document model and becomes an editable page.
-            The original stays attached to it.
+            Each file is read by a document model and becomes an editable page.
+            The originals stay attached to it.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
+        {/*
+          The dialog body is a grid item, so without min-w-0 a long file name
+          in the preview or the rejection message would widen the track and
+          push the controls outside the dialog box.
+        */}
+        <div className="flex min-w-0 flex-col gap-4">
           <FileDropzone
-            file={file}
-            onFile={chooseFile}
+            files={files}
+            onFiles={chooseFiles}
             onReject={setRejection}
             disabled={createImport.isPending}
           />
+
+          {many && (
+            <div className="flex items-start gap-3 rounded-lg border bg-muted/20 p-3">
+              <Checkbox
+                id="import-combine"
+                checked={combine}
+                disabled={createImport.isPending}
+                onCheckedChange={(v) => setCombine(v === true)}
+                className="mt-0.5"
+                data-testid="import-combine"
+              />
+              <div className="grid min-w-0 gap-1">
+                <Label htmlFor="import-combine" className="font-medium">
+                  Combine into a single page
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  {combine
+                    ? `All ${files.length} files become one page, in the order listed above.`
+                    : `Each file becomes its own page. Tick this if they are parts of one document.`}
+                </p>
+              </div>
+            </div>
+          )}
           {rejection && (
             <Alert variant="destructive" data-testid="import-rejection">
               <AlertCircle />
-              <AlertDescription>{rejection}</AlertDescription>
+              <AlertDescription className="break-all">
+                {rejection}
+              </AlertDescription>
             </Alert>
           )}
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="import-title">Page title</Label>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <Label htmlFor="import-title">Page title</Label>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="import-auto-title"
+                  checked={autoTitle || !titleAvailable}
+                  disabled={createImport.isPending || !titleAvailable}
+                  onCheckedChange={(v) => setAutoTitle(v === true)}
+                  data-testid="import-auto-title"
+                />
+                <Label
+                  htmlFor="import-auto-title"
+                  className="font-normal text-muted-foreground text-xs"
+                >
+                  Generate it from the document
+                </Label>
+              </div>
+            </div>
             <Input
               id="import-title"
-              value={title}
-              placeholder="Taken from the file name"
-              disabled={createImport.isPending}
-              onChange={(e) => {
-                setTitle(e.target.value)
-                setTitleTouched(true)
-              }}
+              value={autoTitle || !titleAvailable ? "" : title}
+              placeholder={
+                titleAvailable
+                  ? "Taken from the document's own heading"
+                  : "Each page is named after its own heading"
+              }
+              disabled={createImport.isPending || autoTitle || !titleAvailable}
+              onChange={(e) => setTitle(e.target.value)}
               data-testid="import-title"
             />
+            {!titleAvailable && (
+              <p className="text-muted-foreground text-xs">
+                Several files are becoming separate pages, so each is named
+                after its own content.
+              </p>
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -231,7 +299,7 @@ export function ImportDialog({
           </Button>
           <LoadingButton
             onClick={submit}
-            disabled={!file || !spaceId}
+            disabled={files.length === 0 || !spaceId}
             loading={createImport.isPending}
             data-testid="import-submit"
           >

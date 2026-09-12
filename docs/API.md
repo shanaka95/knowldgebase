@@ -129,9 +129,12 @@ curl -s -X POST $BASE/namespaces/$NS/members -H "$AUTH" -H 'Content-Type: applic
 | Shares | `GET/POST /documents/{id}/shares`, `PATCH/DELETE /documents/{id}/shares/{user_id}` |
 | Embeddings | `GET /documents/{id}/embeddings`, `POST /documents/{id}/embeddings/regenerate` |
 | Attachments | `POST /attachments/` (multipart: `file`, `namespace_id`, `document_id?`), `GET /attachments/` , `GET /attachments/{id}`, `GET /attachments/{id}/download`, `DELETE /attachments/{id}` |
-| Search | `GET /search/?q=&namespace_id=&skip=&limit=` (Postgres full-text), `GET /search/retrieve?q=&bm25=&vector=&targets=` (hybrid BM25 + vector, RRF-fused — see [RETRIEVAL.md](RETRIEVAL.md)) |
+| Search | `GET /search/?q=&namespace_id=&skip=&limit=` (Postgres full-text), `GET /search/retrieve?q=&bm25=&vector=&targets=&rerank=` (hybrid BM25 + vector, RRF-fused, then reranked — see [RETRIEVAL.md](RETRIEVAL.md)) |
 | Ask | `POST /ask/` (grounded answer with citations), `POST /ask/stream` (same, server-sent events) — see [ASK.md](ASK.md) |
-| Imports | `POST /imports/` (multipart PDF/image), `GET /imports/`, `GET /imports/{id}`, `POST /imports/{id}/retry`, `POST /imports/{id}/cancel`, `DELETE /imports/{id}` — see [IMPORTS.md](IMPORTS.md) |
+| Imports | `POST /imports/` (one file), `POST /imports/batch` (several, with `combine`), `GET /imports/`, `GET /imports/{id}`, `POST /imports/{id}/retry`, `POST /imports/{id}/cancel`, `DELETE /imports/{id}` — see [IMPORTS.md](IMPORTS.md) |
+| Sharing | `POST /documents/{id}/shares/batch`, `GET/DELETE /documents/{id}/invitations`, `POST/DELETE /documents/{id}/public`, `POST /documents/{id}/clone`, `GET /users/lookup?email=` — see [SHARING.md](SHARING.md) |
+| Public (no auth) | `GET /public/documents/{slug}`, `GET /public/{slug}/attachments/{id}`, `GET /public/invitations/{token}` |
+| Types | `GET /documents/types` (what kinds of page exist here, most-used first) |
 | Ops | `GET /health/` (no auth), `GET /workers/`, `GET /utils/health-check/` |
 
 ### Document object

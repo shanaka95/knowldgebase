@@ -40,3 +40,9 @@ frontend/playwright/.auth/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# TanStack Router's generated cache
+frontend/.tanstack/
+
+# Playwright's own scratch directory at the repo root
+/playwright/

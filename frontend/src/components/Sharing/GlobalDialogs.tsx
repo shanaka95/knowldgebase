@@ -11,6 +11,7 @@ import {
 } from "@/hooks/useKbMutations"
 import { namespaceQuery } from "@/queries/namespaces"
 import { type DialogRequest, useDialogStore } from "@/stores/dialogs"
+import { CopyDialog } from "./CopyDialog"
 import { DeleteDialog } from "./DeleteDialog"
 import { MoveDialog } from "./MoveDialog"
 import { ShareDialog } from "./ShareDialog"
@@ -141,6 +142,8 @@ function Dialogs({
       return <DeleteDialog open onOpenChange={close} target={request.target} />
     case "share":
       return <ShareDialog open onOpenChange={close} target={request.target} />
+    case "copy":
+      return <CopyDialog open onOpenChange={close} target={request.target} />
     case "import":
       return (
         <ImportDialog

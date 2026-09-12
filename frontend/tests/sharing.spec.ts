@@ -7,6 +7,7 @@ import {
   createNamespace,
   createTestUser,
   getToken,
+  uid,
   updateDocument,
 } from "./utils/api.ts"
 import { loginAs } from "./utils/ui.ts"
@@ -45,8 +46,16 @@ test.describe("Sharing", () => {
     await expect(dialog).toContainText(`Share “${doc.title}”`)
     await expect(dialog).toContainText("Nobody has been added yet")
     await dialog.getByTestId("share-email").fill(guest.email)
+    await dialog.getByTestId("share-email").press("Enter")
+    // the chip resolves to the account behind the address
+    await expect(dialog.getByTestId("share-chip")).toHaveAttribute(
+      "data-status",
+      "known",
+    )
     await dialog.getByTestId("share-submit").click()
-    await expect(page.getByText("Access granted")).toBeVisible()
+    await expect(dialog.getByTestId("share-result")).toContainText(
+      "1 person now has access",
+    )
     await expect(dialog.getByTestId("share-row")).toContainText(guest.email)
     await page.keyboard.press("Escape")
 
@@ -194,18 +203,45 @@ test.describe("Sharing", () => {
     ).toBe("admin")
   })
 
-  test("sharing with an unknown e-mail shows an error toast", async ({
+  test("an address with no account is invited rather than refused", async ({
     page,
     request,
   }) => {
     const token = await adminToken(request)
     const ns = await createNamespace(request, token)
     const doc = await createDocument(request, token, ns.id)
+    const stranger = `ghost_${uid()}@example.com`
+
     await page.goto(`/s/${ns.slug}/d/${doc.id}?mode=view`)
     await page.getByTestId("document-menu").click()
     await page.getByRole("menuitem", { name: "Share" }).click()
-    await page.getByTestId("share-email").fill("ghost-user@example.com")
-    await page.getByTestId("share-submit").click()
-    await expect(page.getByText(/not found|no user/i).first()).toBeVisible()
+    const dialog = page.getByTestId("share-dialog")
+    await dialog.getByTestId("share-email").fill(stranger)
+    await dialog.getByTestId("share-email").press("Enter")
+
+    const chip = dialog.getByTestId("share-chip")
+    await expect(chip).toHaveAttribute("data-status", "new")
+    await expect(chip).toContainText("will be invited")
+    await expect(dialog.getByTestId("share-invite-notice")).toContainText(
+      "1 of these addresses doesn't have a PlusGPT account yet",
+    )
+
+    await dialog.getByTestId("share-submit").click()
+    await expect(dialog.getByTestId("share-result")).toContainText(
+      "1 invitation sent",
+    )
+    // and it is listed as a promise of access, not as access
+    const invitation = dialog
+      .getByTestId("invitation-row")
+      .filter({ hasText: stranger })
+    await expect(invitation).toContainText("Invited — not yet accepted")
+
+    await dialog
+      .getByRole("button", {
+        name: `Withdraw the invitation for ${stranger}`,
+      })
+      .click()
+    await expect(page.getByText("Invitation withdrawn")).toBeVisible()
+    await expect(dialog.getByTestId("invitation-row")).toHaveCount(0)
   })
 })

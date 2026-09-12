@@ -192,7 +192,7 @@ test.describe("Sidebar tree", () => {
     await expect(dialog).toBeVisible()
     await expect(dialog.getByTestId("move-submit")).toBeDisabled() // unchanged
     await dialog
-      .getByTestId("move-folder-option")
+      .getByTestId("destination-folder-option")
       .filter({ hasText: folder.name })
       .getByRole("button", { name: folder.name })
       .click()
@@ -207,7 +207,7 @@ test.describe("Sidebar tree", () => {
     // and back to root
     await page.getByTestId("document-menu").click()
     await page.getByRole("menuitem", { name: "Move to…" }).click()
-    await page.getByTestId("move-root-option").click()
+    await page.getByTestId("destination-root-option").click()
     await page.getByTestId("move-submit").click()
     await expect(page.getByText("Moved")).toBeVisible()
     await expect(crumbs).not.toContainText(folder.name)

@@ -4,6 +4,7 @@ import {
   type DocumentEmbeddingsPublic,
   type DocumentPublic,
   DocumentsService,
+  type DocumentTypesPublic,
 } from "@/client"
 import { queryKeys } from "@/lib/queryKeys"
 
@@ -42,5 +43,18 @@ export function documentEmbeddingsQuery(documentId: string) {
     },
     refetchIntervalInBackground: false,
     staleTime: 1_000,
+  })
+}
+
+/**
+ * The page types this account already uses (with counts), followed by common
+ * suggestions. A suggestion list, not a closed set — any short string is valid.
+ */
+export function documentTypesQuery() {
+  return queryOptions({
+    queryKey: queryKeys.documents.types(),
+    queryFn: async (): Promise<DocumentTypesPublic> =>
+      (await DocumentsService.readDocumentTypes()).data,
+    staleTime: 60_000,
   })
 }

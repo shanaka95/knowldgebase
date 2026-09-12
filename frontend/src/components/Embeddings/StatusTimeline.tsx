@@ -55,7 +55,7 @@ export function StatusTimeline({ state, job, className }: StatusTimelineProps) {
             key={step.key}
             className="flex flex-1 items-center gap-1 last:flex-none"
           >
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex min-w-0 flex-col items-center gap-1">
               <span
                 className={cn(
                   "flex size-6 items-center justify-center rounded-full border text-[11px] transition-colors",
@@ -86,7 +86,7 @@ export function StatusTimeline({ state, job, className }: StatusTimelineProps) {
               </span>
               <span
                 className={cn(
-                  "text-[10px] leading-none",
+                  "max-w-full truncate text-[10px] leading-none",
                   active || isFailedHere
                     ? "font-medium text-foreground"
                     : "text-muted-foreground",

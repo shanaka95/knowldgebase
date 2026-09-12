@@ -8,7 +8,12 @@ from collections.abc import Iterable
 from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
-from app.core.permissions import get_document_role, get_namespace_role, has_min_role
+from app.core.permissions import (
+    accessible_documents_filter,
+    get_document_role,
+    get_namespace_role,
+    has_min_role,
+)
 from app.models import (
     Attachment,
     AttachmentPublic,
@@ -17,6 +22,7 @@ from app.models import (
     DocumentSummaryPublic,
     EmbeddingJob,
     EmbeddingJobPublic,
+    ImportFile,
     ImportJob,
     ImportJobPublic,
     Namespace,
@@ -53,16 +59,28 @@ def to_namespace_public(
 ) -> NamespacePublic:
     if role is None:
         role = get_namespace_role(session, user, namespace)
+
+    # Counts are scoped to the caller. Somebody who was shared a single page can
+    # see the space around it, and must not learn from these numbers how much
+    # else is in there or how many people it is shared with.
     document_count = session.exec(
         select(func.count())
         .select_from(Document)
-        .where(Document.namespace_id == namespace.id)
+        .where(
+            Document.namespace_id == namespace.id,
+            accessible_documents_filter(session, user),
+        )
     ).one()
-    member_count = session.exec(
-        select(func.count())
-        .select_from(NamespaceMember)
-        .where(NamespaceMember.namespace_id == namespace.id)
-    ).one()
+    member_count: int | None = None
+    if role is not None:
+        member_count = (
+            session.exec(
+                select(func.count())
+                .select_from(NamespaceMember)
+                .where(NamespaceMember.namespace_id == namespace.id)
+            ).one()
+            + 1  # the owner counts as a member
+        )
     owner = session.get(User, namespace.owner_id)
     return NamespacePublic(
         id=namespace.id,
@@ -75,7 +93,7 @@ def to_namespace_public(
         owner=user_ref(owner),
         my_role=role,
         document_count=document_count,
-        member_count=member_count + 1,  # owner counts as a member
+        member_count=member_count,
         created_at=namespace.created_at,
         updated_at=namespace.updated_at,
     )
@@ -102,6 +120,7 @@ def to_document_summary(
         namespace_slug=document.namespace.slug if document.namespace else None,
         folder_id=document.folder_id,
         title=document.title,
+        doc_type=document.doc_type,
         version=document.version,
         created_by=document.created_by,
         updated_by=document.updated_by,
@@ -168,6 +187,12 @@ def to_attachment_public(attachment: Attachment) -> AttachmentPublic:
 
 def to_import_job_public(session: Session, job: ImportJob) -> ImportJobPublic:
     namespace = session.get(Namespace, job.namespace_id)
+    parts = session.exec(
+        select(ImportFile)
+        .where(ImportFile.job_id == job.id)
+        .order_by(col(ImportFile.position))
+    ).all()
+    filenames = [f.filename for f in parts] or [job.filename]
     return ImportJobPublic(
         id=job.id,
         namespace_id=job.namespace_id,
@@ -176,10 +201,13 @@ def to_import_job_public(session: Session, job: ImportJob) -> ImportJobPublic:
         document_id=job.document_id,
         attachment_id=job.attachment_id,
         title=job.title,
+        doc_type=job.doc_type,
         prompt=job.prompt,
         filename=job.filename,
         content_type=job.content_type,
         size=job.size,
+        file_count=len(filenames),
+        filenames=filenames,
         status=job.status,
         parser=job.parser,
         pages_total=job.pages_total,

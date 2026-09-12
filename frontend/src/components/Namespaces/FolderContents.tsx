@@ -13,6 +13,7 @@ import {
 import { useMemo, useState } from "react"
 
 import type { DocumentSummaryPublic, FolderPublic } from "@/client"
+import { DocumentTypeBadge } from "@/components/Documents/DocumentTypeBadge"
 import { EmbeddingStatusIcon } from "@/components/Embeddings/EmbeddingStatusIcon"
 import { EmptyState } from "@/components/Layout/EmptyState"
 import { Button } from "@/components/ui/button"
@@ -326,13 +327,16 @@ export function FolderContents({
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <EmbeddingStatusIcon state={deriveEmbeddingState(d)} />
-                <span>Updated {relativeTime(d.updated_at)}</span>
+                <span className="truncate">
+                  Updated {relativeTime(d.updated_at)}
+                </span>
+                <DocumentTypeBadge type={d.doc_type} className="ml-auto" />
               </div>
             </Link>
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border">
+        <div className="w-full overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
@@ -393,10 +397,11 @@ export function FolderContents({
                         to="/s/$namespaceSlug/d/$documentId"
                         params={{ namespaceSlug, documentId: d.id }}
                         search={{ mode: "view" } as never}
-                        className="flex items-center gap-2 font-medium hover:underline"
+                        className="flex min-w-0 items-center gap-2 font-medium hover:underline"
                       >
-                        <FileText className="size-4 text-muted-foreground" />
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
                         <span className="truncate">{d.title}</span>
+                        <DocumentTypeBadge type={d.doc_type} />
                       </Link>
                     </td>
                     <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">

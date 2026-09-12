@@ -11,11 +11,13 @@ x-backend-common: &backend-common
   image: ${KB_IMAGE:-shanaka95/knowledge-base:latest}
   restart: unless-stopped
   environment: &backend-env
-    PROJECT_NAME: ${PROJECT_NAME:-Knowledge Base}
+    PROJECT_NAME: ${PROJECT_NAME:-PlusGPT}
     SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
     FIRST_SUPERUSER: ${FIRST_SUPERUSER:?set FIRST_SUPERUSER}
     FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:?set FIRST_SUPERUSER_PASSWORD}
-    FRONTEND_HOST: ${FRONTEND_HOST:-http://localhost}
+    # Also where the links inside emails point, so it has to be the public
+    # address rather than a placeholder.
+    FRONTEND_HOST: ${FRONTEND_HOST:?set FRONTEND_HOST}
     DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/app
     QDRANT_URL: http://qdrant:6333
     QDRANT_COLLECTION: ${QDRANT_COLLECTION:-kb_documents}
@@ -25,17 +27,46 @@ x-backend-common: &backend-common
     MINIO_BUCKET: ${MINIO_BUCKET:-kb-attachments}
     MINIO_SECURE: "false"
 
+    # --- product identity -----------------------------------------------------
+    APP_NAME: ${APP_NAME:-PlusGPT}
+    APP_TAGLINE: ${APP_TAGLINE:-a personal knowledge management system}
+
+    # --- email (AWS SES) ------------------------------------------------------
+    # Registration, sign-in codes and password resets all depend on this. With
+    # EMAIL_ENABLED=false nothing is sent and codes go to the log, which is fine
+    # for a private instance and useless for a public one.
+    EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+    EMAIL_FROM: ${EMAIL_FROM:-noreply@plusgpt.io}
+    EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-PlusGPT}
+    AWS_REGION: ${AWS_REGION:-eu-west-1}
+    AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-}
+    AWS_ACCESS_SECRET: ${AWS_ACCESS_SECRET:-}
+
     # --- models: one provider, one key, set on the host -----------------------
     LLM_BASE_URL: ${LLM_BASE_URL:?set LLM_BASE_URL}
     LLM_MODEL: ${LLM_MODEL:?set LLM_MODEL}
     LLM_API_KEY: ${LLM_API_KEY:?set LLM_API_KEY}
     LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-300}
     LLM_DISABLE_THINKING: ${LLM_DISABLE_THINKING:-true}
+    # How much document goes to the chat model in one call. A large context is
+    # worth having: summarising a long page in one pass beats stitching together
+    # summaries of its halves.
+    LLM_WINDOW_CHARS: ${LLM_WINDOW_CHARS:-20000}
+    LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-8192}
     EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:?set EMBEDDING_BASE_URL}
     EMBEDDING_MODEL: ${EMBEDDING_MODEL:?set EMBEDDING_MODEL}
     EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:?set EMBEDDING_API_KEY}
     EMBEDDING_DIM: ${EMBEDDING_DIM:?set EMBEDDING_DIM}
     EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-16}
+    # Must match the embedding model's own context window, in characters.
+    EMBEDDING_MAX_CHARS: ${EMBEDDING_MAX_CHARS:-24000}
+    # Optional cross-encoder that reorders search results and picks the pages
+    # the answering model reads. Leave RERANK_MODEL empty to switch it off.
+    RERANK_MODEL: ${RERANK_MODEL:-}
+    RERANK_BASE_URL: ${RERANK_BASE_URL:-}
+    # One provider serves all three models here, so the reranker falls back to
+    # the chat model's key rather than asking for the same secret twice.
+    RERANK_API_KEY: ${RERANK_API_KEY:-${LLM_API_KEY}}
     # No document-parsing model here: page images go to the chat model instead.
     IMPORT_PARSER: ${IMPORT_PARSER:-llm}
 
@@ -120,6 +151,21 @@ services:
       - caddy-config:/config
     depends_on:
       - backend
+      - mcp
+
+  # MCP server: the same knowledge base, exposed to agents at /mcp. It holds no
+  # credentials; callers authenticate with their own API key.
+  mcp:
+    image: shanaka95/knowledgebase-mcp:latest
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      KB_API_URL: http://backend:8000/api/v1
+      PUBLIC_URL: ${MCP_PUBLIC_URL:-}
+    depends_on:
+      backend:
+        condition: service_healthy
 
   backend:
     <<: *backend-common

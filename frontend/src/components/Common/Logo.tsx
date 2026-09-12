@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router"
-import { BookOpenText } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+
+export const APP_NAME = "PlusGPT"
+export const APP_TAGLINE = "a personal knowledge management system"
 
 interface LogoProps {
   variant?: "full" | "icon" | "responsive"
@@ -9,15 +11,32 @@ interface LogoProps {
   asLink?: boolean
 }
 
+/**
+ * The mark, drawn rather than loaded, so it inherits crisp rendering at every
+ * size and needs no network request. It matches `public/favicon.svg` exactly.
+ */
 function Mark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground",
+        "inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-indigo-500 to-violet-500 text-white",
         className,
       )}
+      aria-hidden="true"
     >
-      <BookOpenText className="size-4" />
+      {/* The wrapper is aria-hidden and the name sits beside it, so this
+          title exists for tooling rather than to be announced twice. */}
+      <svg
+        viewBox="0 0 64 64"
+        className="size-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={8}
+        strokeLinecap="round"
+      >
+        <title>PlusGPT</title>
+        <path d="M32 15.2v33.6M15.2 32h33.6" />
+      </svg>
     </span>
   )
 }
@@ -31,8 +50,8 @@ export function Logo({
     variant === "responsive" ? (
       <span className={cn("flex items-center gap-2", className)}>
         <Mark />
-        <span className="text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-          Knowledge Base
+        <span className="font-semibold text-sm tracking-tight group-data-[collapsible=icon]:hidden">
+          {APP_NAME}
         </span>
       </span>
     ) : variant === "icon" ? (
@@ -40,9 +59,7 @@ export function Logo({
     ) : (
       <span className={cn("flex items-center gap-2.5", className)}>
         <Mark className="size-9 rounded-lg [&>svg]:size-5" />
-        <span className="text-lg font-semibold tracking-tight">
-          Knowledge Base
-        </span>
+        <span className="font-semibold text-lg tracking-tight">{APP_NAME}</span>
       </span>
     )
 

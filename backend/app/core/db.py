@@ -2,7 +2,7 @@ from sqlmodel import Session, create_engine, select
 
 from app import crud
 from app.core.config import settings
-from app.models import User, UserCreate
+from app.models import User, UserCreate, get_datetime_utc
 
 engine = create_engine(str(settings.DATABASE_URL), pool_pre_ping=True)
 
@@ -31,3 +31,8 @@ def init_db(session: Session) -> None:
             is_superuser=True,
         )
         user = crud.create_user(session=session, user_create=user_in)
+        # The administrator is created by the operator, not by someone filling
+        # in a form, so there is no address to confirm and nobody to confirm it.
+        user.email_verified_at = get_datetime_utc()
+        session.add(user)
+        session.commit()

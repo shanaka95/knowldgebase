@@ -7,11 +7,17 @@ import { importKeys } from "@/queries/imports"
 import { handleError } from "@/utils"
 
 export interface CreateImportInput {
-  file: File
+  files: File[]
   namespaceId: string
   folderId: string | null
   title?: string | null
   prompt?: string | null
+  /**
+   * Make one page out of every file instead of one page each. For a document
+   * that arrived as a set of scans this is the difference between a report and
+   * a folder of fragments.
+   */
+  combine?: boolean
 }
 
 export function useCreateImport() {
@@ -19,22 +25,37 @@ export function useCreateImport() {
   const { showSuccessToast, showErrorToast } = useCustomToast()
 
   return useMutation({
-    mutationFn: async (input: CreateImportInput): Promise<ImportJobPublic> => {
-      const res = await ImportsService.createImport({
+    mutationFn: async (
+      input: CreateImportInput,
+    ): Promise<ImportJobPublic[]> => {
+      const res = await ImportsService.createImports({
         body: {
-          file: input.file,
+          files: input.files,
           namespace_id: input.namespaceId,
           folder_id: input.folderId,
           title: input.title?.trim() || null,
           prompt: input.prompt?.trim() || null,
+          combine: input.combine ?? false,
         },
       })
-      return res.data
+      return res.data.data
     },
-    onSuccess: (job) => {
-      showSuccessToast(
-        `“${job.filename}” is queued. It becomes a page once parsing finishes.`,
-      )
+    onSuccess: (jobs) => {
+      const first = jobs[0]
+      if (!first) return
+      if (jobs.length > 1) {
+        showSuccessToast(
+          `${jobs.length} files queued. Each becomes a page once parsing finishes.`,
+        )
+      } else if ((first.file_count ?? 1) > 1) {
+        showSuccessToast(
+          `${first.file_count} files queued. They become one page once parsing finishes.`,
+        )
+      } else {
+        showSuccessToast(
+          `“${first.filename}” is queued. It becomes a page once parsing finishes.`,
+        )
+      }
     },
     onError: handleError.bind(showErrorToast),
     onSettled: () => {

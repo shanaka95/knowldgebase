@@ -72,7 +72,7 @@ test.describe("Edit user profile", () => {
     page,
   }) => {
     await page.getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Email").fill("")
+    await page.getByLabel("Email", { exact: true }).fill("")
     await page.locator("body").click()
 
     await expect(page.getByText("Invalid email address")).toBeVisible()
@@ -93,7 +93,7 @@ test.describe("Edit user email", () => {
     await page.getByRole("tab", { name: "My profile" }).click()
 
     await page.getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Email").fill(updatedEmail)
+    await page.getByLabel("Email", { exact: true }).fill(updatedEmail)
     await page.getByRole("button", { name: "Save" }).click()
 
     await expect(page.getByText("User updated successfully")).toBeVisible()
@@ -132,7 +132,7 @@ test.describe("Cancel edit actions", () => {
     await page.goto("/settings")
     await page.getByRole("tab", { name: "My profile" }).click()
     await page.getByRole("button", { name: "Edit" }).click()
-    await page.getByLabel("Email").fill(randomEmail())
+    await page.getByLabel("Email", { exact: true }).fill(randomEmail())
     await page.getByRole("button", { name: "Cancel" }).first().click()
 
     await expect(

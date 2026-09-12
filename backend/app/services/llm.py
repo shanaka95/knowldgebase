@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import AsyncIterator
 from typing import Any
@@ -13,6 +14,12 @@ from app.services.model_client import (
     make_http_client,
     post_json_with_cold_start_retry,
 )
+
+logger = logging.getLogger(__name__)
+
+# How much room a second attempt gets when the first came back empty.
+THINKING_BUDGET_FACTOR = 8
+THINKING_BUDGET_FLOOR = 4096
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
@@ -66,7 +73,14 @@ class LLMClient:
             "max_tokens": max_tokens,
         }
         if self.disable_thinking:
+            # Two switches, because no provider understands both. Local servers
+            # (vMLX, vLLM, LM Studio) read the chat template argument; OpenRouter
+            # drops unknown fields and reads `reasoning` instead. Whichever is
+            # ignored costs nothing, and getting this wrong is expensive: a
+            # reasoning model spends the whole token budget thinking and returns
+            # an empty completion.
             body["chat_template_kwargs"] = {"enable_thinking": False}
+            body["reasoning"] = {"enabled": False}
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         return body
@@ -79,27 +93,47 @@ class LLMClient:
         max_tokens: int = 1024,
         temperature: float | None = None,
     ) -> str:
-        body = self._body(
-            messages,
-            json_mode=json_mode,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        data = await post_json_with_cold_start_retry(
-            self.client, f"{self.base_url}/chat/completions", body, what="llm"
-        )
-        try:
-            choice = data["choices"][0]
-            content = choice["message"].get("content")
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LLMError(f"llm: malformed response: {str(data)[:300]}") from exc
-        if not content:
-            reason = choice.get("finish_reason")
-            raise LLMError(
-                f"llm: empty completion (finish_reason={reason}); "
-                "increase max_tokens or disable thinking"
+        budget = max_tokens
+        for attempt in (1, 2):
+            body = self._body(
+                messages,
+                json_mode=json_mode,
+                max_tokens=budget,
+                temperature=temperature,
             )
-        return clean_completion(str(content))
+            data = await post_json_with_cold_start_retry(
+                self.client, f"{self.base_url}/chat/completions", body, what="llm"
+            )
+            try:
+                choice = data["choices"][0]
+                content = choice["message"].get("content")
+            except (KeyError, IndexError, TypeError) as exc:
+                raise LLMError(f"llm: malformed response: {str(data)[:300]}") from exc
+            if content:
+                return clean_completion(str(content))
+
+            reason = choice.get("finish_reason")
+            # A model that thinks anyway - because the provider ignored both
+            # switches above - burns the budget before writing a word. One
+            # larger attempt costs a few cents; failing loses the document.
+            if attempt == 1 and reason == "length":
+                budget = min(
+                    max(budget * THINKING_BUDGET_FACTOR, THINKING_BUDGET_FLOOR),
+                    settings.LLM_MAX_OUTPUT_TOKENS,
+                )
+                if budget > max_tokens:
+                    logger.info(
+                        "llm: empty completion at max_tokens=%s, retrying with %s",
+                        max_tokens,
+                        budget,
+                    )
+                    continue
+            raise LLMError(
+                f"llm: empty completion (finish_reason={reason}) "
+                f"at max_tokens={budget}; the model may be spending its whole "
+                "budget on hidden reasoning"
+            )
+        raise LLMError("llm: empty completion")  # pragma: no cover - unreachable
 
     async def stream_chat(
         self,

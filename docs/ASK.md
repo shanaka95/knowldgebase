@@ -12,6 +12,8 @@ place to make someone choose between BM25 and vectors.
 ```
 question ─► hybrid search (BM25 + vectors, RRF) ─► top 10 pages
                                                       │
+                                 rerank ─► the 3 (up to 5) that answer it
+                                                      │
                             section-level pass: best sections of those pages
                                                       │
                                           budgeted excerpts [1]…[n]
@@ -22,7 +24,26 @@ question ─► hybrid search (BM25 + vectors, RRF) ─► top 10 pages
 1. **Retrieve.** The same `retrieve()` the search page uses, with both methods
    and all three targets plus the full-text source, so pages written moments ago
    are eligible too. See [RETRIEVAL.md](RETRIEVAL.md).
-2. **Pick the passages.** Document ranking answers *which pages* are about the
+2. **Narrow to what answers it.** Ten pages is the right net to cast, and the
+   wrong number to read. A cross-encoder scores each of them against the
+   question and the best three go forward. See
+   [RETRIEVAL.md](RETRIEVAL.md#reranking).
+
+   Three, not ten, because the pages ranked fourth and below are usually near
+   misses, and a near miss in the prompt is worse than nothing: it gives the
+   model something plausible to cite instead of admitting the answer is not
+   there. Three is also not a hard cap. When several pages score nearly as
+   highly as the third - a procedure written across four pages, say - up to five
+   go through. The widening rule is deliberately strict, because irrelevant
+   pages also score close to each other, so nearness alone proves nothing. A
+   page joins only if it also clears an absolute score of `0.25`, which is where
+   measured relevant and irrelevant pages separate cleanly.
+
+   Without a reranker configured there is no confidence signal to cut on, so all
+   `ASK_DOCUMENTS_WITHOUT_RERANK` (10) pages go forward and the context budget
+   does the trimming. The answer reports `reranked` either way.
+
+3. **Pick the passages.** Document ranking answers *which pages* are about the
    question; it does not say **where** in a long page the answer sits. So the
    chosen pages get a second, section-level pass: their chunks are ranked against
    the question with the same BM25 + vector fusion, and each page contributes up
@@ -33,15 +54,15 @@ question ─► hybrid search (BM25 + vectors, RRF) ─► top 10 pages
    amount lives three sections further down - sending only the best-matching
    section would answer "the excerpts do not contain the amount" about a page
    that plainly does.
-3. **Budget the context.** Excerpts are added in relevance order until
+4. **Budget the context.** Excerpts are added in relevance order until
    `ASK_CONTEXT_CHARS` (12 000) is used, each capped at `ASK_PASSAGE_CHARS`
    (2 400). Spending top-down means a highly-ranked page is never dropped to make
    room for a weaker one, and one long page cannot crowd out the rest. When
    anything was cut, the response says `truncated: true`.
-4. **Answer.** The excerpts are numbered `[1]…[n]` and the model is told to use
+5. **Answer.** The excerpts are numbered `[1]…[n]` and the model is told to use
    only them, to cite the number its claims come from, and to say so plainly when
    the answer is not there.
-5. **Report.** Every excerpt comes back with the answer, each marked `cited` or
+6. **Report.** Every excerpt comes back with the answer, each marked `cited` or
    not, so the reader can check any claim - and see what was considered but not
    used.
 
@@ -84,8 +105,9 @@ curl -s -X POST http://localhost:8800/api/v1/ask/ \
 |---|---|
 | `q` | the question (required) |
 | `namespace_id` | restrict to one space |
-| `top_k` | how many pages become context (default `ASK_TOP_K` = 10, max 25) |
+| `top_k` | how many pages are shortlisted before reranking (default `ASK_TOP_K` = 10, max 25) |
 | `searched` / `used` | pages the search found / distinct pages that contributed an excerpt |
+| `reranked` | whether a cross-encoder chose the pages that were read |
 | `passages` | excerpts sent to the model; one page can contribute several |
 | `truncated` | an excerpt was shortened, or a page did not fit at all |
 | `cited` (per citation) | the answer actually referenced this excerpt |
@@ -117,7 +139,8 @@ complete at ~5 s.
 
 | setting | default | purpose |
 |---|---|---|
-| `ASK_TOP_K` | 10 | pages considered for context |
+| `ASK_TOP_K` | 10 | pages retrieved before reranking |
+| `ASK_DOCUMENTS_WITHOUT_RERANK` | 10 | pages used when no reranker is configured |
 | `ASK_CHUNKS_PER_DOC` | 4 | best sections taken from each page |
 | `ASK_MAX_PASSAGES` | 16 | hard cap on excerpts |
 | `ASK_CONTEXT_CHARS` | 12000 | total excerpt budget |

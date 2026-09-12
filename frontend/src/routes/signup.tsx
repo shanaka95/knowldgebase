@@ -1,12 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useMutation } from "@tanstack/react-query"
 import {
   createFileRoute,
   Link as RouterLink,
   redirect,
 } from "@tanstack/react-router"
+import { MailCheck } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
+import { LoginService } from "@/client"
+import { AuthAlert } from "@/components/Common/AuthAlert"
 import { AuthLayout } from "@/components/Common/AuthLayout"
+import { Button } from "@/components/ui/button"
 import {
   Form,
   FormControl,
@@ -19,6 +24,7 @@ import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { PasswordInput } from "@/components/ui/password-input"
 import useAuth, { isLoggedIn } from "@/hooks/useAuth"
+import { extractErrorMessage } from "@/utils"
 
 const formSchema = z
   .object({
@@ -41,6 +47,11 @@ type FormData = z.infer<typeof formSchema>
 
 export const Route = createFileRoute("/signup")({
   component: SignUp,
+  // An invitation already names the address it was sent to, and access only
+  // follows that address, so it arrives prefilled rather than retyped.
+  validateSearch: z.object({
+    email: z.string().optional().catch(undefined),
+  }),
   beforeLoad: async () => {
     if (isLoggedIn()) {
       throw redirect({
@@ -51,7 +62,7 @@ export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
       {
-        title: "Sign Up - Knowledge Base",
+        title: "Sign Up - PlusGPT",
       },
     ],
   }),
@@ -59,12 +70,13 @@ export const Route = createFileRoute("/signup")({
 
 function SignUp() {
   const { signUpMutation } = useAuth()
+  const { email: invitedEmail } = Route.useSearch()
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     mode: "onBlur",
     criteriaMode: "all",
     defaultValues: {
-      email: "",
+      email: invitedEmail ?? "",
       full_name: "",
       password: "",
       confirm_password: "",
@@ -79,6 +91,19 @@ function SignUp() {
     signUpMutation.mutate(submitData)
   }
 
+  // Registering never signs anyone in: the account cannot be used until the
+  // address has been confirmed, which is the whole point of the link.
+  if (signUpMutation.isSuccess) {
+    return (
+      <AuthLayout>
+        <CheckYourInbox
+          email={form.getValues("email")}
+          message={signUpMutation.data.message}
+        />
+      </AuthLayout>
+    )
+  }
+
   return (
     <AuthLayout>
       <Form {...form}>
@@ -89,6 +114,10 @@ function SignUp() {
           <div className="flex flex-col items-center gap-2 text-center">
             <h1 className="text-2xl font-bold">Create an account</h1>
           </div>
+
+          {signUpMutation.error && (
+            <AuthAlert>{extractErrorMessage(signUpMutation.error)}</AuthAlert>
+          )}
 
           <div className="grid gap-4">
             <FormField
@@ -183,5 +212,54 @@ function SignUp() {
         </form>
       </Form>
     </AuthLayout>
+  )
+}
+
+function CheckYourInbox({
+  email,
+  message,
+}: {
+  email: string
+  message: string
+}) {
+  const resendVerification = useMutation({
+    mutationFn: async () =>
+      (await LoginService.resendVerification({ body: { email } })).data,
+  })
+
+  return (
+    <div className="flex flex-col gap-6" data-testid="check-your-inbox">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <MailCheck className="size-8 text-muted-foreground" />
+        <h1 className="text-2xl font-bold">Check your inbox</h1>
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </div>
+
+      {resendVerification.data && (
+        <AuthAlert tone="info">{resendVerification.data.message}</AuthAlert>
+      )}
+      {resendVerification.error && (
+        <AuthAlert>{extractErrorMessage(resendVerification.error)}</AuthAlert>
+      )}
+
+      <div className="grid gap-4">
+        <Button
+          type="button"
+          variant="outline"
+          data-testid="resend-confirmation"
+          disabled={resendVerification.isPending}
+          onClick={() => resendVerification.mutate()}
+        >
+          Resend the confirmation link
+        </Button>
+      </div>
+
+      <div className="text-center text-sm">
+        Already confirmed?{" "}
+        <RouterLink to="/login" className="underline underline-offset-4">
+          Log in
+        </RouterLink>
+      </div>
+    </div>
   )
 }

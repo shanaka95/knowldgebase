@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginTestTokenData, loginTestTokenResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
+import type { apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, documentsCancelInvitationData, documentsCancelInvitationErrors, documentsCancelInvitationResponses, documentsCloneDocumentData, documentsCloneDocumentErrors, documentsCloneDocumentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsPublishDocumentData, documentsPublishDocumentErrors, documentsPublishDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentInvitationsData, documentsReadDocumentInvitationsErrors, documentsReadDocumentInvitationsResponses, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadDocumentTypesData, documentsReadDocumentTypesResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsShareDocumentWithManyData, documentsShareDocumentWithManyErrors, documentsShareDocumentWithManyResponses, documentsUnpublishDocumentData, documentsUnpublishDocumentErrors, documentsUnpublishDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsCreateImportsData, importsCreateImportsErrors, importsCreateImportsResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordResponses, loginResendTwoFactorData, loginResendTwoFactorErrors, loginResendTwoFactorResponses, loginResendVerificationData, loginResendVerificationErrors, loginResendVerificationResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginSignOutEverywhereData, loginSignOutEverywhereResponses, loginTestTokenData, loginTestTokenResponses, loginVerifyEmailData, loginVerifyEmailErrors, loginVerifyEmailResponses, loginVerifyTwoFactorData, loginVerifyTwoFactorErrors, loginVerifyTwoFactorResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, privateReadEmailsData, privateReadEmailsErrors, privateReadEmailsResponses, publicReadInvitationData, publicReadInvitationErrors, publicReadInvitationResponses, publicReadPublicAttachmentData, publicReadPublicAttachmentErrors, publicReadPublicAttachmentResponses, publicReadPublicDocumentData, publicReadPublicDocumentErrors, publicReadPublicDocumentResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersLookupUserData, usersLookupUserErrors, usersLookupUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -22,7 +22,13 @@ export class LoginService {
     /**
      * Login Access Token
      *
-     * OAuth2 compatible token login, get an access token for future requests
+     * Check the password and email a sign-in code.
+     *
+     * This returns a challenge, never a session. Exchange it for an access token
+     * at `/login/two-factor` by answering the emailed code.
+     *
+     * Third-party and programmatic callers should use a personal API key instead
+     * of a password; see the API documentation.
      */
     public static loginAccessToken<ThrowOnError extends boolean = true>(options: Options<loginLoginAccessTokenData, ThrowOnError>) {
         return (options.client ?? client).post<loginLoginAccessTokenResponses, loginLoginAccessTokenErrors, ThrowOnError>({
@@ -38,15 +44,135 @@ export class LoginService {
     }
     
     /**
+     * Verify Two Factor
+     *
+     * Answer the emailed code and receive an access token.
+     */
+    public static verifyTwoFactor<ThrowOnError extends boolean = true>(options: Options<loginVerifyTwoFactorData, ThrowOnError>) {
+        return (options.client ?? client).post<loginVerifyTwoFactorResponses, loginVerifyTwoFactorErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/login/two-factor',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Resend Two Factor
+     *
+     * Send another sign-in code for a login already in progress.
+     */
+    public static resendTwoFactor<ThrowOnError extends boolean = true>(options: Options<loginResendTwoFactorData, ThrowOnError>) {
+        return (options.client ?? client).post<loginResendTwoFactorResponses, loginResendTwoFactorErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/login/two-factor/resend',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Verify Email
+     *
+     * Confirm an address using the link that was emailed to it.
+     */
+    public static verifyEmail<ThrowOnError extends boolean = true>(options: Options<loginVerifyEmailData, ThrowOnError>) {
+        return (options.client ?? client).post<loginVerifyEmailResponses, loginVerifyEmailErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/login/verify-email',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Resend Verification
+     *
+     * Send another confirmation link.
+     *
+     * Answers identically whether or not the address has an account.
+     */
+    public static resendVerification<ThrowOnError extends boolean = true>(options: Options<loginResendVerificationData, ThrowOnError>) {
+        return (options.client ?? client).post<loginResendVerificationResponses, loginResendVerificationErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/login/verify-email/resend',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Recover Password
+     *
+     * Email a link for choosing a new password.
+     *
+     * Answers identically whether or not the address has an account.
+     */
+    public static recoverPassword<ThrowOnError extends boolean = true>(options: Options<loginRecoverPasswordData, ThrowOnError>) {
+        return (options.client ?? client).post<loginRecoverPasswordResponses, loginRecoverPasswordErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/login/password-recovery',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Reset Password
+     *
+     * Set a new password using the emailed link, and end every other session.
+     */
+    public static resetPassword<ThrowOnError extends boolean = true>(options: Options<loginResetPasswordData, ThrowOnError>) {
+        return (options.client ?? client).post<loginResetPasswordResponses, loginResetPasswordErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/login/reset-password',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Test Token
      *
-     * Test access token
+     * Confirm an access token is still good, and say whose it is.
      */
     public static testToken<ThrowOnError extends boolean = true>(options?: Options<loginTestTokenData, ThrowOnError>) {
         return (options?.client ?? client).post<loginTestTokenResponses, unknown, ThrowOnError>({
             responseType: 'json',
             security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
             url: '/api/v1/login/test-token',
+            ...options
+        });
+    }
+    
+    /**
+     * Sign Out Everywhere
+     *
+     * End every session for this account, including this one.
+     */
+    public static signOutEverywhere<ThrowOnError extends boolean = true>(options?: Options<loginSignOutEverywhereData, ThrowOnError>) {
+        return (options?.client ?? client).post<loginSignOutEverywhereResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/login/sign-out-everywhere',
             ...options
         });
     }
@@ -150,9 +276,38 @@ export class UsersService {
     }
     
     /**
+     * Lookup User
+     *
+     * Does this exact address have an account here?
+     *
+     * Used by the share dialog to show who a page is about to go to. **Exact
+     * matches only, never prefixes**: confirming one address somebody already
+     * typed is what sharing needs, while a prefix search would turn this into a
+     * way to read the user list. Signed in, for the same reason.
+     *
+     * An address with no account is not an error - it can still be invited.
+     */
+    public static lookupUser<ThrowOnError extends boolean = true>(options: Options<usersLookupUserData, ThrowOnError>) {
+        return (options.client ?? client).get<usersLookupUserResponses, usersLookupUserErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/users/lookup',
+            ...options
+        });
+    }
+    
+    /**
      * Register User
      *
-     * Create new user without the need to be logged in.
+     * Create an account and email a confirmation link.
+     *
+     * The account exists immediately but cannot sign in until the address is
+     * confirmed, so registering with someone else's address gains nothing.
+     *
+     * The reply is the same whether or not the address was already taken. An
+     * unauthenticated endpoint that distinguishes the two is a way to test whether
+     * a given person has an account here, and the person who really owns the
+     * address learns the truth from their inbox either way.
      */
     public static registerUser<ThrowOnError extends boolean = true>(options: Options<usersRegisterUserData, ThrowOnError>) {
         return (options.client ?? client).post<usersRegisterUserResponses, usersRegisterUserErrors, ThrowOnError>({
@@ -538,6 +693,23 @@ export class DocumentsService {
     }
     
     /**
+     * Read Document Types
+     *
+     * The types worth offering: the ones you already use, then the usual ones.
+     *
+     * Counted across the pages you can see, so the list reflects how this person
+     * actually files things rather than a fixed vocabulary.
+     */
+    public static readDocumentTypes<ThrowOnError extends boolean = true>(options?: Options<documentsReadDocumentTypesData, ThrowOnError>) {
+        return (options?.client ?? client).get<documentsReadDocumentTypesResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/documents/types',
+            ...options
+        });
+    }
+    
+    /**
      * Delete Document
      */
     public static deleteDocument<ThrowOnError extends boolean = true>(options: Options<documentsDeleteDocumentData, ThrowOnError>) {
@@ -602,6 +774,34 @@ export class DocumentsService {
     }
     
     /**
+     * Clone Document
+     *
+     * Copy a page you can read into a space you can write to.
+     *
+     * The copy belongs to you. It is a separate page from the moment it exists:
+     * editing it does not touch the original, the original's shares do not follow
+     * it, and nobody else can see it until you share it yourself. That is the
+     * point - it is how somebody keeps a copy of something shared with them
+     * without depending on the sharer leaving it in place.
+     *
+     * Images embedded in the page are copied into the destination space too.
+     * Pointing the copy at the original's files would leave it broken for anyone
+     * who cannot read the original, which is most of the reason to clone.
+     */
+    public static cloneDocument<ThrowOnError extends boolean = true>(options: Options<documentsCloneDocumentData, ThrowOnError>) {
+        return (options.client ?? client).post<documentsCloneDocumentResponses, documentsCloneDocumentErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/documents/{document_id}/clone',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Read Document Shares
      */
     public static readDocumentShares<ThrowOnError extends boolean = true>(options: Options<documentsReadDocumentSharesData, ThrowOnError>) {
@@ -626,6 +826,91 @@ export class DocumentsService {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
+        });
+    }
+    
+    /**
+     * Share Document With Many
+     *
+     * Share one page with several addresses at once.
+     *
+     * Addresses that already have an account get access immediately and an email
+     * saying so. Addresses that do not get an invitation: still no access, but a
+     * branded message telling them who shared what, and a link to create an
+     * account. The invitation becomes real access when that address is confirmed.
+     *
+     * The reply separates the three outcomes - `shared`, `invited`, `skipped` -
+     * so the interface can say plainly which is which rather than guessing.
+     */
+    public static shareDocumentWithMany<ThrowOnError extends boolean = true>(options: Options<documentsShareDocumentWithManyData, ThrowOnError>) {
+        return (options.client ?? client).post<documentsShareDocumentWithManyResponses, documentsShareDocumentWithManyErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/documents/{document_id}/shares/batch',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read Document Invitations
+     *
+     * Invitations on this page that nobody has accepted yet.
+     */
+    public static readDocumentInvitations<ThrowOnError extends boolean = true>(options: Options<documentsReadDocumentInvitationsData, ThrowOnError>) {
+        return (options.client ?? client).get<documentsReadDocumentInvitationsResponses, documentsReadDocumentInvitationsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/documents/{document_id}/invitations',
+            ...options
+        });
+    }
+    
+    /**
+     * Cancel Invitation
+     *
+     * Withdraw an invitation. The emailed link stops working immediately.
+     */
+    public static cancelInvitation<ThrowOnError extends boolean = true>(options: Options<documentsCancelInvitationData, ThrowOnError>) {
+        return (options.client ?? client).delete<documentsCancelInvitationResponses, documentsCancelInvitationErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/documents/{document_id}/invitations/{invitation_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Unpublish Document
+     *
+     * Withdraw the public link. Anyone still holding it gets nothing.
+     */
+    public static unpublishDocument<ThrowOnError extends boolean = true>(options: Options<documentsUnpublishDocumentData, ThrowOnError>) {
+        return (options.client ?? client).delete<documentsUnpublishDocumentResponses, documentsUnpublishDocumentErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/documents/{document_id}/public',
+            ...options
+        });
+    }
+    
+    /**
+     * Publish Document
+     *
+     * Make this page readable by anyone holding its link.
+     *
+     * The link is the only credential, so treat it as one. Publishing twice keeps
+     * the existing link rather than invalidating a copy already sent.
+     */
+    public static publishDocument<ThrowOnError extends boolean = true>(options: Options<documentsPublishDocumentData, ThrowOnError>) {
+        return (options.client ?? client).post<documentsPublishDocumentResponses, documentsPublishDocumentErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/documents/{document_id}/public',
+            ...options
         });
     }
     
@@ -793,7 +1078,11 @@ export class ImportsService {
     /**
      * Create Import
      *
-     * Upload a PDF or image and queue it to be turned into a page.
+     * Upload one PDF or image and queue it to be turned into a page.
+     *
+     * Leave `title` empty to have the page named after its own first heading,
+     * which is almost always better than the filename. Use `/imports/batch` for
+     * several files at once.
      */
     public static createImport<ThrowOnError extends boolean = true>(options: Options<importsCreateImportData, ThrowOnError>) {
         return (options.client ?? client).post<importsCreateImportResponses, importsCreateImportErrors, ThrowOnError>({
@@ -801,6 +1090,34 @@ export class ImportsService {
             responseType: 'json',
             security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
             url: '/api/v1/imports/',
+            ...options,
+            headers: {
+                'Content-Type': null,
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Create Imports
+     *
+     * Upload several files at once, into the same space and folder.
+     *
+     * By default each file becomes its own page, named after its own first
+     * heading. With `combine=true` the files become a single page instead, in the
+     * order they were sent - which is what you want for a document that arrived as
+     * a set of scans, or a report split across several files.
+     *
+     * `title` applies only when combining, or when there is exactly one file;
+     * giving several files their own page and one shared title would produce a
+     * list of identically named pages.
+     */
+    public static createImports<ThrowOnError extends boolean = true>(options: Options<importsCreateImportsData, ThrowOnError>) {
+        return (options.client ?? client).post<importsCreateImportsResponses, importsCreateImportsErrors, ThrowOnError>({
+            ...formDataBodySerializer,
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/imports/batch',
             ...options,
             headers: {
                 'Content-Type': null,
@@ -1019,6 +1336,59 @@ export class WorkersService {
     }
 }
 
+export class PublicService {
+    /**
+     * Read Public Document
+     *
+     * Read a page that has been shared by link.
+     *
+     * `identifier` is the link's slug, or the page's own id - a published page is
+     * published either way. A page that is not currently shared by link is not
+     * found here, which is what makes withdrawing a link effective immediately.
+     */
+    public static readPublicDocument<ThrowOnError extends boolean = true>(options: Options<publicReadPublicDocumentData, ThrowOnError>) {
+        return (options.client ?? client).get<publicReadPublicDocumentResponses, publicReadPublicDocumentErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/public/documents/{identifier}',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Public Attachment
+     *
+     * An image embedded in a page shared by link.
+     *
+     * Reachable only through the slug of the page that embeds it, and only if the
+     * page actually references it. Publishing a page does not publish the rest of
+     * the space's files.
+     */
+    public static readPublicAttachment<ThrowOnError extends boolean = true>(options: Options<publicReadPublicAttachmentData, ThrowOnError>) {
+        return (options.client ?? client).get<publicReadPublicAttachmentResponses, publicReadPublicAttachmentErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/public/{slug}/attachments/{attachment_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Invitation
+     *
+     * What an invitation link is for, so its landing page can explain itself.
+     *
+     * Holding the link is the only way to reach this, and whoever holds it was
+     * already told by email who shared what. It grants nothing: access still comes
+     * from creating an account on that address and confirming it.
+     */
+    public static readInvitation<ThrowOnError extends boolean = true>(options: Options<publicReadInvitationData, ThrowOnError>) {
+        return (options.client ?? client).get<publicReadInvitationResponses, publicReadInvitationErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/public/invitations/{token}',
+            ...options
+        });
+    }
+}
+
 export class PrivateService {
     /**
      * Create User
@@ -1034,6 +1404,23 @@ export class PrivateService {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
+        });
+    }
+    
+    /**
+     * Read Emails
+     *
+     * Read what would have been emailed, newest first.
+     *
+     * With ``EMAIL_ENABLED=false`` the sender records messages instead of sending
+     * them; this hands them back so a browser test can follow a confirmation link
+     * or answer a sign-in code the way a person reading their mail would.
+     */
+    public static readEmails<ThrowOnError extends boolean = true>(options?: Options<privateReadEmailsData, ThrowOnError>) {
+        return (options?.client ?? client).get<privateReadEmailsResponses, privateReadEmailsErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/private/emails/',
+            ...options
         });
     }
 }

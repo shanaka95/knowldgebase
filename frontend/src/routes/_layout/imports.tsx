@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_layout/imports")({
   loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery(importsQuery())
   },
-  head: () => ({ meta: [{ title: "Imports - Knowledge Base" }] }),
+  head: () => ({ meta: [{ title: "Imports - PlusGPT" }] }),
 })
 
 function ImportsPage() {

@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_layout/shared")({
   loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery(sharedWithMeQuery())
   },
-  head: () => ({ meta: [{ title: "Shared with me - Knowledge Base" }] }),
+  head: () => ({ meta: [{ title: "Shared with me - PlusGPT" }] }),
 })
 
 function SharedPage() {

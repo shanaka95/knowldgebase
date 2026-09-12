@@ -72,7 +72,10 @@ interface DocumentPageProps {
   }) => void
 }
 
-type SavePayload = Pick<DocumentUpdate, "title" | "content" | "content_format">
+type SavePayload = Pick<
+  DocumentUpdate,
+  "title" | "content" | "content_format" | "doc_type"
+>
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
@@ -117,6 +120,12 @@ export function DocumentPage({
   const [title, setTitle] = useState(document.title)
   const titleRef = useRef(document.title)
   const htmlRef = useRef(document.content_html)
+  const [docType, setDocType] = useState<string | null>(
+    document.doc_type ?? null,
+  )
+  const docTypeRef = useRef<string | null>(document.doc_type ?? null)
+  /** The type the server last confirmed, to spot a newly invented one. */
+  const savedDocTypeRef = useRef<string | null>(document.doc_type ?? null)
   /** Version the editor's current content was loaded from. */
   const [loadedVersion, setLoadedVersion] = useState(document.version)
   const [finishing, setFinishing] = useState(false)
@@ -124,6 +133,11 @@ export function DocumentPage({
   const setTitleBoth = useCallback((value: string) => {
     titleRef.current = value
     setTitle(value)
+  }, [])
+
+  const setDocTypeBoth = useCallback((value: string | null) => {
+    docTypeRef.current = value
+    setDocType(value)
   }, [])
 
   // ---- editor ----------------------------------------------------------------
@@ -166,6 +180,9 @@ export function DocumentPage({
       title: titleRef.current.trim() || "Untitled",
       content: htmlRef.current,
       content_format: "html",
+      // "" clears the type; the server treats it as metadata, so sending it on
+      // every save never bumps the version or re-runs the AI index.
+      doc_type: docTypeRef.current ?? "",
     }),
     save: async (payload, base) => {
       const response = await DocumentsService.updateDocument({
@@ -178,6 +195,13 @@ export function DocumentPage({
         (prev) => (prev ? { ...prev, ...fresh } : fresh),
       )
       setLoadedVersion(fresh.version)
+      if ((fresh.doc_type ?? null) !== savedDocTypeRef.current) {
+        savedDocTypeRef.current = fresh.doc_type ?? null
+        // A type only exists once a page uses it, so the suggestions changed.
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.documents.types(),
+        })
+      }
       void queryClient.invalidateQueries({
         queryKey: queryKeys.documents.embeddings(documentId),
       })
@@ -202,6 +226,8 @@ export function DocumentPage({
       })
       htmlRef.current = fresh.content_html
       setTitleBoth(fresh.title)
+      setDocTypeBoth(fresh.doc_type ?? null)
+      savedDocTypeRef.current = fresh.doc_type ?? null
       editor?.commands.setContent(fresh.content_html, { emitUpdate: false })
       setLoadedVersion(fresh.version)
     },
@@ -216,10 +242,25 @@ export function DocumentPage({
     [autosave, setTitleBoth],
   )
 
-  // Keep the displayed title in sync with the server while not editing.
+  const onDocTypeChange = useCallback(
+    (value: string | null) => {
+      setDocTypeBoth(value)
+      autosave.markDirty()
+    },
+    [autosave, setDocTypeBoth],
+  )
+
+  // Keep the displayed title and type in sync with the server while not editing.
   useEffect(() => {
     if (!editing) setTitleBoth(document.title)
   }, [document.title, editing, setTitleBoth])
+
+  useEffect(() => {
+    if (!editing) {
+      setDocTypeBoth(document.doc_type ?? null)
+      savedDocTypeRef.current = document.doc_type ?? null
+    }
+  }, [document.doc_type, editing, setDocTypeBoth])
 
   // ---- view-mode polling: "new version available" ---------------------------
   const polled = useDocumentPolling(documentId, !editing)
@@ -232,9 +273,10 @@ export function DocumentPage({
     if (!fresh) return
     htmlRef.current = fresh.content_html
     setTitleBoth(fresh.title)
+    setDocTypeBoth(fresh.doc_type ?? null)
     editor?.commands.setContent(fresh.content_html, { emitUpdate: false })
     setLoadedVersion(fresh.version)
-  }, [editor, polled.data, setTitleBoth])
+  }, [editor, polled.data, setTitleBoth, setDocTypeBoth])
 
   // ---- embeddings ------------------------------------------------------------
   const embedding = useEmbeddingStatus(documentId, document.namespace_id)
@@ -427,6 +469,8 @@ export function DocumentPage({
           onTitleChange={onTitleChange}
           onTitleSubmit={() => editor?.commands.focus("start")}
           mode={mode}
+          docType={docType}
+          onDocTypeChange={onDocTypeChange}
           canEdit={canEdit}
           onEdit={enterEdit}
           onDone={() => void finishEditing()}
@@ -499,7 +543,7 @@ export function DocumentPage({
 
       {hasRail && !isMobile && (
         <aside
-          className="hidden w-[280px] shrink-0 lg:block"
+          className="hidden w-[320px] shrink-0 lg:block"
           data-testid="document-rail"
           data-panel={aiOpen ? "ai" : "toc"}
         >

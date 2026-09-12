@@ -74,7 +74,7 @@ function ChunkRow({ chunk }: { chunk: DocumentChunkPublic }) {
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium">
+              <span className="min-w-0 truncate text-sm font-medium">
                 {chunk.title || `Chunk ${chunk.chunk_index + 1}`}
               </span>
               <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">

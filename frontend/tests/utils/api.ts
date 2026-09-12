@@ -1,6 +1,9 @@
+import fs from "node:fs"
+import path from "node:path"
 import type { APIRequestContext, APIResponse } from "@playwright/test"
 import { expect } from "@playwright/test"
 import { firstSuperuser, firstSuperuserPassword } from "../config.ts"
+import { twoFactorCode } from "./mail.ts"
 
 /** Absolute API base — tests call the backend directly for setup/assertions. */
 export const API = `${process.env.VITE_API_URL ?? "http://localhost:8800"}/api/v1`
@@ -9,20 +12,51 @@ export const uid = () => Math.random().toString(36).slice(2, 8)
 
 export const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
 
+/**
+ * Sign in the way the product does: the password buys a challenge, the code
+ * emailed to the address buys the session. There is no shortcut, by design.
+ */
 export async function getToken(
   request: APIRequestContext,
   email: string,
   password: string,
 ): Promise<string> {
-  const r = await request.post(`${API}/login/access-token`, {
+  const challenge = await request.post(`${API}/login/access-token`, {
     form: { username: email, password },
   })
-  expect(r.ok(), await r.text()).toBeTruthy()
-  return (await r.json()).access_token as string
+  expect(challenge.ok(), await challenge.text()).toBeTruthy()
+  const { challenge_token } = await challenge.json()
+
+  const code = await twoFactorCode(request, email)
+  const session = await request.post(`${API}/login/two-factor`, {
+    data: { challenge_token, code },
+  })
+  expect(session.ok(), await session.text()).toBeTruthy()
+  return (await session.json()).access_token as string
 }
 
-export const adminToken = (request: APIRequestContext) =>
-  getToken(request, firstSuperuser, firstSuperuserPassword)
+const AUTH_FILE = path.join(process.cwd(), "playwright/.auth/user.json")
+
+/**
+ * The superuser's session, borrowed from the storage state the `setup` project
+ * saved. Signing in again for every test would email a sign-in code every time
+ * and walk straight into the backend's send limit, so the suite would end up
+ * testing the rate limiter rather than the feature under test.
+ */
+export async function adminToken(request?: APIRequestContext): Promise<string> {
+  if (fs.existsSync(AUTH_FILE)) {
+    const state = JSON.parse(fs.readFileSync(AUTH_FILE, "utf8"))
+    for (const origin of state.origins ?? []) {
+      for (const item of origin.localStorage ?? []) {
+        if (item.name === "access_token" && item.value) return item.value
+      }
+    }
+  }
+  if (!request) {
+    throw new Error(`no saved session in ${AUTH_FILE} and no request context`)
+  }
+  return getToken(request, firstSuperuser, firstSuperuserPassword)
+}
 
 async function expectOk(r: APIResponse) {
   if (!r.ok()) {
@@ -34,12 +68,24 @@ async function expectOk(r: APIResponse) {
 /** Create a regular user through the dev-only private endpoint. */
 export async function createTestUser(
   request: APIRequestContext,
-  overrides: { email?: string; password?: string; full_name?: string } = {},
+  overrides: {
+    email?: string
+    password?: string
+    full_name?: string
+    is_verified?: boolean
+  } = {},
 ) {
   const email = overrides.email ?? `e2e_${uid()}@example.com`
   const password = overrides.password ?? `pw_${uid()}${uid()}`
   const r = await request.post(`${API}/private/users/`, {
-    data: { email, password, full_name: overrides.full_name ?? "E2E User" },
+    data: {
+      email,
+      password,
+      full_name: overrides.full_name ?? "E2E User",
+      // An account with an unconfirmed address cannot sign in at all, and a
+      // fixture has no inbox to confirm from.
+      is_verified: overrides.is_verified ?? true,
+    },
   })
   const user = await expectOk(r)
   return { email, password, id: user.id as string, full_name: user.full_name }
@@ -85,6 +131,7 @@ export async function createDocument(
     content: string
     content_format: "html" | "markdown" | "text"
     folder_id: string | null
+    doc_type: string
   }> = {},
 ) {
   const r = await request.post(`${API}/documents/`, {
@@ -181,6 +228,42 @@ export async function shareDocument(
     headers: auth(token),
     data: { email, role },
   })
+}
+
+export async function shareDocumentWithMany(
+  request: APIRequestContext,
+  token: string,
+  documentId: string,
+  body: { emails: string[]; role?: "viewer" | "editor"; message?: string },
+) {
+  return request.post(`${API}/documents/${documentId}/shares/batch`, {
+    headers: auth(token),
+    data: { role: "viewer", ...body },
+  })
+}
+
+export async function getInvitations(
+  request: APIRequestContext,
+  token: string,
+  documentId: string,
+) {
+  return expectOk(
+    await request.get(`${API}/documents/${documentId}/invitations`, {
+      headers: auth(token),
+    }),
+  )
+}
+
+export async function publishDocument(
+  request: APIRequestContext,
+  token: string,
+  documentId: string,
+) {
+  return expectOk(
+    await request.post(`${API}/documents/${documentId}/public`, {
+      headers: auth(token),
+    }),
+  )
 }
 
 export async function addMember(

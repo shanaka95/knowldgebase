@@ -42,7 +42,7 @@ export const Route = createFileRoute("/_layout/s/$namespaceSlug/d/$documentId")(
       return { title: document.title }
     },
     head: ({ loaderData }) => ({
-      meta: [{ title: `${loaderData?.title ?? "Page"} - Knowledge Base` }],
+      meta: [{ title: `${loaderData?.title ?? "Page"} - PlusGPT` }],
     }),
     pendingComponent: PendingDocument,
     errorComponent: DocumentRouteError,

@@ -39,12 +39,14 @@ def test_share_lifecycle(client: TestClient, db: Session) -> None:
         == 409
     )
     # unknown user
-    assert (
-        client.post(
-            f"{url}/shares", headers=oh, json={"email": "ghost@example.com"}
-        ).status_code
-        == 404
+    # An address with no account is no longer a dead end: the batch endpoint
+    # invites it. This single-address endpoint says so rather than pretending
+    # the page does not exist.
+    unknown = client.post(
+        f"{url}/shares", headers=oh, json={"email": "ghost@example.com"}
     )
+    assert unknown.status_code == 409
+    assert "invite" in unknown.json()["detail"]
 
     r = client.patch(f"{url}/shares/{guest.id}", headers=oh, json={"role": "editor"})
     assert r.status_code == 200 and r.json()["role"] == "editor"

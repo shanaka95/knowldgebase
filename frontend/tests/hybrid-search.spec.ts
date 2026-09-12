@@ -180,6 +180,26 @@ test.describe("Hybrid search interface", () => {
     await page.getByRole("button", { name: "Enable both methods" }).click()
     await expect(page).toHaveURL(/vector=true/)
   })
+
+  test("the explain panel says whether a reranker set the order", async ({
+    page,
+  }) => {
+    await mockRetrieve(page, () => BOTH_METHODS, { usedRerank: true })
+    await page.goto("/search?q=vpn+token")
+    await expect(results(page).first()).toBeVisible()
+    await openExplain(page)
+    await expect(page.getByText("Reranking: on")).toBeVisible()
+    await expect(page.getByText(/A reranker read your query/)).toBeVisible()
+  })
+
+  test("and says so when it did not run", async ({ page }) => {
+    await mockRetrieve(page, () => BOTH_METHODS)
+    await page.goto("/search?q=vpn+token")
+    await expect(results(page).first()).toBeVisible()
+    await openExplain(page)
+    await expect(page.getByText("Reranking: off")).toBeVisible()
+    await expect(page.getByText(/A reranker read your query/)).toBeHidden()
+  })
 })
 
 test.describe("Hybrid search against the real index", () => {

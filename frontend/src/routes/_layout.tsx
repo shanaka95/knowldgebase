@@ -7,6 +7,7 @@ import { GlobalDialogs } from "@/components/Sharing/GlobalDialogs"
 import AppSidebar from "@/components/Sidebar/AppSidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { isLoggedIn } from "@/hooks/useAuth"
+import { usePendingInviteRedirect } from "@/hooks/usePendingInvite"
 import { useSearchDialogStore } from "@/stores/searchDialog"
 
 export const Route = createFileRoute("/_layout")({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/_layout")({
 
 function Layout() {
   const openSearch = useSearchDialogStore((s) => s.open)
+  usePendingInviteRedirect()
 
   return (
     <SidebarProvider>

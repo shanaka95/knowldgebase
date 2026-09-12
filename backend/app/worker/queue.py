@@ -8,7 +8,7 @@ shared engine. The async worker invokes them via ``asyncio.to_thread`` so an
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -25,6 +25,7 @@ from app.models import (
     DocumentChunk,
     EmbeddingJob,
     EmbeddingStatus,
+    ImportFile,
     ImportJob,
     ImportParser,
     ImportStatus,
@@ -497,6 +498,17 @@ def queue_depth() -> dict[str, int]:
 
 
 @dataclass(slots=True)
+class ImportPart:
+    """One file of a multi-file import, detached from the session."""
+
+    position: int
+    filename: str
+    content_type: str
+    size: int
+    object_key: str
+
+
+@dataclass(slots=True)
 class ImportSnapshot:
     """Detached copy of an import job, safe to use outside the session."""
 
@@ -505,6 +517,7 @@ class ImportSnapshot:
     folder_id: uuid.UUID | None
     created_by: uuid.UUID | None
     title: str | None
+    doc_type: str | None
     prompt: str | None
     filename: str
     content_type: str
@@ -512,6 +525,9 @@ class ImportSnapshot:
     object_key: str
     attempts: int
     max_attempts: int
+    # Set when several uploads are being combined into one page, in order.
+    # Empty for the ordinary one-file import, which uses ``object_key``.
+    parts: list[ImportPart] = field(default_factory=list)
 
 
 def claim_import_jobs(worker_name: str, limit: int) -> list[ImportSnapshot]:
@@ -551,6 +567,21 @@ def claim_import_jobs(worker_name: str, limit: int) -> list[ImportSnapshot]:
         if not ids:
             return []
         jobs = session.exec(select(ImportJob).where(col(ImportJob.id).in_(ids))).all()
+        parts_by_job: dict[uuid.UUID, list[ImportPart]] = {}
+        for row in session.exec(
+            select(ImportFile)
+            .where(col(ImportFile.job_id).in_(ids))
+            .order_by(col(ImportFile.job_id), col(ImportFile.position))
+        ).all():
+            parts_by_job.setdefault(row.job_id, []).append(
+                ImportPart(
+                    position=row.position,
+                    filename=row.filename,
+                    content_type=row.content_type,
+                    size=row.size,
+                    object_key=row.object_key,
+                )
+            )
         return [
             ImportSnapshot(
                 id=j.id,
@@ -558,11 +589,13 @@ def claim_import_jobs(worker_name: str, limit: int) -> list[ImportSnapshot]:
                 folder_id=j.folder_id,
                 created_by=j.created_by,
                 title=j.title,
+                doc_type=j.doc_type,
                 prompt=j.prompt,
                 filename=j.filename,
                 content_type=j.content_type,
                 size=j.size,
                 object_key=j.object_key,
+                parts=parts_by_job.get(j.id, []),
                 attempts=j.attempts,
                 max_attempts=j.max_attempts,
             )
@@ -720,22 +753,38 @@ def create_document_from_import(
     already in MinIO, so nothing is copied and the original file stays
     downloadable from the page for good.
     """
-    with Session(engine) as session:
-        attachment = Attachment(
-            namespace_id=job.namespace_id,
-            uploader_id=job.created_by,
+    # One attachment per uploaded file, so a page combined from several scans
+    # can still produce each original. The first is the page's source.
+    uploads = job.parts or [
+        ImportPart(
+            position=0,
             filename=job.filename,
             content_type=job.content_type,
             size=job.size,
             object_key=job.object_key,
         )
-        session.add(attachment)
+    ]
+    with Session(engine) as session:
+        attachments = [
+            Attachment(
+                namespace_id=job.namespace_id,
+                uploader_id=job.created_by,
+                filename=part.filename,
+                content_type=part.content_type,
+                size=part.size,
+                object_key=part.object_key,
+            )
+            for part in uploads
+        ]
+        session.add_all(attachments)
         session.flush()
+        attachment = attachments[0]
 
         document = Document(
             namespace_id=job.namespace_id,
             folder_id=job.folder_id,
             title=title[:300],
+            doc_type=job.doc_type,
             content_html=content_html,
             content_text=content_text,
             created_by=job.created_by,
@@ -746,8 +795,9 @@ def create_document_from_import(
         session.add(document)
         session.flush()
 
-        attachment.document_id = document.id
-        session.add(attachment)
+        for a in attachments:
+            a.document_id = document.id
+        session.add_all(attachments)
 
         crud.enqueue_embedding_job(session=session, document=document, force=True)
         session.commit()

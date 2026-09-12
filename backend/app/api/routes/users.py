@@ -1,30 +1,69 @@
+import logging
 import uuid
+from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import EmailStr
 from sqlmodel import col, func, select
 
 from app import crud
 from app.api.deps import (
+    AuthDep,
     CurrentUser,
     SessionDep,
     SessionUser,
     get_current_active_superuser,
 )
-from app.core.security import get_password_hash, verify_password
+from app.api.routes.login import send_verification_email
+from app.api.serializers import user_ref
+from app.core.config import settings
+from app.core.security import (
+    create_access_token,
+    get_password_hash,
+    verify_password,
+)
 from app.models import (
     Message,
+    TokenMessage,
     UpdatePassword,
     User,
     UserCreate,
+    UserLookup,
     UserPublic,
     UserRegister,
     UsersPublic,
     UserUpdate,
     UserUpdateMe,
 )
+from app.services.email import (
+    Email,
+    EmailError,
+    get_email_sender,
+    password_changed_email,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+# The same answer whether or not the address was already registered.
+SIGNUP_REPLY = (
+    "Check your inbox. If that address can be registered, a confirmation "
+    "link is on its way."
+)
+
+
+async def _deliver_quietly(message: Email) -> None:
+    """Send a notification whose failure must not fail the request.
+
+    The password really has changed by this point; a mail outage should not
+    be reported to the caller as though it had not.
+    """
+    try:
+        await get_email_sender().send(message)
+    except EmailError as exc:
+        logger.error("could not send %r: %s", message.subject, exc)
 
 
 @router.get(
@@ -89,8 +128,8 @@ def update_user_me(
     return current_user
 
 
-@router.patch("/me/password", response_model=Message)
-def update_password_me(
+@router.patch("/me/password", response_model=TokenMessage)
+async def update_password_me(
     *, session: SessionDep, body: UpdatePassword, current_user: SessionUser
 ) -> Any:
     """
@@ -103,11 +142,49 @@ def update_password_me(
         raise HTTPException(
             status_code=400, detail="New password cannot be the same as the current one"
         )
-    hashed_password = get_password_hash(body.new_password)
-    current_user.hashed_password = hashed_password
+    current_user.hashed_password = get_password_hash(body.new_password)
+    # Changing a password is also how someone reacts to thinking it leaked, so
+    # it has to end the sessions that password could have opened. This token is
+    # reissued below rather than leaving the caller signed out of their own
+    # browser as a reward for good security hygiene.
+    current_user.session_epoch += 1
     session.add(current_user)
     session.commit()
-    return Message(message="Password updated successfully")
+    session.refresh(current_user)
+
+    await _deliver_quietly(password_changed_email(current_user.email))
+    return TokenMessage(
+        message="Password updated. Every other session has been signed out.",
+        access_token=create_access_token(
+            current_user.id,
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+            session_epoch=current_user.session_epoch,
+        ),
+    )
+
+
+@router.get("/lookup", response_model=UserLookup)
+def lookup_user(
+    session: SessionDep,
+    auth: AuthDep,  # noqa: ARG001 - signed in, so this cannot be probed anonymously
+    email: EmailStr,
+) -> Any:
+    """Does this exact address have an account here?
+
+    Used by the share dialog to show who a page is about to go to. **Exact
+    matches only, never prefixes**: confirming one address somebody already
+    typed is what sharing needs, while a prefix search would turn this into a
+    way to read the user list. Signed in, for the same reason.
+
+    An address with no account is not an error - it can still be invited.
+    """
+    address = email.strip().lower()
+    user = crud.get_user_by_email(session=session, email=address)
+    return UserLookup(
+        email=address,
+        exists=user is not None,
+        user=user_ref(user) if user is not None else None,
+    )
 
 
 @router.get("/me", response_model=UserPublic)
@@ -132,20 +209,30 @@ def delete_user_me(session: SessionDep, current_user: SessionUser) -> Any:
     return Message(message="User deleted successfully")
 
 
-@router.post("/signup", response_model=UserPublic)
-def register_user(session: SessionDep, user_in: UserRegister) -> Any:
+@router.post("/signup", response_model=Message)
+async def register_user(session: SessionDep, user_in: UserRegister) -> Any:
+    """Create an account and email a confirmation link.
+
+    The account exists immediately but cannot sign in until the address is
+    confirmed, so registering with someone else's address gains nothing.
+
+    The reply is the same whether or not the address was already taken. An
+    unauthenticated endpoint that distinguishes the two is a way to test whether
+    a given person has an account here, and the person who really owns the
+    address learns the truth from their inbox either way.
     """
-    Create new user without the need to be logged in.
-    """
-    user = crud.get_user_by_email(session=session, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system",
-        )
+    existing = crud.get_user_by_email(session=session, email=user_in.email)
+    if existing is not None:
+        if existing.email_verified_at is None and existing.is_active:
+            # Very likely the same person registering again after losing the
+            # first message, so send another rather than stranding them.
+            await send_verification_email(session, existing)
+        return Message(message=SIGNUP_REPLY)
+
     user_create = UserCreate.model_validate(user_in)
     user = crud.create_user(session=session, user_create=user_create)
-    return user
+    await send_verification_email(session, user)
+    return Message(message=SIGNUP_REPLY)
 
 
 @router.get("/{user_id}", response_model=UserPublic)

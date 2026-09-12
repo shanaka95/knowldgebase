@@ -11,6 +11,7 @@ from app.api.routes import (
     login,
     namespaces,
     private,
+    public,
     search,
     users,
     utils,
@@ -32,6 +33,9 @@ api_router.include_router(api_keys.router)
 api_router.include_router(search.router)
 api_router.include_router(ask.router)
 api_router.include_router(workers.router)
+# Answers without a credential, by design: pages shared by link, and the
+# facts of an invitation. See app/api/routes/public.py.
+api_router.include_router(public.router)
 
 
 if settings.FASTAPI_ENV == "development":

@@ -58,6 +58,13 @@ export function SearchExplain({
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="flex flex-col gap-4 border-t px-4 py-3 text-sm">
+          {result.used_rerank && (
+            <p className="text-foreground">
+              A reranker read your query against each of the top results and put
+              them in this order. Fusion decided which pages made the shortlist;
+              the reranker decided which of them come first.
+            </p>
+          )}
           {bm25Skipped && (
             <p className="flex items-start gap-2 text-foreground">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
@@ -72,6 +79,12 @@ export function SearchExplain({
             <span>
               Fusion constant k ={" "}
               <span className="font-mono text-foreground">{result.rrf_k}</span>
+            </span>
+            <span>
+              Reranking:{" "}
+              <span className="text-foreground">
+                {result.used_rerank ? "on" : "off"}
+              </span>
             </span>
             <span>
               Searched in{" "}

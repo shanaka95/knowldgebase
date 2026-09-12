@@ -202,7 +202,7 @@ test.describe("Import dialog", () => {
     await expect(page.getByTestId("import-submit")).toBeDisabled()
   })
 
-  test("accepts an image, prefills the title and can be cleared", async ({
+  test("accepts an image, offers an automatic title and can be cleared", async ({
     page,
   }) => {
     await page.goto("/imports")
@@ -222,10 +222,12 @@ test.describe("Import dialog", () => {
 
     const preview = page.getByTestId("import-file-preview")
     await expect(preview).toContainText("Scanned invoice.png")
-    // the filename is a sensible starting title
-    await expect(page.getByTestId("import-title")).toHaveValue(
-      "Scanned invoice",
-    )
+    // The title is generated from the document by default, so the field is
+    // empty and disabled until someone asks to write one.
+    await expect(page.getByTestId("import-auto-title")).toBeChecked()
+    await expect(page.getByTestId("import-title")).toBeDisabled()
+    await page.getByTestId("import-auto-title").click()
+    await expect(page.getByTestId("import-title")).toBeEnabled()
     await expect(page.getByTestId("import-submit")).toBeEnabled({
       timeout: 15_000,
     })
@@ -364,5 +366,98 @@ test.describe("Imported pages", () => {
       timeout: 20_000,
     })
     await expect(dialog.getByTestId("source-file-download")).toBeVisible()
+  })
+})
+
+test.describe("Importing several files at once", () => {
+  const png = (name: string) => ({
+    name,
+    mimeType: "image/png",
+    buffer: TINY_PNG,
+  })
+
+  async function openDialog(page: Page) {
+    await page.goto("/imports")
+    await page.getByTestId("import-new").click()
+    await expect(page.getByTestId("import-space-select")).not.toContainText(
+      "Select a space",
+      { timeout: 15_000 },
+    )
+  }
+
+  test("several files are listed and can be removed one at a time", async ({
+    page,
+  }) => {
+    await openDialog(page)
+    await page
+      .getByTestId("import-file-input")
+      .setInputFiles([png("one.png"), png("two.png"), png("three.png")])
+
+    await expect(page.getByTestId("import-file-preview")).toHaveCount(3)
+    await page.getByRole("button", { name: "Remove two.png" }).click()
+    await expect(page.getByTestId("import-file-preview")).toHaveCount(2)
+    await expect(page.getByTestId("import-dialog")).not.toContainText("two.png")
+  })
+
+  test("separate pages cannot share one title", async ({ page }) => {
+    await openDialog(page)
+    await page
+      .getByTestId("import-file-input")
+      .setInputFiles([png("one.png"), png("two.png")])
+
+    // Two files becoming two pages: a shared title would name them identically,
+    // so the field is not offered at all.
+    await expect(page.getByTestId("import-title")).toBeDisabled()
+    await expect(page.getByTestId("import-auto-title")).toBeDisabled()
+    await expect(page.getByTestId("import-dialog")).toContainText(
+      "named after its own content",
+    )
+  })
+
+  test("combining them makes a title available again", async ({ page }) => {
+    await openDialog(page)
+    await page
+      .getByTestId("import-file-input")
+      .setInputFiles([png("one.png"), png("two.png")])
+
+    await expect(page.getByTestId("import-combine")).not.toBeChecked()
+    await page.getByTestId("import-combine").click()
+    await expect(page.getByTestId("import-dialog")).toContainText(
+      "become one page",
+    )
+
+    await page.getByTestId("import-auto-title").click()
+    await expect(page.getByTestId("import-title")).toBeEnabled()
+    await page.getByTestId("import-title").fill("Site survey")
+    await expect(page.getByTestId("import-title")).toHaveValue("Site survey")
+  })
+
+  test("the combine choice only appears once there is more than one file", async ({
+    page,
+  }) => {
+    await openDialog(page)
+    await page.getByTestId("import-file-input").setInputFiles([png("one.png")])
+    await expect(page.getByTestId("import-combine")).toBeHidden()
+
+    await page.getByTestId("import-file-input").setInputFiles([png("two.png")])
+    await expect(page.getByTestId("import-combine")).toBeVisible()
+  })
+
+  test("an unsupported file is refused without losing the good ones", async ({
+    page,
+  }) => {
+    await openDialog(page)
+    await page
+      .getByTestId("import-file-input")
+      .setInputFiles([
+        png("keep.png"),
+        { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("x") },
+      ])
+
+    await expect(page.getByTestId("import-rejection")).toBeVisible()
+    await expect(page.getByTestId("import-file-preview")).toHaveCount(1)
+    await expect(page.getByTestId("import-file-preview")).toContainText(
+      "keep.png",
+    )
   })
 })

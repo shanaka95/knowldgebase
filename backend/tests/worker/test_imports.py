@@ -14,6 +14,7 @@ from app.models import (
     Attachment,
     Document,
     EmbeddingJob,
+    ImportFile,
     ImportJob,
     ImportParser,
     ImportStatus,
@@ -93,12 +94,22 @@ class FakeLLMParser:
 
 
 async def _claim(job: ImportJob) -> queue.ImportSnapshot:
-    claimed = await __import__("asyncio").to_thread(
-        queue.claim_import_jobs, "test-worker", 10
-    )
-    match = [c for c in claimed if c.id == job.id]
-    assert match, "the job should have been claimable"
-    return match[0]
+    """Claim until this job comes up.
+
+    Other tests leave queued imports behind, and claiming is first-come: taking
+    a single batch would sometimes return somebody else's jobs and never this
+    one.
+    """
+    import asyncio
+
+    for _ in range(50):
+        claimed = await asyncio.to_thread(queue.claim_import_jobs, "test-worker", 20)
+        if not claimed:
+            break
+        match = [c for c in claimed if c.id == job.id]
+        if match:
+            return match[0]
+    raise AssertionError("the job should have been claimable")
 
 
 async def test_import_creates_document_and_keeps_original_file(
@@ -345,3 +356,162 @@ async def test_claim_is_exclusive_and_skips_cancelled(db_session: Session) -> No
     ids = {c.id for c in again}
     assert job.id not in ids, "a claimed job must not be handed out twice"
     assert cancelled.id not in ids, "a cancelled job must not be claimed"
+
+
+# ---------------------------------------------------------------------------
+# Several files combined into one page
+# ---------------------------------------------------------------------------
+
+
+def _make_combined_import(
+    db: Session, filenames: list[str], *, title: str | None = None
+) -> tuple[ImportJob, InMemoryStorage]:
+    user = make_user(db)
+    ns = make_namespace(db, user)
+    storage = InMemoryStorage()
+    payload = _png_bytes()
+
+    job = ImportJob(
+        namespace_id=ns.id,
+        created_by=user.id,
+        title=title,
+        filename=f"{filenames[0]} +{len(filenames) - 1} more",
+        content_type="image/png",
+        size=len(payload) * len(filenames),
+        object_key=f"imports/{uuid.uuid4()}-0.png",
+    )
+    db.add(job)
+    db.flush()
+    for position, name in enumerate(filenames):
+        key = f"imports/{job.id}-{position}.png"
+        storage.put(key, io.BytesIO(payload), len(payload), "image/png")
+        db.add(
+            ImportFile(
+                job_id=job.id,
+                position=position,
+                filename=name,
+                content_type="image/png",
+                size=len(payload),
+                object_key=key,
+            )
+        )
+        if position == 0:
+            job.object_key = key
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job, storage
+
+
+class CountingParser:
+    """Returns a different body for each page so the join can be checked."""
+
+    def __init__(self) -> None:
+        self.pages_seen = 0
+        self.base_url = "http://fake-mineru/v1"
+
+    async def available(self) -> bool:
+        return True
+
+    def parse_page(self, image: Any) -> tuple[str, int]:
+        self.pages_seen += 1
+        return f"<p>Part {self.pages_seen}</p>", 1
+
+
+async def test_combined_files_become_one_page_in_order(db_session: Session) -> None:
+    job, storage = _make_combined_import(
+        db_session, ["a.png", "b.png", "c.png"], title="Site survey"
+    )
+    parser = CountingParser()
+
+    status = await imports_mod.run_import(
+        await _claim(job),
+        storage=storage,
+        mineru=parser,  # type: ignore[arg-type]
+    )
+    assert status == ImportStatus.done
+    assert parser.pages_seen == 3, "every file was parsed"
+
+    db_session.refresh(job)
+    document = db_session.get(Document, job.document_id)
+    assert document is not None
+    assert document.title == "Site survey"
+    # One page, holding all three parts, in the order they were chosen.
+    assert document.content_html.index("Part 1") < document.content_html.index("Part 2")
+    assert document.content_html.index("Part 2") < document.content_html.index("Part 3")
+
+
+async def test_every_combined_original_stays_downloadable(
+    db_session: Session,
+) -> None:
+    """The point of keeping the originals is that all of them are kept."""
+    job, storage = _make_combined_import(db_session, ["a.png", "b.png", "c.png"])
+    await imports_mod.run_import(
+        await _claim(job),
+        storage=storage,
+        mineru=CountingParser(),  # type: ignore[arg-type]
+    )
+    db_session.refresh(job)
+
+    attachments = db_session.exec(
+        select(Attachment).where(Attachment.document_id == job.document_id)
+    ).all()
+    assert sorted(a.filename for a in attachments) == ["a.png", "b.png", "c.png"]
+    for attachment in attachments:
+        assert attachment.object_key in storage.objects
+
+
+async def test_a_combined_page_is_indexed_once(db_session: Session) -> None:
+    job, storage = _make_combined_import(db_session, ["a.png", "b.png"])
+    await imports_mod.run_import(
+        await _claim(job),
+        storage=storage,
+        mineru=CountingParser(),  # type: ignore[arg-type]
+    )
+    db_session.refresh(job)
+
+    jobs = db_session.exec(
+        select(EmbeddingJob).where(EmbeddingJob.document_id == job.document_id)
+    ).all()
+    assert len(jobs) == 1, "one page, one indexing job"
+
+
+async def test_a_combined_page_without_a_title_uses_the_first_file(
+    db_session: Session,
+) -> None:
+    """The job's own filename is a summary label, which would read badly."""
+    job, storage = _make_combined_import(db_session, ["survey-part-1.png", "b.png"])
+
+    class Untitled(CountingParser):
+        def parse_page(self, image: Any) -> tuple[str, int]:
+            self.pages_seen += 1
+            return "<p>No heading anywhere.</p>", 1
+
+    await imports_mod.run_import(
+        await _claim(job),
+        storage=storage,
+        mineru=Untitled(),  # type: ignore[arg-type]
+    )
+    db_session.refresh(job)
+    document = db_session.get(Document, job.document_id)
+    assert document is not None
+    assert document.title == "survey-part-1"
+
+
+async def test_the_imported_page_keeps_the_type_it_was_filed_under(
+    db_session: Session,
+) -> None:
+    job, storage = _make_import(db_session)
+    job.doc_type = "Invoice"
+    db_session.add(job)
+    db_session.commit()
+
+    await imports_mod.run_import(
+        await _claim(job),
+        storage=storage,
+        mineru=FakeMinerU(),  # type: ignore[arg-type]
+    )
+    db_session.refresh(job)
+    document = db_session.get(Document, job.document_id)
+    assert document is not None
+    assert document.doc_type == "Invoice"

@@ -25,7 +25,7 @@ export function PendingDocument() {
           <Skeleton className="mt-4 h-32 w-full" />
         </div>
       </div>
-      <aside className="hidden w-[280px] shrink-0 lg:block">
+      <aside className="hidden w-[320px] shrink-0 lg:block">
         <div className="flex flex-col gap-2 pt-16">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-3 w-40" />

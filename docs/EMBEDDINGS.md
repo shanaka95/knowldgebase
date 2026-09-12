@@ -150,6 +150,20 @@ Stages while running: `claimed → loading → chunking → summarizing → embe
   `EMBEDDING_MAX_ATTEMPTS` (3). The document stays `pending` and `embedding_error` shows
   `attempt n/m: …`.
 * Permanent errors (embedding dimension mismatch = misconfigured model) fail immediately.
+* **Reasoning models that will not stop thinking.** Hidden reasoning is charged to the
+  same token budget as the answer, so a model that reasons when asked not to can spend
+  the entire budget and return a completion with *no content at all*
+  (`finish_reason=length`). This is not a transient error and retrying unchanged cannot
+  fix it, which is how a 38,000-character document once failed three times over.
+
+  Two defences. First, thinking is switched off in both dialects at once, because no
+  provider understands both: local servers (vMLX, vLLM, LM Studio) read
+  `chat_template_kwargs.enable_thinking`, while OpenRouter silently drops unknown fields
+  and reads `reasoning.enabled`. Whichever is ignored costs nothing. Second, a completion
+  that comes back empty *because it ran out of length* is retried once with a much larger
+  budget (up to `LLM_MAX_OUTPUT_TOKENS`), so a provider that ignores both switches costs a
+  few cents rather than a document. An empty completion for any other reason is reported,
+  not retried.
 * vMLX starts models on demand: clients retry "connection refused" / 502 / 503 for up to
   `MODEL_SERVER_COLD_START_SECONDS` (150 s) before treating it as a failure. Read timeouts are
   never retried so a multi-minute LLM call is not doubled.
@@ -168,6 +182,24 @@ Stages while running: `claimed → loading → chunking → summarizing → embe
   and whether a worker is online.
 * Qdrant UI: <http://localhost:6333/dashboard>.
 
+## Sizing the budgets to your models
+
+`EMBEDDING_MAX_CHARS` and `LLM_WINDOW_CHARS` are properties of the models you deployed,
+not of this app, and both are in **characters** because that is what providers actually
+enforce. Real documents here measure 3.75 (dense German) to 4.1 (English prose)
+characters per token, so divide a model's token window by ~3.75 for a safe character cap.
+
+* A document longer than `EMBEDDING_MAX_CHARS` is truncated before embedding, so anything
+  past the cut is invisible to whole-document search. Set it as high as the model allows.
+* A document longer than `LLM_WINDOW_CHARS` is summarised window by window and the
+  summaries are then summarised. That works, but a single pass is better, so with a
+  large-context model set this above the size of your longest page.
+
+The deployed instance uses `qwen3-embedding-8b` (32k tokens → 120,000 characters, under
+the provider's own 131,072-character hard limit) and `qwen3.8-flash` (1M tokens, capped at
+200,000 characters here — enough for every page in one pass without paying to push a whole
+book through).
+
 ## Configuration
 
 All settings live in `.env` (host defaults) and are overridden per container in `compose.yml`:
@@ -178,9 +210,11 @@ Model endpoints live in `models.toml`; the rest are environment variables.
 |---|---|---|
 | `[embeddings]` in models.toml | vMLX gateway / Jina v5 small / 1024 | embedding server, model, dimensions |
 | `EMBEDDING_BATCH_SIZE` / `EMBEDDING_MAX_CHARS` | 16 / 24000 | batching and truncation |
+| `[embeddings].max_chars` | 24000 | set it to the deployed model's own context window |
 | `[llm]` in models.toml | vMLX gateway / Qwen3.5-9B | chunking + summary model |
-| `[llm].disable_thinking` | true | sends `chat_template_kwargs.enable_thinking=false` |
+| `[llm].disable_thinking` | true | sends both `chat_template_kwargs.enable_thinking=false` and `reasoning.enabled=false` |
 | `LLM_WINDOW_CHARS` / `LLM_MIN_CHARS_FOR_CHUNKING` | 20000 / 600 | windowing thresholds |
+| `LLM_MAX_OUTPUT_TOKENS` | 8192 | ceiling for the retry after an empty completion |
 | `LLM_TIMEOUT_SECONDS` | 300 | read timeout per LLM call |
 | `EMBEDDING_DEBOUNCE_SECONDS` | 10 | autosave coalescing |
 | `EMBEDDING_MAX_ATTEMPTS` / `EMBEDDING_RETRY_BACKOFF_SECONDS` | 3 / 30 | retries |

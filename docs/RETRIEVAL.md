@@ -96,8 +96,53 @@ GET /api/v1/search/retrieve?q=vpn+token+error&bm25=true&vector=true&limit=20
 | `targets` | `document,summary,chunk` | which embedding kinds to search |
 | `namespace_id` | all accessible | restrict to one space |
 | `limit` | 20 | number of fused results |
+| `rerank` | `true` | rerank the leading results (see below) |
 | `rrf_k` | 60 | fusion constant |
 | `candidates_per_source` | 50 | depth fetched from each source before fusion |
+
+The response carries `used_bm25`, `used_vector` and `used_rerank`, which report
+what actually ran rather than what was asked for.
+
+## Reranking
+
+Fusion decides which pages belong in the running. It cannot decide which of them
+actually answers the query, because no source ever reads the query and the page
+together: BM25 counts word overlap, and a vector search compares two summaries of
+meaning that were computed separately.
+
+A cross-encoder does read them together. After fusion, the top
+`RERANK_CANDIDATES` (10) pages are sent to the reranker in one call, and the
+order it returns is the order the reader sees. Anything past the pool keeps its
+fused position behind the rescored block.
+
+Each candidate is represented by its title followed by the most specific text
+available: the section that matched, else the summary, else the start of the
+page. One representation, not three, because the budget is better spent on more
+pages than on the same page said three ways. Candidates are trimmed to
+`RERANK_DOC_CHARS` (4000) and, if the batch is still too big for the reranker's
+own context window, shrunk evenly rather than dropped, so no page silently
+disappears from the ranking.
+
+Reranking is an improvement, not a dependency. If `RERANK_MODEL` is empty, or the
+call fails, the fused order stands and `used_rerank` comes back `false`.
+
+### Cost
+
+Rerank providers bill per request, not per document. Measured against
+`cohere/rerank-4-fast` through OpenRouter, a call carrying 100 documents of
+12,000 characters each costs exactly what a call carrying 3 short ones costs:
+one search unit, $0.002. So the design is one call per query carrying the whole
+candidate pool. Trimming candidates buys latency and context headroom, not money.
+
+| configuration | default | meaning |
+|---|---|---|
+| `RERANK_MODEL` | empty (off) | model id, e.g. `cohere/rerank-4-fast` |
+| `RERANK_BASE_URL` | empty | an OpenAI-style `/rerank` endpoint |
+| `RERANK_API_KEY` | empty | falls back to the chat model's key in the deploy compose |
+| `RERANK_CANDIDATES` | 10 | pages sent for scoring |
+| `RERANK_MIN_CANDIDATES` | 3 | below this there is nothing worth reordering |
+| `RERANK_DOC_CHARS` | 4000 | per-candidate trim |
+| `RERANK_TOTAL_CHARS` | 100000 | whole-batch ceiling |
 
 ### A note on the semantic floor
 

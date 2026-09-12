@@ -19,11 +19,51 @@ password_hash = PasswordHash(
 ALGORITHM = "HS256"
 
 
-def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
+# Marks a token that is *not* a session: it only names a login waiting for its
+# emailed code. Checked on the way in, so one can never be used as the other.
+CHALLENGE_TOKEN_TYPE = "2fa-challenge"
+
+
+def create_access_token(
+    subject: str | Any, expires_delta: timedelta, session_epoch: int = 0
+) -> str:
+    """A session token, stamped with the epoch it was minted under.
+
+    The epoch is what makes revocation possible. A JWT cannot be withdrawn once
+    issued, so the account carries a counter, every token records the value it
+    saw, and raising the counter leaves every older token failing its check.
+    """
     expire = datetime.now(UTC) + expires_delta
-    to_encode = {"exp": expire, "sub": str(subject)}
+    to_encode = {"exp": expire, "sub": str(subject), "sev": session_epoch}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def create_challenge_token(subject: str | Any, expires_delta: timedelta) -> str:
+    """Proof that a password was accepted, and nothing more.
+
+    It carries no session epoch and a type of its own, so presenting it as a
+    bearer token gets nowhere: the code still has to be answered.
+    """
+    expire = datetime.now(UTC) + expires_delta
+    to_encode = {
+        "exp": expire,
+        "sub": str(subject),
+        "typ": CHALLENGE_TOKEN_TYPE,
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def read_challenge_token(token: str) -> str | None:
+    """The user id inside a challenge token, or None if it is not one."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:
+        return None
+    if payload.get("typ") != CHALLENGE_TOKEN_TYPE:
+        return None
+    subject = payload.get("sub")
+    return str(subject) if subject else None
 
 
 def verify_password(

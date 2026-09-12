@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_layout/playground")({
 
 const SAMPLE = `
 <h1>Onboarding guide</h1>
-<p>Welcome to the <strong>Knowledge Base</strong>. This page shows every block the editor supports. Type <code>/</code> anywhere to insert a block.</p>
+<p>Welcome to the <strong>PlusGPT</strong>. This page shows every block the editor supports. Type <code>/</code> anywhere to insert a block.</p>
 <div data-panel data-panel-type="info"><p>Panels are great for tips, caveats and callouts. Select one to switch its type.</p></div>
 <h2>Getting started</h2>
 <ul>
