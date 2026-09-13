@@ -156,3 +156,41 @@ export function treeQuery(namespaceId: string) {
     staleTime: 15_000,
   })
 }
+
+/**
+ * Folders in reading order, each with how deep it sits.
+ *
+ * A flat alphabetical list cannot say whether "Invoices" is a top-level folder
+ * or one of three called that under different parents, so a picker built from
+ * one makes people guess. Depth-first with siblings sorted puts every child
+ * directly under its parent, and the depth lets the caller indent.
+ *
+ * A folder whose parent is missing - filtered out, or deleted underneath us -
+ * is treated as top level rather than dropped, so nothing becomes unreachable.
+ */
+export function foldersInTreeOrder(
+  folders: readonly FolderPublic[],
+): { folder: FolderPublic; depth: number }[] {
+  const byParent = new Map<string | null, FolderPublic[]>()
+  const ids = new Set(folders.map((f) => f.id))
+  for (const folder of folders) {
+    const parent =
+      folder.parent_id && ids.has(folder.parent_id) ? folder.parent_id : null
+    const siblings = byParent.get(parent) ?? []
+    siblings.push(folder)
+    byParent.set(parent, siblings)
+  }
+  for (const siblings of byParent.values()) {
+    siblings.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  const out: { folder: FolderPublic; depth: number }[] = []
+  const walk = (parent: string | null, depth: number) => {
+    for (const folder of byParent.get(parent) ?? []) {
+      out.push({ folder, depth })
+      walk(folder.id, depth + 1)
+    }
+  }
+  walk(null, 0)
+  return out
+}

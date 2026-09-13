@@ -69,7 +69,7 @@ export function QuickCreate() {
               data-testid="quick-import"
             >
               <FileUp className="size-4" />
-              Import PDF or image…
+              Add a document…
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => openDialog({ kind: "createNamespace" })}

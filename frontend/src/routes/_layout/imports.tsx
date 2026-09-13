@@ -1,47 +1,12 @@
-import { useQuery } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
-import { FileUp } from "lucide-react"
-import {
-  ImportsList,
-  ImportsListSkeleton,
-} from "@/components/Imports/ImportsList"
-import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
-import { Button } from "@/components/ui/button"
-import { importsQuery } from "@/queries/imports"
-import { openDialog } from "@/stores/dialogs"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
+/**
+ * The page this used to be. Kept as a redirect because people bookmark pages
+ * and paste links to each other, and a rename is not a reason for either to
+ * stop working.
+ */
 export const Route = createFileRoute("/_layout/imports")({
-  component: ImportsPage,
-  staticData: { crumb: "Imports" },
-  loader: ({ context: { queryClient } }) => {
-    void queryClient.prefetchQuery(importsQuery())
+  beforeLoad: () => {
+    throw redirect({ to: "/capture", replace: true })
   },
-  head: () => ({ meta: [{ title: "Imports - PlusGPT" }] }),
 })
-
-function ImportsPage() {
-  const { data, isPending } = useQuery(importsQuery())
-
-  return (
-    <PageContainer className="flex flex-col gap-6">
-      <PageHeader
-        title="Imports"
-        description="PDFs and images you turned into pages. The original file stays attached to the page it created."
-        actions={
-          <Button
-            onClick={() => openDialog({ kind: "import" })}
-            data-testid="import-new"
-          >
-            <FileUp />
-            Import a file
-          </Button>
-        }
-      />
-      {isPending || !data ? (
-        <ImportsListSkeleton />
-      ) : (
-        <ImportsList jobs={data.data} />
-      )}
-    </PageContainer>
-  )
-}

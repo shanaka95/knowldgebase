@@ -19,6 +19,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutAskRouteImport } from './routes/_layout/ask'
+import { Route as LayoutCaptureRouteImport } from './routes/_layout/capture'
 import { Route as LayoutDataSourcesRouteImport } from './routes/_layout/data-sources'
 import { Route as LayoutImportsRouteImport } from './routes/_layout/imports'
 import { Route as LayoutPlaygroundRouteImport } from './routes/_layout/playground'
@@ -81,6 +82,11 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
 const LayoutAskRoute = LayoutAskRouteImport.update({
   id: '/ask',
   path: '/ask',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutCaptureRoute = LayoutCaptureRouteImport.update({
+  id: '/capture',
+  path: '/capture',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutDataSourcesRoute = LayoutDataSourcesRouteImport.update({
@@ -168,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/admin': typeof LayoutAdminRoute
   '/ask': typeof LayoutAskRoute
+  '/capture': typeof LayoutCaptureRoute
   '/data-sources': typeof LayoutDataSourcesRoute
   '/imports': typeof LayoutImportsRoute
   '/playground': typeof LayoutPlaygroundRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/admin': typeof LayoutAdminRoute
   '/ask': typeof LayoutAskRoute
+  '/capture': typeof LayoutCaptureRoute
   '/data-sources': typeof LayoutDataSourcesRoute
   '/imports': typeof LayoutImportsRoute
   '/playground': typeof LayoutPlaygroundRoute
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/_layout/admin': typeof LayoutAdminRoute
   '/_layout/ask': typeof LayoutAskRoute
+  '/_layout/capture': typeof LayoutCaptureRoute
   '/_layout/data-sources': typeof LayoutDataSourcesRoute
   '/_layout/imports': typeof LayoutImportsRoute
   '/_layout/playground': typeof LayoutPlaygroundRoute
@@ -246,6 +255,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin'
     | '/ask'
+    | '/capture'
     | '/data-sources'
     | '/imports'
     | '/playground'
@@ -270,6 +280,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin'
     | '/ask'
+    | '/capture'
     | '/data-sources'
     | '/imports'
     | '/playground'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/_layout/admin'
     | '/_layout/ask'
+    | '/_layout/capture'
     | '/_layout/data-sources'
     | '/_layout/imports'
     | '/_layout/playground'
@@ -393,6 +405,13 @@ declare module '@tanstack/react-router' {
       path: '/ask'
       fullPath: '/ask'
       preLoaderRoute: typeof LayoutAskRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/capture': {
+      id: '/_layout/capture'
+      path: '/capture'
+      fullPath: '/capture'
+      preLoaderRoute: typeof LayoutCaptureRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/data-sources': {
@@ -516,6 +535,7 @@ const LayoutSNamespaceSlugRouteWithChildren =
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
   LayoutAskRoute: typeof LayoutAskRoute
+  LayoutCaptureRoute: typeof LayoutCaptureRoute
   LayoutDataSourcesRoute: typeof LayoutDataSourcesRoute
   LayoutImportsRoute: typeof LayoutImportsRoute
   LayoutPlaygroundRoute: typeof LayoutPlaygroundRoute
@@ -531,6 +551,7 @@ interface LayoutRouteChildren {
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
   LayoutAskRoute: LayoutAskRoute,
+  LayoutCaptureRoute: LayoutCaptureRoute,
   LayoutDataSourcesRoute: LayoutDataSourcesRoute,
   LayoutImportsRoute: LayoutImportsRoute,
   LayoutPlaygroundRoute: LayoutPlaygroundRoute,

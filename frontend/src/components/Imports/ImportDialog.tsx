@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, CornerDownRight } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
@@ -28,7 +28,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { useCreateImport } from "@/hooks/useImports"
 import { canEditNamespace, useNamespaces } from "@/hooks/useNamespaces"
-import { treeQuery } from "@/queries/namespaces"
+import { foldersInTreeOrder, treeQuery } from "@/queries/namespaces"
 import { FileDropzone } from "./FileDropzone"
 
 interface Props {
@@ -120,10 +120,10 @@ export function ImportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" data-testid="import-dialog">
         <DialogHeader>
-          <DialogTitle>Import PDFs or images</DialogTitle>
+          <DialogTitle>Add a document</DialogTitle>
           <DialogDescription>
-            Each file is read by a document model and becomes an editable page.
-            The originals stay attached to it.
+            Photograph it or choose a file. Each one is read by a document model
+            and becomes an editable page, with the original attached.
           </DialogDescription>
         </DialogHeader>
 
@@ -260,9 +260,26 @@ export function ImportDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__root__">Space root</SelectItem>
-                  {folders.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.name}
+                  {/*
+                    Indented by depth, so a nested folder reads as nested. A
+                    flat list cannot distinguish a top-level "Invoices" from
+                    one of three under different parents, which leaves the
+                    reader guessing where a document is about to go.
+                  */}
+                  {foldersInTreeOrder(folders).map(({ folder, depth }) => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      <span
+                        style={{ paddingInlineStart: `${depth * 14}px` }}
+                        className="flex min-w-0 items-center gap-1.5"
+                      >
+                        {depth > 0 && (
+                          <CornerDownRight
+                            className="size-3 shrink-0 text-muted-foreground"
+                            aria-hidden
+                          />
+                        )}
+                        <span className="truncate">{folder.name}</span>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>

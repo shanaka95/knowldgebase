@@ -1,4 +1,4 @@
-import { FileText, ImageIcon, Upload, X } from "lucide-react"
+import { Camera, FileText, ImageIcon, Upload, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,39 @@ interface Props {
   onReject: (message: string) => void
   disabled?: boolean
   max?: number
+}
+
+/**
+ * Whether to offer the camera.
+ *
+ * Asked of the pointer rather than the hardware: a laptop has a webcam and
+ * nobody photographs a letter with it, while a phone or tablet is the device
+ * people actually hold over a piece of paper. A coarse pointer is the closest
+ * honest proxy for "this is held, not typed at".
+ */
+function useCameraAvailable(): boolean {
+  const [available, setAvailable] = useState(false)
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return
+    const touch = window.matchMedia("(pointer: coarse)").matches
+    const hasCamera = Boolean(navigator.mediaDevices?.getUserMedia)
+    setAvailable(touch && hasCamera)
+  }, [])
+  return available
+}
+
+/**
+ * A photograph arrives named whatever the camera felt like - often "image.jpg"
+ * for every shot. Naming them in order keeps the list readable and stops two
+ * captures looking like the same file to the duplicate check.
+ */
+function namedCapture(file: File, position: number): File {
+  const stamp = new Date().toISOString().slice(0, 10)
+  const extension = file.name.includes(".") ? file.name.split(".").pop() : "jpg"
+  return new File([file], `Photo ${position} — ${stamp}.${extension}`, {
+    type: file.type,
+    lastModified: file.lastModified,
+  })
 }
 
 /** Preview thumbnail for images; revoked when the file changes. */
@@ -97,7 +130,9 @@ export function FileDropzone({
   max = 20,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const cameraAvailable = useCameraAvailable()
 
   /**
    * Add what is acceptable and explain what is not, rather than discarding the
@@ -155,6 +190,22 @@ export function FileDropzone({
         </div>
       )}
 
+      {files.length < max && cameraAvailable && (
+        // First, because on a phone the camera is usually why someone opened
+        // this at all - the document is on the table in front of them.
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => cameraRef.current?.click()}
+          className="w-full"
+          data-testid="capture-photo"
+        >
+          <Camera />
+          {files.length > 0 ? "Take another photo" : "Take a photo"}
+        </Button>
+      )}
+
       {files.length < max && (
         <button
           type="button"
@@ -185,7 +236,9 @@ export function FileDropzone({
           <span className="font-medium text-sm">
             {files.length > 0
               ? "Add more files"
-              : "Drop PDFs or images here, or click to browse"}
+              : cameraAvailable
+                ? "Or choose a file"
+                : "Drop PDFs or images here, or click to browse"}
           </span>
           {files.length === 0 && (
             <span className="text-muted-foreground text-xs">
@@ -208,6 +261,28 @@ export function FileDropzone({
           e.target.value = ""
         }}
         data-testid="import-file-input"
+      />
+
+      {/*
+        A separate input because `capture` changes what the control *is*: on a
+        phone it opens the camera directly rather than the file picker. One shot
+        per press, which is why the button says "take another" - each capture
+        appends, so a three-page letter is three presses.
+      */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          const shot = e.target.files?.[0]
+          if (shot) accept([namedCapture(shot, files.length + 1)])
+          e.target.value = ""
+        }}
+        data-testid="capture-camera-input"
       />
     </div>
   )
