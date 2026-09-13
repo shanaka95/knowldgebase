@@ -77,6 +77,21 @@ def _check_destination(
             )
 
 
+def _import_key(namespace_id: uuid.UUID, job_id: uuid.UUID, part: int | None = None) -> str:
+    """Where an imported original is stored.
+
+    Partitioned by space, matching direct uploads (``ns/<space>/<file>``). Not
+    the access boundary - that is the permission check on the attachment - but
+    it means the object store is already separated by account, so a listing, a
+    cleanup or a future signed-URL feature cannot reach across one by accident.
+
+    Objects written before this keep their old flat ``imports/<id>`` key, which
+    still resolves: the key lives on the row.
+    """
+    suffix = f"-{part}" if part is not None else ""
+    return f"ns/{namespace_id}/imports/{job_id}{suffix}"
+
+
 async def _store(
     storage: ObjectStorage, file: UploadFile, key_prefix: str
 ) -> StoredUpload:
@@ -144,7 +159,7 @@ async def create_import(
     _check_destination(session, auth.user, namespace_id, folder_id)
 
     job_id = uuid.uuid4()
-    stored = await _store(storage, file, f"imports/{job_id}")
+    stored = await _store(storage, file, _import_key(namespace_id, job_id))
 
     job = ImportJob(
         id=job_id,
@@ -211,7 +226,7 @@ async def create_imports(
     if combine and len(files) > 1:
         job_id = uuid.uuid4()
         stored = [
-            await _store(storage, f, f"imports/{job_id}-{i}")
+            await _store(storage, f, _import_key(namespace_id, job_id, i))
             for i, f in enumerate(files)
         ]
         total = sum(s.size for s in stored)
@@ -252,7 +267,7 @@ async def create_imports(
     jobs: list[ImportJob] = []
     for file in files:
         job_id = uuid.uuid4()
-        stored_one = await _store(storage, file, f"imports/{job_id}")
+        stored_one = await _store(storage, file, _import_key(namespace_id, job_id))
         jobs.append(
             ImportJob(
                 id=job_id,

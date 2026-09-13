@@ -743,3 +743,46 @@ def test_originals_are_stored_under_the_space_that_owns_them(
     assert row is not None
     assert row.object_key.startswith(f"ns/{owner_world['namespace'].id}/")
     assert row.namespace_id == owner_world["namespace"].id
+
+
+def test_imported_originals_are_stored_under_their_own_space(
+    client: TestClient, owner_world: dict[str, Any], db: Session
+) -> None:
+    """Imports used to share one flat prefix across every account.
+
+    Access was still checked, so nothing leaked - but every account's originals
+    sat in one directory, which makes a listing bug, a cleanup bug or any future
+    direct-URL feature a cross-account problem rather than a local one.
+    """
+    from app.models import ImportJob
+
+    pdf = b"%PDF-1.7\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>"
+    created = client.post(
+        f"{API}/imports/",
+        headers=owner_world["headers"],
+        data={"namespace_id": str(owner_world["namespace"].id)},
+        files={"file": ("scan.pdf", io.BytesIO(pdf), "application/pdf")},
+    )
+    assert created.status_code == 200, created.text
+
+    job = db.get(ImportJob, uuid.UUID(created.json()["id"]))
+    assert job is not None
+    assert job.object_key.startswith(f"ns/{owner_world['namespace'].id}/")
+    assert not job.object_key.startswith("imports/"), "the flat prefix is the old shape"
+
+
+def test_an_agent_key_cannot_reach_another_accounts_import(
+    client: TestClient, owner_world: dict[str, Any], stranger: dict[str, str]
+) -> None:
+    """The original of somebody else's import is not readable either."""
+    pdf = b"%PDF-1.7\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>"
+    created = client.post(
+        f"{API}/imports/",
+        headers=owner_world["headers"],
+        data={"namespace_id": str(owner_world["namespace"].id)},
+        files={"file": ("scan.pdf", io.BytesIO(pdf), "application/pdf")},
+    )
+    job_id = created.json()["id"]
+    intruder = _agent_key(client, stranger)
+    r = client.get(f"{API}/imports/{job_id}", headers=intruder)
+    assert r.status_code in DENIED
