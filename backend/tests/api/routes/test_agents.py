@@ -118,6 +118,7 @@ def test_the_profile_grants_no_shell_or_filesystem_tools(
     # key that did nothing, and passed.
     from app.services.agent_provisioning import (
         AGENT_PLATFORMS,
+        DENIED_TOOLSETS,
         MCP_SERVER_NAME,
         TOOLSET_CONFIG_KEY,
     )
@@ -139,7 +140,7 @@ def test_the_profile_grants_no_shell_or_filesystem_tools(
     # out silently falls back to the permissive default.
     assert set(granted_per_platform) == set(AGENT_PLATFORMS)
     for platform, granted in granted_per_platform.items():
-        assert not granted & {"terminal", "file", "browser", "computer_use"}, platform
+        assert not granted & set(DENIED_TOOLSETS), platform
         # The MCP server's name is also its toolset name. Leaving it out does
         # not trim a nicety - it takes the knowledge base away entirely, which
         # is how this was found: an agent that could not list a single document.
@@ -1450,3 +1451,28 @@ def test_the_agent_can_file_an_attachment_it_cannot_read(
     # The plugin reaches the knowledge base through the same MCP server the
     # agent uses, and only that one: MCP access is default-deny per plugin.
     assert f"mcp_allowlist: [{agent_provisioning.MCP_SERVER_NAME}]" in config
+
+
+def test_code_execution_is_denied_as_well_as_ungranted(
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
+) -> None:
+    """Named as a denial, not only left out of the grant.
+
+    Toolsets compose - a preset gaining a member, a plugin declaring one, an
+    adapter override - and any of those would quietly hand a hosted agent code
+    execution or the filesystem. Both lists have to change before that happens.
+    """
+    from app.services import agent_provisioning
+
+    body = _create_agent(client, normal_user_token_headers, f"Denied {uuid.uuid4().hex[:6]}")
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    config = (
+        agent_provisioning.profile_dir(agent.shard_id, agent.profile_name)
+        / "config.yaml"
+    ).read_text()
+
+    line = next(l for l in config.splitlines() if "disabled_toolsets" in l)
+    denied = {t.strip() for t in line.split("[", 1)[1].rstrip("]").split(",")}
+    # Every toolset that carries execute_code, a shell, or the filesystem.
+    assert {"code_execution", "coding", "terminal", "file"} <= denied
+    assert "computer_use" in denied

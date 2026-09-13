@@ -54,6 +54,22 @@ TOOLSET_CONFIG_KEY = "platform_toolsets"
 # with no entry falls back to Hermes' permissive default.
 AGENT_PLATFORMS = ("telegram", "whatsapp", "slack", "discord", "cli")
 
+# Named again as a denial, not only omitted from the grant. Toolsets compose -
+# a preset gaining a member, a plugin declaring one, an adapter override - and
+# any of those would quietly hand a hosted agent code execution or the
+# filesystem. Listing them here means the grant and the denial both have to
+# change before that can happen.
+DENIED_TOOLSETS = [
+    "terminal",
+    "file",
+    "browser",
+    "code_execution",
+    "coding",
+    "computer_use",
+    "debugging",
+    "delegation",
+]
+
 
 def profile_name_for(agent_id: uuid.UUID) -> str:
     """Stable directory name. Derived from the id, so renaming never moves state."""
@@ -149,6 +165,9 @@ plugins:
   entries:
     plusgpt-files:
       mcp_allowlist: [{MCP_SERVER_NAME}]
+
+agent:
+  disabled_toolsets: [{", ".join(DENIED_TOOLSETS)}]
 """
 
 
