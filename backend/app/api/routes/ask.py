@@ -30,6 +30,7 @@ from app.core.permissions import accessible_documents_filter
 from app.models import (
     AskAnswer,
     AskCitation,
+    AskContext,
     AskRequest,
     Document,
     DocumentChunk,
@@ -335,6 +336,44 @@ async def ask_question(
         reranked=reranked,
         truncated=context.truncated,
         model=settings.LLM_MODEL,
+        retrieval_ms=retrieval_ms,
+        took_ms=(time.perf_counter() - started) * 1000,
+    )
+
+
+@router.post("/context", response_model=AskContext)
+async def ask_context(
+    session: SessionDep,
+    auth: AuthDep,
+    vectors: VectorsDep,
+    embeddings: EmbeddingsDep,
+    reranker: RerankerDep,
+    body: AskRequest,
+) -> AskContext:
+    """The pages an answer would be written from, without writing it.
+
+    Identical retrieval to `POST /ask/` - the same fusion, the same reranker,
+    the same three pages, the same context budget - and then it stops. A caller
+    that is going to compose a reply anyway gets the sources instead of a
+    summary of them, and pays for one generation rather than two.
+    """
+    if not body.q.strip():
+        raise HTTPException(status_code=422, detail="Ask a question")
+
+    started = time.perf_counter()
+    passages, retrieval_ms, searched, reranked = await _search(
+        session, auth, vectors, embeddings, reranker, body
+    )
+    context = build_context(passages)
+    return AskContext(
+        question=body.q.strip(),
+        # No answer exists yet, so nothing is marked as cited.
+        documents=_citations(session, context, ""),
+        searched=searched,
+        used=len({p.document_id for p in context.passages}),
+        passages=len(context.passages),
+        reranked=reranked,
+        truncated=context.truncated,
         retrieval_ms=retrieval_ms,
         took_ms=(time.perf_counter() - started) * 1000,
     )

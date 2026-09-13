@@ -27,6 +27,7 @@ from tests.utils.kb import (
 )
 
 ASK = f"{API}/ask/"
+ASK_CONTEXT = f"{API}/ask/context"
 ASK_STREAM = f"{API}/ask/stream"
 LLM_URL = f"{str(settings.LLM_BASE_URL).rstrip('/')}/chat/completions"
 
@@ -289,6 +290,104 @@ async def test_a_page_that_matched_in_several_places_is_sent_once_and_whole(
     assert "Total due is 262.12 EUR" in prompt
     assert "Customer address" in prompt, "the whole page, including what did not match"
     assert "Payment history" in prompt
+
+
+@pytest.mark.anyio
+async def test_context_hands_over_the_pages_without_writing_an_answer(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    """The caller that will phrase the reply gets the sources, not a summary.
+
+    Every MCP caller is itself a model with a reply to write. Answering here
+    and letting it rewrite that answer spends a second generation to say the
+    same thing slightly less accurately, so this endpoint stops at the pages.
+    """
+    owner, pw = create_user_with_password(db)
+    await _seed(db, store, (owner, pw))
+    headers = login(client, owner, pw)
+
+    with respx.mock:
+        llm = respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, json=_completion("should not be called"))
+        )
+        body = client.post(
+            ASK_CONTEXT, headers=headers, json={"q": "vpn error 407"}
+        ).json()
+
+    assert not llm.called, "no answer is written, so no model is paid for"
+    assert body["documents"], "the pages it would have answered from"
+    assert body["used"] >= 1
+    titles = [d["title"] for d in body["documents"]]
+    assert "Connecting to the VPN" in titles
+
+
+@pytest.mark.anyio
+async def test_context_returns_whole_pages_not_excerpts(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    """A caller answering from these needs the parts that did not match too."""
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    invoice = create_document(
+        db,
+        ns,
+        owner,
+        title="Invoice",
+        html=(
+            "<p>Customer address and contact details for the vpn account.</p>"
+            "<p>Total due is 262.12 EUR for the vpn service period.</p>"
+            "<p>Payment history and mandate details for the vpn contract.</p>"
+        ),
+    )
+    await _index(
+        store,
+        db,
+        invoice,
+        chunks=[
+            "Customer address and contact details for the vpn account.",
+            "Total due is 262.12 EUR for the vpn service period.",
+            "Payment history and mandate details for the vpn contract.",
+        ],
+        summary="An invoice for the vpn service.",
+    )
+    db.commit()
+    headers = login(client, owner, pw)
+
+    body = client.post(
+        ASK_CONTEXT, headers=headers, json={"q": "vpn total due"}
+    ).json()
+
+    assert body["passages"] == 1, "one page, sent once"
+    text = body["documents"][0]["text"]
+    assert "Total due is 262.12 EUR" in text
+    assert "Customer address" in text, "including what did not match"
+    assert "Payment history" in text
+
+
+@pytest.mark.anyio
+async def test_context_is_scoped_to_the_caller(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    """Skipping the answer must not skip the access check."""
+    owner, owner_pw = create_user_with_password(db)
+    await _seed(db, store, (owner, owner_pw))
+    stranger, stranger_pw = create_user_with_password(db)
+    headers = login(client, stranger, stranger_pw)
+
+    body = client.post(
+        ASK_CONTEXT, headers=headers, json={"q": "vpn error 407"}
+    ).json()
+
+    assert body["documents"] == [], "another account's pages are not context"
+    assert body["used"] == 0
+
+
+def test_context_rejects_an_empty_question(client: TestClient, db: Session) -> None:
+    owner, pw = create_user_with_password(db)
+    headers = login(client, owner, pw)
+    assert client.post(ASK_CONTEXT, headers=headers, json={"q": "   "}).status_code in (
+        422,
+    )
 
 
 @pytest.mark.anyio

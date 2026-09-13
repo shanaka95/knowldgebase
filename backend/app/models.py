@@ -1259,6 +1259,30 @@ class AskCitation(SQLModel):
     updated_at: datetime | None = None
 
 
+class AskContext(SQLModel):
+    """What an answer would be written from, handed over instead of an answer.
+
+    Every caller that reaches this over MCP is itself a model: it has to phrase
+    a reply to somebody either way. Writing an answer here and having that
+    caller rewrite it costs a second generation and loses a little of the
+    source each time, so this returns the same pages the answer would have been
+    written from and lets the caller write once, from the originals.
+    """
+
+    question: str
+    # AskCitation, because it is the same thing: one page the answer is
+    # grounded in, carrying the text and where it came from. Nothing cites it
+    # yet, so `cited` is false throughout.
+    documents: list[AskCitation] = []
+    searched: int = 0
+    used: int = 0
+    passages: int = 0
+    reranked: bool = False
+    truncated: bool = False
+    retrieval_ms: float = 0.0
+    took_ms: float = 0.0
+
+
 class AskAnswer(SQLModel):
     question: str
     answer: str
