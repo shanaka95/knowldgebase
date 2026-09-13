@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, documentsCancelInvitationData, documentsCancelInvitationErrors, documentsCancelInvitationResponses, documentsCloneDocumentData, documentsCloneDocumentErrors, documentsCloneDocumentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsPublishDocumentData, documentsPublishDocumentErrors, documentsPublishDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentInvitationsData, documentsReadDocumentInvitationsErrors, documentsReadDocumentInvitationsResponses, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadDocumentTypesData, documentsReadDocumentTypesResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsShareDocumentWithManyData, documentsShareDocumentWithManyErrors, documentsShareDocumentWithManyResponses, documentsUnpublishDocumentData, documentsUnpublishDocumentErrors, documentsUnpublishDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsCreateImportsData, importsCreateImportsErrors, importsCreateImportsResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordResponses, loginResendTwoFactorData, loginResendTwoFactorErrors, loginResendTwoFactorResponses, loginResendVerificationData, loginResendVerificationErrors, loginResendVerificationResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginSignOutEverywhereData, loginSignOutEverywhereResponses, loginTestTokenData, loginTestTokenResponses, loginVerifyEmailData, loginVerifyEmailErrors, loginVerifyEmailResponses, loginVerifyTwoFactorData, loginVerifyTwoFactorErrors, loginVerifyTwoFactorResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesAddNamespaceMembersData, namespacesAddNamespaceMembersErrors, namespacesAddNamespaceMembersResponses, namespacesCancelNamespaceInvitationData, namespacesCancelNamespaceInvitationErrors, namespacesCancelNamespaceInvitationResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceInvitationsData, namespacesReadNamespaceInvitationsErrors, namespacesReadNamespaceInvitationsResponses, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, privateReadEmailsData, privateReadEmailsErrors, privateReadEmailsResponses, publicReadInvitationData, publicReadInvitationErrors, publicReadInvitationResponses, publicReadPublicAttachmentData, publicReadPublicAttachmentErrors, publicReadPublicAttachmentResponses, publicReadPublicDocumentData, publicReadPublicDocumentErrors, publicReadPublicDocumentResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersLookupUserData, usersLookupUserErrors, usersLookupUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
+import type { adminChannelsClearChannelData, adminChannelsClearChannelErrors, adminChannelsClearChannelResponses, adminChannelsReadChannelsData, adminChannelsReadChannelsResponses, adminChannelsUpdateChannelData, adminChannelsUpdateChannelErrors, adminChannelsUpdateChannelResponses, agentControlControlHealthData, agentControlControlHealthResponses, agentControlResolveRouteData, agentControlResolveRouteErrors, agentControlResolveRouteResponses, agentLlmChatCompletionsData, agentLlmChatCompletionsResponses, agentLlmListModelsData, agentLlmListModelsResponses, agentsCreateAgentData, agentsCreateAgentErrors, agentsCreateAgentResponses, agentsCreateLinkCodeData, agentsCreateLinkCodeErrors, agentsCreateLinkCodeResponses, agentsDeleteAgentData, agentsDeleteAgentErrors, agentsDeleteAgentResponses, agentsDeleteConnectionData, agentsDeleteConnectionErrors, agentsDeleteConnectionResponses, agentsReadAgentChannelsData, agentsReadAgentChannelsErrors, agentsReadAgentChannelsResponses, agentsReadAgentData, agentsReadAgentErrors, agentsReadAgentResponses, agentsReadAgentsData, agentsReadAgentsResponses, agentsUpdateAgentData, agentsUpdateAgentErrors, agentsUpdateAgentResponses, apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, documentsCancelInvitationData, documentsCancelInvitationErrors, documentsCancelInvitationResponses, documentsCloneDocumentData, documentsCloneDocumentErrors, documentsCloneDocumentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsPublishDocumentData, documentsPublishDocumentErrors, documentsPublishDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentInvitationsData, documentsReadDocumentInvitationsErrors, documentsReadDocumentInvitationsResponses, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadDocumentTypesData, documentsReadDocumentTypesResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsShareDocumentWithManyData, documentsShareDocumentWithManyErrors, documentsShareDocumentWithManyResponses, documentsUnpublishDocumentData, documentsUnpublishDocumentErrors, documentsUnpublishDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsCreateImportsData, importsCreateImportsErrors, importsCreateImportsResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordResponses, loginResendTwoFactorData, loginResendTwoFactorErrors, loginResendTwoFactorResponses, loginResendVerificationData, loginResendVerificationErrors, loginResendVerificationResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginSignOutEverywhereData, loginSignOutEverywhereResponses, loginTestTokenData, loginTestTokenResponses, loginVerifyEmailData, loginVerifyEmailErrors, loginVerifyEmailResponses, loginVerifyTwoFactorData, loginVerifyTwoFactorErrors, loginVerifyTwoFactorResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesAddNamespaceMembersData, namespacesAddNamespaceMembersErrors, namespacesAddNamespaceMembersResponses, namespacesCancelNamespaceInvitationData, namespacesCancelNamespaceInvitationErrors, namespacesCancelNamespaceInvitationResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceInvitationsData, namespacesReadNamespaceInvitationsErrors, namespacesReadNamespaceInvitationsResponses, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, privateReadEmailsData, privateReadEmailsErrors, privateReadEmailsResponses, publicReadInvitationData, publicReadInvitationErrors, publicReadInvitationResponses, publicReadPublicAttachmentData, publicReadPublicAttachmentErrors, publicReadPublicAttachmentResponses, publicReadPublicDocumentData, publicReadPublicDocumentErrors, publicReadPublicDocumentResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersLookupUserData, usersLookupUserErrors, usersLookupUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -243,6 +243,13 @@ export class UsersService {
      * Update User Me
      *
      * Update own user.
+     *
+     * Moving to a different address leaves that address **unconfirmed** until a
+     * link sent to it is answered, exactly as at sign-up. Being signed in proves
+     * control of the account, never of an address somebody typed into it - and
+     * the address is the account's identity everywhere else: sharing looks
+     * accounts up by it, so an address accepted on an authenticated PATCH alone
+     * would let anyone claim somebody else's and be handed their pages.
      */
     public static updateUserMe<ThrowOnError extends boolean = true>(options: Options<usersUpdateUserMeData, ThrowOnError>) {
         return (options.client ?? client).patch<usersUpdateUserMeResponses, usersUpdateUserMeErrors, ThrowOnError>({
@@ -278,7 +285,12 @@ export class UsersService {
     /**
      * Lookup User
      *
-     * Does this exact address have an account here?
+     * Does this exact address have a confirmed account here?
+     *
+     * Confirmed, because that is what sharing will do with the answer: an address
+     * whose account never answered a confirmation gets an invitation, not access,
+     * and a dialog that promised otherwise would be lying about where the page is
+     * about to go.
      *
      * Used by the share dialog to show who a page is about to go to. **Exact
      * matches only, never prefixes**: confirming one address somebody already
@@ -386,10 +398,14 @@ export class HealthService {
      * Read Health
      *
      * Reachability of Postgres, Qdrant, MinIO, the model servers and the worker.
+     *
+     * Open, so a monitor can poll it without a credential. Anyone signed in also
+     * sees why a service is unhealthy; anyone else sees only that it is.
      */
     public static readHealth<ThrowOnError extends boolean = true>(options?: Options<healthReadHealthData, ThrowOnError>) {
         return (options?.client ?? client).get<healthReadHealthResponses, unknown, ThrowOnError>({
             responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
             url: '/api/v1/health/',
             ...options
         });
@@ -1384,6 +1400,237 @@ export class WorkersService {
             responseType: 'json',
             security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
             url: '/api/v1/workers/',
+            ...options
+        });
+    }
+}
+
+export class AgentsService {
+    /**
+     * Read Agents
+     */
+    public static readAgents<ThrowOnError extends boolean = true>(options?: Options<agentsReadAgentsData, ThrowOnError>) {
+        return (options?.client ?? client).get<agentsReadAgentsResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/',
+            ...options
+        });
+    }
+    
+    /**
+     * Create Agent
+     */
+    public static createAgent<ThrowOnError extends boolean = true>(options: Options<agentsCreateAgentData, ThrowOnError>) {
+        return (options.client ?? client).post<agentsCreateAgentResponses, agentsCreateAgentErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete Agent
+     */
+    public static deleteAgent<ThrowOnError extends boolean = true>(options: Options<agentsDeleteAgentData, ThrowOnError>) {
+        return (options.client ?? client).delete<agentsDeleteAgentResponses, agentsDeleteAgentErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/{agent_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Agent
+     */
+    public static readAgent<ThrowOnError extends boolean = true>(options: Options<agentsReadAgentData, ThrowOnError>) {
+        return (options.client ?? client).get<agentsReadAgentResponses, agentsReadAgentErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/{agent_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Update Agent
+     */
+    public static updateAgent<ThrowOnError extends boolean = true>(options: Options<agentsUpdateAgentData, ThrowOnError>) {
+        return (options.client ?? client).patch<agentsUpdateAgentResponses, agentsUpdateAgentErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/{agent_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read Agent Channels
+     *
+     * Channels this agent can use: the ones an admin has enabled, plus status.
+     */
+    public static readAgentChannels<ThrowOnError extends boolean = true>(options: Options<agentsReadAgentChannelsData, ThrowOnError>) {
+        return (options.client ?? client).get<agentsReadAgentChannelsResponses, agentsReadAgentChannelsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/{agent_id}/channels',
+            ...options
+        });
+    }
+    
+    /**
+     * Create Link Code
+     *
+     * Issue a one-time code proving this account owns a channel identity.
+     *
+     * The plaintext is returned once. Sending it from the channel is what binds
+     * the two together; until then the channel account is a stranger to us.
+     */
+    public static createLinkCode<ThrowOnError extends boolean = true>(options: Options<agentsCreateLinkCodeData, ThrowOnError>) {
+        return (options.client ?? client).post<agentsCreateLinkCodeResponses, agentsCreateLinkCodeErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/{agent_id}/channels/link-code',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete Connection
+     */
+    public static deleteConnection<ThrowOnError extends boolean = true>(options: Options<agentsDeleteConnectionData, ThrowOnError>) {
+        return (options.client ?? client).delete<agentsDeleteConnectionResponses, agentsDeleteConnectionErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/agents/{agent_id}/channels/{connection_id}',
+            ...options
+        });
+    }
+}
+
+export class AdminChannelsService {
+    /**
+     * Read Channels
+     *
+     * Every channel this build supports, configured or not.
+     */
+    public static readChannels<ThrowOnError extends boolean = true>(options?: Options<adminChannelsReadChannelsData, ThrowOnError>) {
+        return (options?.client ?? client).get<adminChannelsReadChannelsResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/channels/',
+            ...options
+        });
+    }
+    
+    /**
+     * Clear Channel
+     *
+     * Forget a channel's credentials and disable it.
+     *
+     * Existing user connections are left alone: an admin re-entering a token
+     * should not force everybody to reconnect.
+     */
+    public static clearChannel<ThrowOnError extends boolean = true>(options: Options<adminChannelsClearChannelData, ThrowOnError>) {
+        return (options.client ?? client).delete<adminChannelsClearChannelResponses, adminChannelsClearChannelErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/channels/{channel_type}',
+            ...options
+        });
+    }
+    
+    /**
+     * Update Channel
+     */
+    public static updateChannel<ThrowOnError extends boolean = true>(options: Options<adminChannelsUpdateChannelData, ThrowOnError>) {
+        return (options.client ?? client).patch<adminChannelsUpdateChannelResponses, adminChannelsUpdateChannelErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/channels/{channel_type}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+}
+
+export class AgentControlService {
+    /**
+     * Resolve Route
+     *
+     * Which profile, if any, an inbound sender belongs to.
+     *
+     * Always 200 with ``{"profile": null}`` for an unknown sender rather than 404,
+     * so a transport error and a genuine "nobody" stay distinguishable to the
+     * caller - it drops the message on both, but only one is worth alerting on.
+     */
+    public static resolveRoute<ThrowOnError extends boolean = true>(options: Options<agentControlResolveRouteData, ThrowOnError>) {
+        return (options.client ?? client).post<agentControlResolveRouteResponses, agentControlResolveRouteErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/agent-control/route',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Control Health
+     *
+     * Lets a shard confirm its token works before it starts taking traffic.
+     */
+    public static controlHealth<ThrowOnError extends boolean = true>(options?: Options<agentControlControlHealthData, ThrowOnError>) {
+        return (options?.client ?? client).get<agentControlControlHealthResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/agent-control/health',
+            ...options
+        });
+    }
+}
+
+export class AgentLlmService {
+    /**
+     * Chat Completions
+     */
+    public static chatCompletions<ThrowOnError extends boolean = true>(options?: Options<agentLlmChatCompletionsData, ThrowOnError>) {
+        return (options?.client ?? client).post<agentLlmChatCompletionsResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/agent-llm/v1/chat/completions',
+            ...options
+        });
+    }
+    
+    /**
+     * List Models
+     *
+     * The one model an agent may use.
+     *
+     * Answered locally rather than proxied: the provider's full catalogue is not
+     * an agent's business, and clients only call this to discover a default.
+     */
+    public static listModels<ThrowOnError extends boolean = true>(options?: Options<agentLlmListModelsData, ThrowOnError>) {
+        return (options?.client ?? client).get<agentLlmListModelsResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/agent-llm/v1/models',
             ...options
         });
     }

@@ -1459,3 +1459,259 @@ class PasswordRecoveryRequest(SQLModel):
 class NewPassword(SQLModel):
     token: str = Field(min_length=16, max_length=256)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+# ---------------------------------------------------------------------------
+# Agents and channels
+#
+# An *agent* is a conversational assistant a user talks to from a messaging
+# channel. Each one is backed by its own Hermes profile - its own home
+# directory, conversation store and knowledge-base credential - because that is
+# the isolation unit Hermes is built around. Two users' agents share a process
+# but never a profile.
+#
+# A *channel connection* binds a platform identity (a phone number, a Telegram
+# user id) to one agent. Everyone messages the same bot, so an inbound identity
+# is a claim rather than a credential: a connection only exists once the person
+# has proved they hold both the channel account and the PlusGPT account, by
+# sending a one-time code issued in the dashboard.
+# ---------------------------------------------------------------------------
+
+
+class ChannelType(StrEnum):
+    whatsapp = "whatsapp"
+    telegram = "telegram"
+    slack = "slack"
+    discord = "discord"
+
+
+class WhatsAppTransport(StrEnum):
+    """Which WhatsApp backend the deployment talks to.
+
+    ``cloud_api`` is Meta's official Business API: webhook ingress, priced per
+    conversation, safe to run at scale. ``bridge`` pairs an ordinary WhatsApp
+    account over WhatsApp Web through a Node sidecar - free and instant, but
+    unofficial, so a ban takes every user's agent down at once.
+    """
+
+    cloud_api = "cloud_api"
+    bridge = "bridge"
+
+
+class AgentStatus(StrEnum):
+    provisioning = "provisioning"
+    ready = "ready"
+    failed = "failed"
+    disabled = "disabled"
+
+
+# ---------------------------------------------------------------------------
+# Agent
+# ---------------------------------------------------------------------------
+
+
+class AgentBase(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    # Appended to the agent's persona file. The agent already knows it is a
+    # knowledge-base assistant; this is for "call me Sam", "answer in German".
+    persona: str | None = Field(default=None, max_length=4000)
+
+
+class AgentCreate(AgentBase):
+    pass
+
+
+class AgentUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    persona: str | None = Field(default=None, max_length=4000)
+
+
+class Agent(AgentBase, table=True):
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_agent_user_name"),
+        Index("ix_agent_shard", "shard_id"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    # The Hermes profile directory name. Derived from the id rather than the
+    # user's chosen name: renaming an agent must not move its conversation store.
+    profile_name: str = Field(unique=True, index=True, max_length=64)
+    # Which gateway container serves it. Pinned at creation, because the profile
+    # directory lives on that shard's volume.
+    shard_id: int = Field(default=0)
+    status: AgentStatus = Field(default=AgentStatus.provisioning, sa_type=String(32))  # type: ignore
+    status_detail: str | None = Field(default=None, max_length=500)
+    # The knowledge-base key this agent authenticates to the MCP server with.
+    # Kept as a reference so deleting the agent can revoke it.
+    api_key_id: uuid.UUID | None = Field(
+        default=None, foreign_key="apikey.id", ondelete="SET NULL"
+    )
+    # Bearer token this agent presents to the LLM proxy. Hashed, like every
+    # other credential here, and revoked by clearing it.
+    llm_token_hash: str | None = Field(default=None, index=True, max_length=64)
+    created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+
+    connections: list["ChannelConnection"] = Relationship(
+        back_populates="agent", cascade_delete=True
+    )
+
+
+class ChannelConnectionPublic(SQLModel):
+    id: uuid.UUID
+    channel_type: ChannelType
+    # Masked for display: a phone number is personal data and the dashboard
+    # only needs enough of it to be recognisable.
+    identity_hint: str
+    display_name: str | None
+    created_at: datetime | None
+
+
+class AgentPublic(AgentBase):
+    id: uuid.UUID
+    status: AgentStatus
+    status_detail: str | None
+    created_at: datetime | None
+    connections: list[ChannelConnectionPublic]
+
+
+class AgentsPublic(SQLModel):
+    data: list[AgentPublic]
+    count: int
+
+
+# ---------------------------------------------------------------------------
+# Channel connections
+# ---------------------------------------------------------------------------
+
+
+class ChannelConnection(SQLModel, table=True):
+    __table_args__ = (
+        # One identity, one agent. The database enforces the product rule that a
+        # channel account can only be connected once, so a race between two
+        # redemptions cannot bind the same phone number to two people.
+        UniqueConstraint(
+            "channel_type", "platform_identity", name="uq_channel_identity"
+        ),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    agent_id: uuid.UUID = Field(
+        foreign_key="agent.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    channel_type: ChannelType = Field(sa_type=String(32))  # type: ignore
+    # The platform's own id for this person: a phone number for WhatsApp, a
+    # numeric chat id for Telegram. Matched verbatim against inbound events.
+    platform_identity: str = Field(max_length=255)
+    display_name: str | None = Field(default=None, max_length=255)
+    created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+    last_seen_at: datetime | None = _tz_datetime(default=None)
+
+    agent: Agent | None = Relationship(back_populates="connections")
+
+
+# ---------------------------------------------------------------------------
+# Link codes
+# ---------------------------------------------------------------------------
+
+
+class ChannelLinkCode(SQLModel, table=True):
+    """A one-time code proving the sender of a message owns a PlusGPT account.
+
+    Stored hashed, like every other one-time secret here: a database leak must
+    not hand someone else's channel to an attacker. Single use and short lived,
+    because the plaintext travels through a messaging app.
+    """
+
+    __table_args__ = (Index("ix_channellinkcode_agent", "agent_id"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    agent_id: uuid.UUID = Field(
+        foreign_key="agent.id", nullable=False, ondelete="CASCADE"
+    )
+    channel_type: ChannelType = Field(sa_type=String(32))  # type: ignore
+    code_hash: str = Field(unique=True, index=True, max_length=64)
+    expires_at: datetime = _tz_datetime(nullable=False)
+    used_at: datetime | None = _tz_datetime(default=None)
+    created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class ChannelLinkCodeCreate(SQLModel):
+    channel_type: ChannelType
+
+
+class ChannelLinkCodePublic(SQLModel):
+    """The plaintext code, returned once at issue time and never stored."""
+
+    code: str
+    channel_type: ChannelType
+    expires_at: datetime
+    # A tap-through that pre-fills the code in the messaging app, where the
+    # platform supports one.
+    deep_link: str | None = None
+    instructions: str
+
+
+# ---------------------------------------------------------------------------
+# Admin channel configuration
+# ---------------------------------------------------------------------------
+
+
+class ChannelConfig(SQLModel, table=True):
+    """Deployment-wide setup for one channel, managed by an administrator.
+
+    Credentials are encrypted at rest and never leave the server: the API
+    returns only whether a value is set. A channel a user sees offered on their
+    agent is one an admin has both configured and enabled.
+    """
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    channel_type: ChannelType = Field(unique=True, index=True, sa_type=String(32))  # type: ignore
+    enabled: bool = Field(default=False)
+    # WhatsApp only; ignored by the other channels.
+    transport: WhatsAppTransport | None = Field(default=None, sa_type=String(32))  # type: ignore
+    credentials_encrypted: str | None = Field(default=None, sa_type=Text)
+    # Shown to users on the connect card, e.g. the bot's @handle or number.
+    public_handle: str | None = Field(default=None, max_length=255)
+    updated_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class ChannelConfigUpdate(SQLModel):
+    enabled: bool | None = None
+    transport: WhatsAppTransport | None = None
+    public_handle: str | None = Field(default=None, max_length=255)
+    # Write-only. Absent leaves the stored credentials untouched, so an admin
+    # can toggle a channel without re-entering secrets.
+    credentials: dict[str, str] | None = None
+
+
+class ChannelConfigPublic(SQLModel):
+    channel_type: ChannelType
+    enabled: bool
+    transport: WhatsAppTransport | None
+    public_handle: str | None
+    configured: bool
+    # Which credential fields this channel needs, so the admin form is driven
+    # by the server rather than duplicated in the frontend.
+    required_fields: list[str]
+    present_fields: list[str]
+    updated_at: datetime | None
+
+
+class ChannelConfigsPublic(SQLModel):
+    data: list[ChannelConfigPublic]
+
+
+class AvailableChannel(SQLModel):
+    """A channel a user may connect, as offered on the agent page."""
+
+    channel_type: ChannelType
+    public_handle: str | None
+    connected: bool
+
+
+class AvailableChannelsPublic(SQLModel):
+    data: list[AvailableChannel]

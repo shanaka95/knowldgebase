@@ -1,4 +1,6 @@
 import {
+  Bot,
+  Database,
   FileUp,
   LayoutDashboard,
   Search,
@@ -32,6 +34,10 @@ const baseItems: Item[] = [
   { icon: Sparkles, title: "Ask", path: "/ask" },
   { icon: Search, title: "Search", path: "/search" },
   { icon: FileUp, title: "Imports", path: "/imports" },
+  // Integrations, in the two directions they run: an agent is how you
+  // reach the knowledge base, a data source is how documents reach it.
+  { icon: Bot, title: "Agents", path: "/agents" },
+  { icon: Database, title: "Data sources", path: "/data-sources" },
 ]
 
 export function AppSidebar() {

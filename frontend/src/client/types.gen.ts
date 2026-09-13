@@ -5,6 +5,84 @@ export type ClientOptions = {
 };
 
 /**
+ * AgentCreate
+ */
+export type AgentCreate = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Persona
+     */
+    persona?: string | null;
+};
+
+/**
+ * AgentPublic
+ */
+export type AgentPublic = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Persona
+     */
+    persona?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    status: AgentStatus;
+    /**
+     * Status Detail
+     */
+    status_detail: string | null;
+    /**
+     * Created At
+     */
+    created_at: string | null;
+    /**
+     * Connections
+     */
+    connections: Array<ChannelConnectionPublic>;
+};
+
+/**
+ * AgentStatus
+ */
+export type AgentStatus = 'provisioning' | 'ready' | 'failed' | 'disabled';
+
+/**
+ * AgentUpdate
+ */
+export type AgentUpdate = {
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Persona
+     */
+    persona?: string | null;
+};
+
+/**
+ * AgentsPublic
+ */
+export type AgentsPublic = {
+    /**
+     * Data
+     */
+    data: Array<AgentPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * ApiKeyCreate
  */
 export type ApiKeyCreate = {
@@ -307,6 +385,33 @@ export type AttachmentsPublic = {
 };
 
 /**
+ * AvailableChannel
+ *
+ * A channel a user may connect, as offered on the agent page.
+ */
+export type AvailableChannel = {
+    channel_type: ChannelType;
+    /**
+     * Public Handle
+     */
+    public_handle: string | null;
+    /**
+     * Connected
+     */
+    connected: boolean;
+};
+
+/**
+ * AvailableChannelsPublic
+ */
+export type AvailableChannelsPublic = {
+    /**
+     * Data
+     */
+    data: Array<AvailableChannel>;
+};
+
+/**
  * Body_attachments-upload_attachment
  */
 export type Body_attachments_upload_attachment = {
@@ -437,6 +542,129 @@ export type CapturedEmail = {
      */
     text: string;
 };
+
+/**
+ * ChannelConfigPublic
+ */
+export type ChannelConfigPublic = {
+    channel_type: ChannelType;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    transport: WhatsAppTransport | null;
+    /**
+     * Public Handle
+     */
+    public_handle: string | null;
+    /**
+     * Configured
+     */
+    configured: boolean;
+    /**
+     * Required Fields
+     */
+    required_fields: Array<string>;
+    /**
+     * Present Fields
+     */
+    present_fields: Array<string>;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+};
+
+/**
+ * ChannelConfigUpdate
+ */
+export type ChannelConfigUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    transport?: WhatsAppTransport | null;
+    /**
+     * Public Handle
+     */
+    public_handle?: string | null;
+    /**
+     * Credentials
+     */
+    credentials?: {
+        [key: string]: string;
+    } | null;
+};
+
+/**
+ * ChannelConfigsPublic
+ */
+export type ChannelConfigsPublic = {
+    /**
+     * Data
+     */
+    data: Array<ChannelConfigPublic>;
+};
+
+/**
+ * ChannelConnectionPublic
+ */
+export type ChannelConnectionPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    channel_type: ChannelType;
+    /**
+     * Identity Hint
+     */
+    identity_hint: string;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * Created At
+     */
+    created_at: string | null;
+};
+
+/**
+ * ChannelLinkCodeCreate
+ */
+export type ChannelLinkCodeCreate = {
+    channel_type: ChannelType;
+};
+
+/**
+ * ChannelLinkCodePublic
+ *
+ * The plaintext code, returned once at issue time and never stored.
+ */
+export type ChannelLinkCodePublic = {
+    /**
+     * Code
+     */
+    code: string;
+    channel_type: ChannelType;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Deep Link
+     */
+    deep_link?: string | null;
+    /**
+     * Instructions
+     */
+    instructions: string;
+};
+
+/**
+ * ChannelType
+ */
+export type ChannelType = 'whatsapp' | 'telegram' | 'slack' | 'discord';
 
 /**
  * ContentFormat
@@ -2411,6 +2639,18 @@ export type ValidationError = {
         [key: string]: unknown;
     };
 };
+
+/**
+ * WhatsAppTransport
+ *
+ * Which WhatsApp backend the deployment talks to.
+ *
+ * ``cloud_api`` is Meta's official Business API: webhook ingress, priced per
+ * conversation, safe to run at scale. ``bridge`` pairs an ordinary WhatsApp
+ * account over WhatsApp Web through a Node sidecar - free and instant, but
+ * unofficial, so a ban takes every user's agent down at once.
+ */
+export type WhatsAppTransport = 'cloud_api' | 'bridge';
 
 /**
  * WorkerPublic
@@ -4815,6 +5055,387 @@ export type workersReadWorkersResponses = {
 };
 
 export type workersReadWorkersResponse = workersReadWorkersResponses[keyof workersReadWorkersResponses];
+
+export type agentsReadAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/agents/';
+};
+
+export type agentsReadAgentsResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentsPublic;
+};
+
+export type agentsReadAgentsResponse = agentsReadAgentsResponses[keyof agentsReadAgentsResponses];
+
+export type agentsCreateAgentData = {
+    body: AgentCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/agents/';
+};
+
+export type agentsCreateAgentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentsCreateAgentError = agentsCreateAgentErrors[keyof agentsCreateAgentErrors];
+
+export type agentsCreateAgentResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentPublic;
+};
+
+export type agentsCreateAgentResponse = agentsCreateAgentResponses[keyof agentsCreateAgentResponses];
+
+export type agentsDeleteAgentData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agent_id}';
+};
+
+export type agentsDeleteAgentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentsDeleteAgentError = agentsDeleteAgentErrors[keyof agentsDeleteAgentErrors];
+
+export type agentsDeleteAgentResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type agentsDeleteAgentResponse = agentsDeleteAgentResponses[keyof agentsDeleteAgentResponses];
+
+export type agentsReadAgentData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agent_id}';
+};
+
+export type agentsReadAgentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentsReadAgentError = agentsReadAgentErrors[keyof agentsReadAgentErrors];
+
+export type agentsReadAgentResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentPublic;
+};
+
+export type agentsReadAgentResponse = agentsReadAgentResponses[keyof agentsReadAgentResponses];
+
+export type agentsUpdateAgentData = {
+    body: AgentUpdate;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agent_id}';
+};
+
+export type agentsUpdateAgentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentsUpdateAgentError = agentsUpdateAgentErrors[keyof agentsUpdateAgentErrors];
+
+export type agentsUpdateAgentResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentPublic;
+};
+
+export type agentsUpdateAgentResponse = agentsUpdateAgentResponses[keyof agentsUpdateAgentResponses];
+
+export type agentsReadAgentChannelsData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agent_id}/channels';
+};
+
+export type agentsReadAgentChannelsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentsReadAgentChannelsError = agentsReadAgentChannelsErrors[keyof agentsReadAgentChannelsErrors];
+
+export type agentsReadAgentChannelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: AvailableChannelsPublic;
+};
+
+export type agentsReadAgentChannelsResponse = agentsReadAgentChannelsResponses[keyof agentsReadAgentChannelsResponses];
+
+export type agentsCreateLinkCodeData = {
+    body: ChannelLinkCodeCreate;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agent_id}/channels/link-code';
+};
+
+export type agentsCreateLinkCodeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentsCreateLinkCodeError = agentsCreateLinkCodeErrors[keyof agentsCreateLinkCodeErrors];
+
+export type agentsCreateLinkCodeResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChannelLinkCodePublic;
+};
+
+export type agentsCreateLinkCodeResponse = agentsCreateLinkCodeResponses[keyof agentsCreateLinkCodeResponses];
+
+export type agentsDeleteConnectionData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{agent_id}/channels/{connection_id}';
+};
+
+export type agentsDeleteConnectionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentsDeleteConnectionError = agentsDeleteConnectionErrors[keyof agentsDeleteConnectionErrors];
+
+export type agentsDeleteConnectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type agentsDeleteConnectionResponse = agentsDeleteConnectionResponses[keyof agentsDeleteConnectionResponses];
+
+export type adminChannelsReadChannelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/channels/';
+};
+
+export type adminChannelsReadChannelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChannelConfigsPublic;
+};
+
+export type adminChannelsReadChannelsResponse = adminChannelsReadChannelsResponses[keyof adminChannelsReadChannelsResponses];
+
+export type adminChannelsClearChannelData = {
+    body?: never;
+    path: {
+        channel_type: ChannelType;
+    };
+    query?: never;
+    url: '/api/v1/admin/channels/{channel_type}';
+};
+
+export type adminChannelsClearChannelErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminChannelsClearChannelError = adminChannelsClearChannelErrors[keyof adminChannelsClearChannelErrors];
+
+export type adminChannelsClearChannelResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type adminChannelsClearChannelResponse = adminChannelsClearChannelResponses[keyof adminChannelsClearChannelResponses];
+
+export type adminChannelsUpdateChannelData = {
+    body: ChannelConfigUpdate;
+    path: {
+        channel_type: ChannelType;
+    };
+    query?: never;
+    url: '/api/v1/admin/channels/{channel_type}';
+};
+
+export type adminChannelsUpdateChannelErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminChannelsUpdateChannelError = adminChannelsUpdateChannelErrors[keyof adminChannelsUpdateChannelErrors];
+
+export type adminChannelsUpdateChannelResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChannelConfigPublic;
+};
+
+export type adminChannelsUpdateChannelResponse = adminChannelsUpdateChannelResponses[keyof adminChannelsUpdateChannelResponses];
+
+export type agentControlResolveRouteData = {
+    /**
+     * Body
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-control/route';
+};
+
+export type agentControlResolveRouteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type agentControlResolveRouteError = agentControlResolveRouteErrors[keyof agentControlResolveRouteErrors];
+
+export type agentControlResolveRouteResponses = {
+    /**
+     * Response Agent Control-Resolve Route
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type agentControlResolveRouteResponse = agentControlResolveRouteResponses[keyof agentControlResolveRouteResponses];
+
+export type agentControlControlHealthData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-control/health';
+};
+
+export type agentControlControlHealthResponses = {
+    /**
+     * Response Agent Control-Control Health
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type agentControlControlHealthResponse = agentControlControlHealthResponses[keyof agentControlControlHealthResponses];
+
+export type agentLlmChatCompletionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-llm/v1/chat/completions';
+};
+
+export type agentLlmChatCompletionsResponses = {
+    /**
+     * Response Agent Llm-Chat Completions
+     *
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type agentLlmListModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-llm/v1/models';
+};
+
+export type agentLlmListModelsResponses = {
+    /**
+     * Response Agent Llm-List Models
+     *
+     * Successful Response
+     */
+    200: unknown;
+};
 
 export type publicReadPublicDocumentData = {
     body?: never;

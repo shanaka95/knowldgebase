@@ -1,13 +1,16 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Suspense } from "react"
+import { z } from "zod"
 
 import { type UserPublic, UsersService } from "@/client"
 import AddUser from "@/components/Admin/AddUser"
+import { ChannelsPanel } from "@/components/Admin/ChannelsPanel"
 import { columns, type UserTableData } from "@/components/Admin/columns"
 import { DataTable } from "@/components/Common/DataTable"
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
 import PendingUsers from "@/components/Pending/PendingUsers"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import useAuth from "@/hooks/useAuth"
 
 function getUsersQueryOptions() {
@@ -18,8 +21,13 @@ function getUsersQueryOptions() {
   }
 }
 
+const adminSearchSchema = z.object({
+  tab: z.enum(["users", "channels"]).catch("users"),
+})
+
 export const Route = createFileRoute("/_layout/admin")({
   component: Admin,
+  validateSearch: adminSearchSchema,
   beforeLoad: async () => {
     const { data: user } = await UsersService.readUserMe()
     if (!user.is_superuser) {
@@ -58,14 +66,36 @@ function UsersTable() {
 }
 
 function Admin() {
+  const { tab } = Route.useSearch()
+  const navigate = Route.useNavigate()
+
   return (
     <PageContainer className="flex flex-col gap-6">
       <PageHeader
-        title="Users"
-        description="Manage user accounts and permissions"
-        actions={<AddUser />}
+        title="Administration"
+        description="Accounts, and the messaging channels people can reach their agents on."
+        actions={tab === "users" ? <AddUser /> : undefined}
       />
-      <UsersTable />
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          navigate({
+            search: { tab: value as "users" | "channels" },
+            replace: true,
+          })
+        }
+      >
+        <TabsList className="h-auto flex-wrap">
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="channels">Channels</TabsTrigger>
+        </TabsList>
+        <TabsContent value="users" className="pt-4">
+          <UsersTable />
+        </TabsContent>
+        <TabsContent value="channels" className="pt-4">
+          <ChannelsPanel />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   )
 }

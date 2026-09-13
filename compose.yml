@@ -9,6 +9,9 @@ x-backend-common: &backend-common
   volumes:
     # single source of truth for model endpoints (base URL, API key, model name)
     - ./models.toml:/app/models.toml:ro
+    # The agents' Hermes profiles. The backend writes them; the gateway shards
+    # read them. One volume, because a profile is only ever written by one side.
+    - hermes-profiles:/hermes-profiles
   environment: &backend-env
     PROJECT_NAME: ${PROJECT_NAME:?Variable not set}
     SECRET_KEY: ${SECRET_KEY:?Variable not set}
@@ -39,6 +42,15 @@ x-backend-common: &backend-common
     EMBEDDING_DEBOUNCE_SECONDS: ${EMBEDDING_DEBOUNCE_SECONDS:-10}
     EMBEDDING_MAX_ATTEMPTS: ${EMBEDDING_MAX_ATTEMPTS:-3}
     EMBEDDING_RETRY_BACKOFF_SECONDS: ${EMBEDDING_RETRY_BACKOFF_SECONDS:-30}
+    # --- hosted agents ---------------------------------------------------
+    HERMES_PROFILES_ROOT: /hermes-profiles
+    HERMES_SHARD_COUNT: ${HERMES_SHARD_COUNT:-1}
+    HERMES_MCP_URL: ${HERMES_MCP_URL:-http://mcp:8000/mcp}
+    AGENT_CONTROL_TOKEN: ${AGENT_CONTROL_TOKEN:-}
+    AGENT_CONTROL_ROUTE_URL: ${AGENT_CONTROL_ROUTE_URL:-http://backend:8000/api/v1/agent-control/route}
+    AGENT_LLM_PROXY_URL: ${AGENT_LLM_PROXY_URL:-http://backend:8000/api/v1/agent-llm/v1}
+    AGENT_LLM_MODEL: ${AGENT_LLM_MODEL:-qwen/qwen3.8-flash}
+    CHANNEL_SECRET_KEY: ${CHANNEL_SECRET_KEY:-}
 
 services:
 
@@ -138,7 +150,31 @@ services:
       retries: 3
       start_period: 30s
 
+  # A gateway shard: the shared bot for every channel, plus one Hermes profile
+  # per agent. Which profile an inbound message reaches is decided by the
+  # backend, not by this container - see app/api/routes/agent_control.py.
+  hermes-gw-0:
+    image: ${HERMES_GATEWAY_IMAGE:-plusgpt/hermes-gateway:latest}
+    build:
+      context: ../hermes-agent
+      dockerfile: docker/plusgpt-gateway.Dockerfile
+    restart: unless-stopped
+    environment:
+      HERMES_HOME: /hermes-profiles/shard-0
+      # Long enough to cover a first boot where nobody has configured a channel
+      # yet; the container then exits and restarts rather than idling forever.
+      PLUSGPT_CONFIG_WAIT_SECONDS: ${PLUSGPT_CONFIG_WAIT_SECONDS:-900}
+    volumes:
+      - hermes-profiles:/hermes-profiles
+      # The skill that teaches the agent how to use the knowledge base. Kept
+      # read-only: it is documentation the agent reads, not state it owns.
+      - ./hermes-skills:/opt/plusgpt-skills:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   app-db-data:
   qdrant-data:
   minio-data:
+  hermes-profiles:

@@ -19,12 +19,15 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutAskRouteImport } from './routes/_layout/ask'
+import { Route as LayoutDataSourcesRouteImport } from './routes/_layout/data-sources'
 import { Route as LayoutImportsRouteImport } from './routes/_layout/imports'
 import { Route as LayoutPlaygroundRouteImport } from './routes/_layout/playground'
 import { Route as LayoutSearchRouteImport } from './routes/_layout/search'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSharedRouteImport } from './routes/_layout/shared'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
+import { Route as LayoutAgentsIndexRouteImport } from './routes/_layout/agents.index'
+import { Route as LayoutAgentsAgentIdRouteImport } from './routes/_layout/agents.$agentId'
 import { Route as LayoutSNamespaceSlugRouteImport } from './routes/_layout/s/$namespaceSlug'
 import { Route as LayoutSNamespaceSlugIndexRouteImport } from './routes/_layout/s/$namespaceSlug/index'
 import { Route as LayoutSNamespaceSlugSettingsRouteImport } from './routes/_layout/s/$namespaceSlug/settings'
@@ -80,6 +83,11 @@ const LayoutAskRoute = LayoutAskRouteImport.update({
   path: '/ask',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutDataSourcesRoute = LayoutDataSourcesRouteImport.update({
+  id: '/data-sources',
+  path: '/data-sources',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutImportsRoute = LayoutImportsRouteImport.update({
   id: '/imports',
   path: '/imports',
@@ -109,6 +117,16 @@ const PSlugRoute = PSlugRouteImport.update({
   id: '/p/$slug',
   path: '/p/$slug',
   getParentRoute: () => rootRouteImport,
+} as any)
+const LayoutAgentsIndexRoute = LayoutAgentsIndexRouteImport.update({
+  id: '/agents/',
+  path: '/agents/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutAgentsAgentIdRoute = LayoutAgentsAgentIdRouteImport.update({
+  id: '/agents/$agentId',
+  path: '/agents/$agentId',
+  getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutSNamespaceSlugRoute = LayoutSNamespaceSlugRouteImport.update({
   id: '/s/$namespaceSlug',
@@ -150,13 +168,16 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/admin': typeof LayoutAdminRoute
   '/ask': typeof LayoutAskRoute
+  '/data-sources': typeof LayoutDataSourcesRoute
   '/imports': typeof LayoutImportsRoute
   '/playground': typeof LayoutPlaygroundRoute
   '/search': typeof LayoutSearchRoute
   '/settings': typeof LayoutSettingsRoute
   '/shared': typeof LayoutSharedRoute
   '/p/$slug': typeof PSlugRoute
+  '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
   '/s/$namespaceSlug': typeof LayoutSNamespaceSlugRouteWithChildren
+  '/agents/': typeof LayoutAgentsIndexRoute
   '/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/s/$namespaceSlug/': typeof LayoutSNamespaceSlugIndexRoute
   '/s/$namespaceSlug/d/$documentId': typeof LayoutSNamespaceSlugDDocumentIdRoute
@@ -171,6 +192,7 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/admin': typeof LayoutAdminRoute
   '/ask': typeof LayoutAskRoute
+  '/data-sources': typeof LayoutDataSourcesRoute
   '/imports': typeof LayoutImportsRoute
   '/playground': typeof LayoutPlaygroundRoute
   '/search': typeof LayoutSearchRoute
@@ -178,6 +200,8 @@ export interface FileRoutesByTo {
   '/shared': typeof LayoutSharedRoute
   '/p/$slug': typeof PSlugRoute
   '/': typeof LayoutIndexRoute
+  '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
+  '/agents': typeof LayoutAgentsIndexRoute
   '/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/s/$namespaceSlug': typeof LayoutSNamespaceSlugIndexRoute
   '/s/$namespaceSlug/d/$documentId': typeof LayoutSNamespaceSlugDDocumentIdRoute
@@ -194,6 +218,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/_layout/admin': typeof LayoutAdminRoute
   '/_layout/ask': typeof LayoutAskRoute
+  '/_layout/data-sources': typeof LayoutDataSourcesRoute
   '/_layout/imports': typeof LayoutImportsRoute
   '/_layout/playground': typeof LayoutPlaygroundRoute
   '/_layout/search': typeof LayoutSearchRoute
@@ -201,7 +226,9 @@ export interface FileRoutesById {
   '/_layout/shared': typeof LayoutSharedRoute
   '/p/$slug': typeof PSlugRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/agents/$agentId': typeof LayoutAgentsAgentIdRoute
   '/_layout/s/$namespaceSlug': typeof LayoutSNamespaceSlugRouteWithChildren
+  '/_layout/agents/': typeof LayoutAgentsIndexRoute
   '/_layout/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/_layout/s/$namespaceSlug/': typeof LayoutSNamespaceSlugIndexRoute
   '/_layout/s/$namespaceSlug/d/$documentId': typeof LayoutSNamespaceSlugDDocumentIdRoute
@@ -219,13 +246,16 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin'
     | '/ask'
+    | '/data-sources'
     | '/imports'
     | '/playground'
     | '/search'
     | '/settings'
     | '/shared'
     | '/p/$slug'
+    | '/agents/$agentId'
     | '/s/$namespaceSlug'
+    | '/agents/'
     | '/s/$namespaceSlug/settings'
     | '/s/$namespaceSlug/'
     | '/s/$namespaceSlug/d/$documentId'
@@ -240,6 +270,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/admin'
     | '/ask'
+    | '/data-sources'
     | '/imports'
     | '/playground'
     | '/search'
@@ -247,6 +278,8 @@ export interface FileRouteTypes {
     | '/shared'
     | '/p/$slug'
     | '/'
+    | '/agents/$agentId'
+    | '/agents'
     | '/s/$namespaceSlug/settings'
     | '/s/$namespaceSlug'
     | '/s/$namespaceSlug/d/$documentId'
@@ -262,6 +295,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/_layout/admin'
     | '/_layout/ask'
+    | '/_layout/data-sources'
     | '/_layout/imports'
     | '/_layout/playground'
     | '/_layout/search'
@@ -269,7 +303,9 @@ export interface FileRouteTypes {
     | '/_layout/shared'
     | '/p/$slug'
     | '/_layout/'
+    | '/_layout/agents/$agentId'
     | '/_layout/s/$namespaceSlug'
+    | '/_layout/agents/'
     | '/_layout/s/$namespaceSlug/settings'
     | '/_layout/s/$namespaceSlug/'
     | '/_layout/s/$namespaceSlug/d/$documentId'
@@ -359,6 +395,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAskRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/data-sources': {
+      id: '/_layout/data-sources'
+      path: '/data-sources'
+      fullPath: '/data-sources'
+      preLoaderRoute: typeof LayoutDataSourcesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/imports': {
       id: '/_layout/imports'
       path: '/imports'
@@ -400,6 +443,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/p/$slug'
       preLoaderRoute: typeof PSlugRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_layout/agents/': {
+      id: '/_layout/agents/'
+      path: '/agents'
+      fullPath: '/agents/'
+      preLoaderRoute: typeof LayoutAgentsIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/agents/$agentId': {
+      id: '/_layout/agents/$agentId'
+      path: '/agents/$agentId'
+      fullPath: '/agents/$agentId'
+      preLoaderRoute: typeof LayoutAgentsAgentIdRouteImport
+      parentRoute: typeof LayoutRoute
     }
     '/_layout/s/$namespaceSlug': {
       id: '/_layout/s/$namespaceSlug'
@@ -459,25 +516,31 @@ const LayoutSNamespaceSlugRouteWithChildren =
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
   LayoutAskRoute: typeof LayoutAskRoute
+  LayoutDataSourcesRoute: typeof LayoutDataSourcesRoute
   LayoutImportsRoute: typeof LayoutImportsRoute
   LayoutPlaygroundRoute: typeof LayoutPlaygroundRoute
   LayoutSearchRoute: typeof LayoutSearchRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutSharedRoute: typeof LayoutSharedRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutAgentsAgentIdRoute: typeof LayoutAgentsAgentIdRoute
   LayoutSNamespaceSlugRoute: typeof LayoutSNamespaceSlugRouteWithChildren
+  LayoutAgentsIndexRoute: typeof LayoutAgentsIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
   LayoutAskRoute: LayoutAskRoute,
+  LayoutDataSourcesRoute: LayoutDataSourcesRoute,
   LayoutImportsRoute: LayoutImportsRoute,
   LayoutPlaygroundRoute: LayoutPlaygroundRoute,
   LayoutSearchRoute: LayoutSearchRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutSharedRoute: LayoutSharedRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutAgentsAgentIdRoute: LayoutAgentsAgentIdRoute,
   LayoutSNamespaceSlugRoute: LayoutSNamespaceSlugRouteWithChildren,
+  LayoutAgentsIndexRoute: LayoutAgentsIndexRoute,
 }
 
 const LayoutRouteWithChildren =

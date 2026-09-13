@@ -1,6 +1,10 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    admin_channels,
+    agent_control,
+    agent_llm,
+    agents,
     api_keys,
     ask,
     attachments,
@@ -33,6 +37,12 @@ api_router.include_router(api_keys.router)
 api_router.include_router(search.router)
 api_router.include_router(ask.router)
 api_router.include_router(workers.router)
+api_router.include_router(agents.router)
+api_router.include_router(admin_channels.router)
+# Machine-to-machine, both of them. The gateway shards authenticate with a
+# shared secret; agents authenticate with their own per-agent token.
+api_router.include_router(agent_control.router)
+api_router.include_router(agent_llm.router)
 # Answers without a credential, by design: pages shared by link, and the
 # facts of an invitation. See app/api/routes/public.py.
 api_router.include_router(public.router)

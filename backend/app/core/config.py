@@ -293,6 +293,35 @@ class Settings(BaseSettings):
     def rerank_enabled(self) -> bool:
         return bool(self.RERANK_MODEL and self.RERANK_BASE_URL)
 
+    # --- Agents and channels -------------------------------------------------
+    # Where each gateway shard's Hermes profiles live. The backend writes a
+    # directory per agent here and the gateway picks it up on the next message:
+    # profiles_to_serve() is a live directory read, so no restart is needed.
+    HERMES_PROFILES_ROOT: str = "/hermes-profiles"
+    # Shards exist to cap the blast radius of any in-process isolation failure,
+    # and to keep one gateway's bounded turn pool from becoming everyone's queue.
+    HERMES_SHARD_COUNT: int = 1
+    # How the gateway reaches the MCP server. In-network, so it never leaves the
+    # compose network on the way to the knowledge base.
+    HERMES_MCP_URL: str = "http://mcp:8000/mcp"
+    # Shared secret the gateway presents when it asks who an inbound sender is.
+    AGENT_CONTROL_TOKEN: str = ""
+    # Where a shard asks who an inbound sender is. In-network by default.
+    AGENT_CONTROL_ROUTE_URL: str = "http://backend:8000/api/v1/agent-control/route"
+    # Fernet key encrypting admin channel credentials at rest. Generated with
+    # `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+    CHANNEL_SECRET_KEY: str = ""
+    # A link code travels through a messaging app, so it is short-lived.
+    CHANNEL_LINK_CODE_TTL_MINUTES: int = 15
+    # Per-agent ceiling on outstanding codes, so issuing cannot be used to flood.
+    CHANNEL_LINK_CODE_MAX_ACTIVE: int = 5
+    # The model the hosted agents run on. Same provider as the knowledge base.
+    AGENT_LLM_MODEL: str = "qwen/qwen3.8-flash"
+    # Agents reach the model through our own OpenAI-compatible proxy rather
+    # than holding a provider key: the real key never lands in a profile .env,
+    # each agent's token is revocable on its own, and usage is attributable.
+    AGENT_LLM_PROXY_URL: str = "http://backend:8000/api/v1/agent-llm/v1"
+
     # --- Hybrid retrieval ----------------------------------------------------
     RRF_K: int = 60
     RETRIEVAL_CANDIDATES_PER_SOURCE: int = 50
