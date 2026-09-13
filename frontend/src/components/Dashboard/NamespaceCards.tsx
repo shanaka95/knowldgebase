@@ -14,7 +14,7 @@ export function NamespaceCards() {
   const { data, isPending } = useNamespaces()
   if (isPending) {
     return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} className="h-24 w-full" />
         ))}
@@ -43,7 +43,7 @@ export function NamespaceCards() {
   }
   return (
     <div
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
       data-testid="namespace-cards"
     >
       {spaces.map((ns) => (

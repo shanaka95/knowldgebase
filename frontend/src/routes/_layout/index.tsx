@@ -78,7 +78,11 @@ function Dashboard() {
         <NamespaceCards />
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
+      {/* minmax(0,…) on both tracks: a bare `auto` or `2fr` column is sized by
+          its widest indivisible content, so one long page title stretched the
+          column and, with it, the page. This lets the column be narrower than
+          its content and leaves the truncating to the rows. */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section className="flex flex-col gap-3">
           <SectionTitle
             action={

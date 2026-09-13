@@ -1,7 +1,8 @@
 import { expect, type Page, test } from "@playwright/test"
 
 /**
- * Nothing may scroll sideways on a phone.
+ * A phone must never have to be scrolled sideways, and a dialog must never
+ * put half of itself off the screen.
  *
  * Horizontal scrolling on a narrow screen is never a design choice — it means
  * something refused to wrap, and the reader has to drag the page around to
@@ -14,6 +15,8 @@ import { expect, type Page, test } from "@playwright/test"
  */
 
 const PHONE = { width: 390, height: 844 }
+/** An iPhone SE / small Android: the size a dialog actually gets cut off at. */
+const SMALL_PHONE = { width: 360, height: 640 }
 
 /** Long enough to widen anything that sizes to its content. */
 const LONG_WORD = "Betriebskostenabrechnung".repeat(6)
@@ -109,6 +112,66 @@ async function expectNoSidewaysScroll(page: Page, where: string) {
   ).toBeLessThanOrEqual(1)
 }
 
+/**
+ * Serve the real API, with every human-written field made long.
+ *
+ * The seeded data has tidy short names, so a sweep over it proves only that
+ * the pages survive tidy short names - which is how a 652px overflow on the
+ * dashboard sat under a passing audit. Real knowledge bases are full of
+ * `Betriebskostenabrechnung_2024_Hausverwaltung_final_signed.pdf`, and that is
+ * the case worth testing.
+ */
+const LENGTHENED_FIELDS = new Set([
+  "title",
+  "name",
+  "filename",
+  "description",
+  "full_name",
+  "email",
+  "slug",
+  "doc_type",
+  "question",
+  "answer",
+  "persona",
+  "error",
+  "display_name",
+])
+
+async function withLongText(page: Page) {
+  await page.route("**/api/v1/**", async (route) => {
+    const response = await route.fetch()
+    if (
+      !(response.headers()["content-type"] ?? "").includes("application/json")
+    ) {
+      return route.fulfill({ response })
+    }
+    const lengthen = (node: unknown): unknown => {
+      if (Array.isArray(node)) return node.map(lengthen)
+      if (node && typeof node === "object") {
+        return Object.fromEntries(
+          Object.entries(node as Record<string, unknown>).map(
+            ([key, value]) => [
+              key,
+              LENGTHENED_FIELDS.has(key) && typeof value === "string" && value
+                ? `${LONG_WORD}_${value}`
+                : lengthen(value),
+            ],
+          ),
+        )
+      }
+      return node
+    }
+    try {
+      return route.fulfill({
+        response,
+        body: JSON.stringify(lengthen(await response.json())),
+      })
+    } catch {
+      return route.fulfill({ response })
+    }
+  })
+}
+
 const PAGES: { path: string; name: string }[] = [
   { path: "/", name: "dashboard" },
   { path: "/ask", name: "ask" },
@@ -189,6 +252,18 @@ test.describe("on a phone", () => {
     await expectNoSidewaysScroll(page, "capture with a failed import")
   })
 
+  // The same pages again, on a smaller screen, with every name and title made
+  // long. This is what the tidy seed data was hiding.
+  for (const { path, name } of PAGES) {
+    test(`${name} survives long names on a small phone`, async ({ page }) => {
+      await page.setViewportSize(SMALL_PHONE)
+      await withLongText(page)
+      await page.goto(path)
+      await page.waitForLoadState("networkidle")
+      await expectNoSidewaysScroll(page, `${name} with long names`)
+    })
+  }
+
   test("the sidebar sheet does not widen the page", async ({ page }) => {
     await page.goto("/")
     await page.waitForLoadState("networkidle")
@@ -200,5 +275,99 @@ test.describe("on a phone", () => {
       await page.waitForTimeout(400)
       await expectNoSidewaysScroll(page, "dashboard with the sidebar open")
     }
+  })
+})
+
+/**
+ * A dialog is centred by translating it half its own height, so one taller
+ * than the screen hangs off both ends at once - and if it cannot scroll, the
+ * title and the buttons are simply gone. This is what an import with three
+ * files chosen looked like on an iPhone SE.
+ */
+test.describe("a dialog on a small phone", () => {
+  test.use({ viewport: SMALL_PHONE })
+
+  async function dialogReport(page: Page) {
+    return page.evaluate(() => {
+      const shell = document.querySelector('[data-slot="dialog-content"]')
+      const body = document.querySelector('[data-slot="dialog-body"]')
+      if (!(shell instanceof HTMLElement) || !(body instanceof HTMLElement)) {
+        return null
+      }
+      const box = shell.getBoundingClientRect()
+      const close = document.querySelector('[data-slot="dialog-close"]')
+      const closeBox =
+        close instanceof HTMLElement ? close.getBoundingClientRect() : null
+      return {
+        cutOffTop: box.top < -1,
+        cutOffBottom: box.bottom > window.innerHeight + 1,
+        sidewaysScroll: Math.max(
+          document.documentElement.scrollWidth -
+            document.documentElement.clientWidth,
+          0,
+        ),
+        closeReachable:
+          !!closeBox &&
+          closeBox.top >= -1 &&
+          closeBox.bottom <= window.innerHeight + 1,
+      }
+    })
+  }
+
+  async function expectUsable(page: Page, where: string) {
+    const report = await dialogReport(page)
+    expect(report, `${where}: no dialog was open`).not.toBeNull()
+    expect(report, `${where} is cut off or scrolls sideways`).toEqual({
+      cutOffTop: false,
+      cutOffBottom: false,
+      sidewaysScroll: 0,
+      closeReachable: true,
+    })
+  }
+
+  test("the import dialog fits, with three long-named files chosen", async ({
+    page,
+  }) => {
+    await page.goto("/capture")
+    await page.waitForLoadState("networkidle")
+    await page.getByTestId("import-new").click()
+    const pdf = (name: string) => ({
+      name,
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4"),
+    })
+    await page
+      .locator('input[type="file"]')
+      .first()
+      .setInputFiles([
+        pdf("Betriebskostenabrechnung_2024_Hausverwaltung_final_signed.pdf"),
+        pdf("Nebenkostenabrechnung_2023_Anlage_B_unterschrieben_scan.pdf"),
+        pdf("Mietvertrag_Wohnung_Norderstedt_Suedportal_7_final.pdf"),
+      ])
+    await expect(page.getByRole("dialog")).toBeVisible()
+    await expectUsable(page, "the import dialog")
+
+    // And scrolled to the end, where the buttons are: the close control must
+    // not have scrolled away with the content.
+    await page.locator('[data-slot="dialog-body"]').evaluate((node) => {
+      node.scrollTop = node.scrollHeight
+    })
+    await expectUsable(page, "the import dialog, scrolled to the bottom")
+  })
+
+  test("the new-agent dialog fits", async ({ page }) => {
+    await page.goto("/agents")
+    await page.waitForLoadState("networkidle")
+    await page.getByTestId("agent-new").click()
+    await expect(page.getByRole("dialog")).toBeVisible()
+    await expectUsable(page, "the new-agent dialog")
+  })
+
+  test("the new-API-key dialog fits", async ({ page }) => {
+    await page.goto("/settings?tab=api-keys")
+    await page.waitForLoadState("networkidle")
+    await page.getByTestId("create-api-key").click()
+    await expect(page.getByRole("dialog")).toBeVisible()
+    await expectUsable(page, "the new-API-key dialog")
   })
 })

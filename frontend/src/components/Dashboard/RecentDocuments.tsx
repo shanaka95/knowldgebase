@@ -46,12 +46,16 @@ export function RecentDocuments({ limit = 12 }: { limit?: number }) {
                 <FileText className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-sm font-medium">
+                    {/* min-w-0 on the truncating element itself: as a flex item
+                        its min-width defaults to its content, and `truncate`
+                        sets white-space: nowrap, so without this the title
+                        refuses to shrink and a long filename widens the page. */}
+                    <span className="min-w-0 truncate text-sm font-medium">
                       {d.title}
                     </span>
                     <DocumentTypeBadge type={d.doc_type} />
                   </span>
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
                     {ns ? (
                       <>
                         <NamespaceIcon

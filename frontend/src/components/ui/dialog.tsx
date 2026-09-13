@@ -59,17 +59,32 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          // grid-cols-[minmax(0,1fr)]: the default `auto` track is sized by its widest
-          // child's min-content, so one long unbreakable string - an API key, a JSON
-          // config, a file name - drags the whole dialog past its max-width and out
-          // of the viewport. Pinning the track lets children scroll or wrap inside
-          // instead, which is what every `overflow-x-auto` in here already expects.
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          // The shell: centred by translating it half its own height, which is
+          // why its height has to be bounded. overflow-hidden so the scrolling
+          // body below is clipped by the rounded corners rather than painting
+          // over them.
+          "fixed top-[50%] left-[50%] z-50 w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] overflow-hidden rounded-lg border bg-background shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
         {...props}
       >
-        {children}
+        {/*
+          The body scrolls, not the shell, so the close button stays put: a
+          dialog taller than the screen was previously centred with half of it
+          off each end and no way to reach either, and once it scrolled, an
+          absolutely positioned X went with it.
+
+          dvh rather than vh because a phone's address bar is part of the
+          window height until it isn't. grid-cols-[minmax(0,1fr)] keeps one
+          long unbreakable string - an API key, a file name - from sizing the
+          track and dragging the dialog past its max-width.
+        */}
+        <div
+          data-slot="dialog-body"
+          className="grid max-h-[calc(100dvh-2rem)] grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto p-6"
+        >
+          {children}
+        </div>
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"

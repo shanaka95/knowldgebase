@@ -7,7 +7,7 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   return (
-    <div className="grid min-h-svh lg:grid-cols-2">
+    <div className="grid grid-cols-1 min-h-svh lg:grid-cols-2">
       <div className="relative hidden overflow-hidden bg-muted lg:flex lg:flex-col lg:justify-between lg:p-12 dark:bg-sidebar">
         <div
           aria-hidden

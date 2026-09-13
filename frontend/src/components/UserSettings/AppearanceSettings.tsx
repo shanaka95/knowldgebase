@@ -55,7 +55,7 @@ export function AppearanceSettings() {
             Choose how the interface looks.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {themes.map((t) => {
             const active = theme === t.value
             return (

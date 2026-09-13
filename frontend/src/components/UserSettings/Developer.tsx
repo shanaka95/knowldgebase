@@ -57,7 +57,7 @@ export function Developer() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {links.map((l) => (
           <a
             key={l.title}

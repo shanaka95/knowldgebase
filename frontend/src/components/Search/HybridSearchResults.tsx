@@ -180,7 +180,7 @@ function SearchIntro() {
           exact wording and meaning both count.
         </p>
       </div>
-      <dl className="grid gap-3 sm:grid-cols-2">
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {(["bm25", "vector"] as const).map((method) => {
           const meta = METHOD_META[method]
           return (

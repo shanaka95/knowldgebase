@@ -38,7 +38,7 @@ export function AskIntro({ onExample }: { onExample: (q: string) => void }) {
         </p>
       </div>
 
-      <dl className="grid gap-3 sm:grid-cols-3">
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {POINTS.map((point) => (
           <div key={point.title} className="rounded-md border bg-muted/20 p-3">
             <dt className="flex items-center gap-1.5 text-sm font-medium">

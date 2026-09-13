@@ -136,7 +136,7 @@ export function McpSettings() {
 
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium">What the assistant can do</p>
-        <ul className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           {ABILITIES.map((ability) => (
             <li key={ability.text} className="flex items-center gap-2">
               <ability.icon className="size-4 shrink-0" />

@@ -186,7 +186,7 @@ function ChannelCard({ channel }: { channel: ChannelConfigPublic }) {
         </div>
 
         {channel.required_fields.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {channel.required_fields.map((field) => {
               const isSet = channel.present_fields.includes(field)
               return (

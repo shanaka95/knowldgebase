@@ -59,7 +59,7 @@ function AgentsPage() {
       />
 
       {isPending || !data ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Skeleton className="h-28 w-full" />
           <Skeleton className="h-28 w-full" />
         </div>
@@ -84,7 +84,7 @@ function AgentsPage() {
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {data.data.map((agent) => (
             <Link
               key={agent.id}
