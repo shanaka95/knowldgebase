@@ -368,9 +368,9 @@ def _candidate_texts(
             chunk = chunks.get((doc.id, doc.embedding_version, hit.best_chunk_index))
         out[doc.id] = build_candidate_text(
             doc.title,
-            passage=chunk.text if chunk else None,
-            summary=doc.summary,
             body=doc.content_text,
+            summary=doc.summary,
+            passage=chunk.text if chunk else None,
         )
     return out
 

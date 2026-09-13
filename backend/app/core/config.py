@@ -229,18 +229,26 @@ class Settings(BaseSettings):
 
     # --- Ask (retrieval-augmented answers) -----------------------------------
     ASK_TOP_K: int = 10
-    # A long page holds many sections; sending only its best-matching one loses
-    # the answer when the question is about a detail elsewhere in the same page.
+    # Chunks decide which pages are worth reading; they are no longer what gets
+    # read. Still fetched, because the best-matching one labels the citation.
     ASK_CHUNKS_PER_DOC: int = 4
+    # One passage per page now, so this bounds pages rather than excerpts.
     ASK_MAX_PASSAGES: int = 16
-    # Context budget in characters. Qwen3.5-9B has plenty of window, but a long
-    # prompt is a slow prompt, and relevance drops off fast after the top hits.
-    ASK_CONTEXT_CHARS: int = 12000
-    ASK_PASSAGE_CHARS: int = 2400
+    # Context budget in characters, sized for whole pages rather than excerpts.
+    # Roughly 75k tokens at four characters each: comfortable inside the
+    # smallest window the answering model is served from, and a fraction of the
+    # largest. A long prompt is still a slow prompt, so these are the ceiling -
+    # a handful of pages usually lands far below them.
+    ASK_CONTEXT_CHARS: int = 300000
+    # Large enough that a whole contract or manual arrives intact; a page past
+    # this is truncated rather than dropped, and the reader is told.
+    ASK_PASSAGE_CHARS: int = 120000
     # With a reranker the answering model sees the reranked top few. Without
     # one there is no confidence signal to cut on, so every retrieved page is
     # offered and the context budget does the trimming.
-    ASK_DOCUMENTS_WITHOUT_RERANK: int = 10
+    # No reranker means no confidence signal to cut on, but whole pages still
+    # have to fit a prompt somebody will wait for, so the same three apply.
+    ASK_DOCUMENTS_WITHOUT_RERANK: int = 3
     ASK_MAX_TOKENS: int = 900
     ASK_TEMPERATURE: float = 0.2
 
@@ -272,13 +280,23 @@ class Settings(BaseSettings):
     RERANK_MIN_CANDIDATES: int = 3
     # Characters of each candidate sent for scoring. Ten of these must fit the
     # reranker's own context window, which is 32k tokens for Cohere rerank 4.
-    RERANK_DOC_CHARS: int = 4000
+    # One page's share of the reranker's window. Raised when candidates became
+    # whole pages rather than matched excerpts: at 4000 a long contract was
+    # judged on its first two sections. Ten candidates at 12000 exceed the
+    # total below, which fit_to_budget then shares out evenly, so this is a
+    # ceiling for a single long page rather than a per-page allocation.
+    RERANK_DOC_CHARS: int = 12000
     RERANK_TOTAL_CHARS: int = 100000
     # How many pages reach the answering model. Three is the default because a
     # fourth rarely adds anything a confident top three missed; the extras are
     # admitted only when the reranker scores them nearly as highly.
     RERANK_KEEP_DEFAULT: int = 3
-    RERANK_KEEP_MAX: int = 5
+    # Equal to the default, so exactly three pages reach the model. The
+    # widening rule below is kept because it is the right shape - a query whose
+    # answer is split across near-identical pages loses half of it at a hard
+    # cut - but a page now carries its whole text rather than an excerpt, and
+    # three whole pages already crowd a prompt. Raise this to let it widen.
+    RERANK_KEEP_MAX: int = 3
     # An extra page is kept only when it is both *close to* the third page and
     # convincing on its own. Both conditions are needed, and the second does most
     # of the work: measured against this reranker, irrelevant pages cluster

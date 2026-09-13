@@ -175,34 +175,33 @@ def _passages_for(
             and (doc.id, doc.embedding_version, i) in chunks
         ]
 
-        if matched:
-            for chunk in matched:
-                passages.append(
-                    Passage(
-                        index=len(passages) + 1,
-                        document_id=doc.id,
-                        title=doc.title,
-                        namespace_name=ns.name,
-                        text=chunk.text,
-                        chunk_index=chunk.chunk_index,
-                        chunk_title=chunk.title,
-                        score=hit.score,
-                    )
-                )
-        else:
-            passages.append(
-                Passage(
-                    index=len(passages) + 1,
-                    document_id=doc.id,
-                    title=doc.title,
-                    namespace_name=ns.name,
-                    # The page itself, not its summary: a summary is written for
-                    # matching and drops the specifics an answer needs - a figure
-                    # in a table survives here and does not survive there.
-                    text=doc.content_text or doc.summary or "",
-                    score=hit.score,
-                )
+        # One passage per page, carrying the whole page.
+        #
+        # Chunks are how a page is *found*; they are a poor way to read one. A
+        # page that matched in three places used to arrive as three excerpts,
+        # which spends the budget on the same document three times, invites the
+        # model to cite the same page as though it were three sources, and still
+        # omits whatever sits between them - the sentence that qualifies the
+        # figure, the row above the total. The whole page costs little more and
+        # answers questions the excerpts cannot.
+        #
+        # Which chunks matched is kept only to label the citation.
+        first = matched[0] if matched else None
+        passages.append(
+            Passage(
+                index=len(passages) + 1,
+                document_id=doc.id,
+                title=doc.title,
+                namespace_name=ns.name,
+                # The page itself, not its summary: a summary is written for
+                # matching and drops the specifics an answer needs - a figure
+                # in a table survives here and does not survive there.
+                text=doc.content_text or doc.summary or "",
+                chunk_index=first.chunk_index if first else None,
+                chunk_title=first.title if first else None,
+                score=hit.score,
             )
+        )
         if len(passages) >= settings.ASK_MAX_PASSAGES:
             break
     return passages

@@ -105,7 +105,13 @@ async def test_a_server_error_surfaces_as_a_model_server_error() -> None:
 # --- what a candidate looks like to the reranker ----------------------------
 
 
-def test_the_matching_section_is_preferred_over_the_summary() -> None:
+def test_the_whole_page_is_what_gets_scored() -> None:
+    """A reranker asked whether a page answers a question should see the page.
+
+    Judging it on the chunk that embedded nearest marks down a contract whose
+    answer sits two sections away from the match - which is the case reranking
+    exists to get right.
+    """
     text = build_candidate_text(
         "Runbook",
         passage="Promote the standby with pg_ctl promote.",
@@ -113,19 +119,31 @@ def test_the_matching_section_is_preferred_over_the_summary() -> None:
         body="The whole runbook.",
     )
     assert text.startswith("Runbook")
-    assert "pg_ctl promote" in text
+    assert "The whole runbook." in text
     assert "A summary" not in text, "one representation of the page, not three"
+    assert "pg_ctl promote" not in text, "the excerpt is redundant beside the page"
 
 
-def test_the_summary_stands_in_when_nothing_matched_a_section() -> None:
+def test_the_summary_stands_in_when_the_page_has_no_text() -> None:
+    """A scan still being parsed has a summary and nothing else yet."""
     text = build_candidate_text(
-        "Runbook", summary="A summary of the runbook.", body="The whole runbook."
+        "Runbook",
+        passage="Promote the standby with pg_ctl promote.",
+        summary="A summary of the runbook.",
     )
     assert "A summary of the runbook." in text
-    assert "The whole runbook." not in text
+    assert "pg_ctl promote" not in text
 
 
-def test_the_page_itself_is_the_last_resort() -> None:
+def test_a_matched_section_is_the_last_resort() -> None:
+    """Neither page text nor summary: the section that matched is all there is."""
+    text = build_candidate_text(
+        "Runbook", passage="Promote the standby with pg_ctl promote."
+    )
+    assert text == "Runbook\n\nPromote the standby with pg_ctl promote."
+
+
+def test_the_page_is_used_verbatim_when_it_is_all_there_is() -> None:
     text = build_candidate_text("Runbook", body="The whole runbook.")
     assert text == "Runbook\n\nThe whole runbook."
 
@@ -161,10 +179,15 @@ def test_three_pages_by_default() -> None:
 
 
 def test_a_fourth_page_joins_when_it_is_nearly_as_convincing() -> None:
-    assert keep_count([0.9, 0.88, 0.85, 0.84, 0.05]) == 4
+    """The widening rule itself, exercised past the deployed cap of three.
+
+    Kept as a test because the mechanism is still here and still correct; it is
+    the cap that changed, once a page started carrying its whole text.
+    """
+    assert keep_count([0.9, 0.88, 0.85, 0.84, 0.05], maximum=5) == 4
 
 
-def test_the_cluster_stops_at_five_however_flat_the_scores() -> None:
+def test_the_cluster_stops_at_the_cap_however_flat_the_scores() -> None:
     assert keep_count([0.9] * 10) == settings.RERANK_KEEP_MAX
 
 
@@ -183,8 +206,11 @@ def test_a_clearly_weaker_fourth_page_stays_out_even_above_the_floor() -> None:
 
 
 def test_an_answer_split_across_four_pages_keeps_all_four() -> None:
-    """Measured: one procedure written across four pages, then unrelated noise."""
-    assert keep_count([0.539, 0.507, 0.424, 0.354, 0.104]) == 4
+    """Measured: one procedure written across four pages, then unrelated noise.
+
+    Past the deployed cap, for the same reason as above.
+    """
+    assert keep_count([0.539, 0.507, 0.424, 0.354, 0.104], maximum=5) == 4
 
 
 def test_fewer_candidates_than_the_default_keeps_them_all() -> None:
@@ -197,3 +223,18 @@ def test_no_candidates_keeps_nothing() -> None:
 
 def test_a_run_of_zero_scores_does_not_widen_the_cut() -> None:
     assert keep_count([0.9, 0.0, 0.0, 0.0, 0.0]) == 3
+
+
+def test_exactly_three_pages_reach_the_model() -> None:
+    """Whole pages now, not excerpts: three already fill a prompt.
+
+    The widening rule is still here because its shape is right - an answer split
+    across near-identical pages loses half of itself at a hard cut - but the cap
+    equals the default, so it cannot widen until someone raises it deliberately.
+    """
+    # Scores tight enough that the old cap of five would have taken all five.
+    assert keep_count([0.91, 0.90, 0.89, 0.89, 0.88]) == 3
+
+
+def test_fewer_than_three_results_are_all_kept() -> None:
+    assert keep_count([0.9, 0.8]) == 2

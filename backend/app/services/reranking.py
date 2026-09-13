@@ -138,14 +138,18 @@ def build_candidate_text(
 ) -> str:
     """The text that stands in for a page while it is being scored.
 
-    The title always leads, because it is often the clearest statement of what a
-    page is about. After it comes the most specific text available: the section
-    that matched, then the summary, then the start of the page. Sending all three
-    would crowd the budget with the same content said three ways.
+    The title leads, because it is often the clearest statement of what a page
+    is about. Then the page itself: a reranker asked "does this page answer the
+    question" should see the page, not the paragraph that happened to embed
+    nearest. A contract whose answer sits two sections away from the matched
+    chunk scores badly on the chunk and correctly on the whole.
+
+    The summary and a matched passage remain as fallbacks for a page with no
+    stored text - a scan still being parsed, say - in that order of specificity.
     """
     limit = max_chars or settings.RERANK_DOC_CHARS
     parts = [title.strip()]
-    for candidate in (passage, summary, body):
+    for candidate in (body, summary, passage):
         text = (candidate or "").strip()
         if text:
             parts.append(text)

@@ -217,9 +217,15 @@ async def test_ask_sends_only_the_top_pages_to_the_model(
 
 
 @pytest.mark.anyio
-async def test_ask_widens_when_several_pages_are_equally_convincing(
+async def test_ask_sends_three_pages_however_flat_the_scores(
     client: TestClient, db: Session, store: InMemoryVectorStore
 ) -> None:
+    """Six near-identical scores, and still three pages reach the model.
+
+    A page carries its whole text now, so three of them already fill a prompt
+    somebody is waiting on. The widening rule still exists in `keep_count` and
+    is tested there; here the cap is what matters.
+    """
     owner, pw = create_user_with_password(db)
     await _seed_many(db, store, owner, count=6)
     headers = login(client, owner, pw)
@@ -238,8 +244,8 @@ async def test_ask_widens_when_several_pages_are_equally_convincing(
         )
 
     body = r.json()
-    assert body["used"] > settings.RERANK_KEEP_DEFAULT
-    assert body["used"] <= settings.RERANK_KEEP_MAX
+    assert body["used"] == 3
+    assert body["searched"] >= 6, "retrieval still cast a wide net"
 
 
 @pytest.mark.anyio

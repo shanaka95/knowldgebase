@@ -233,15 +233,28 @@ def test_asking_requires_authentication(client: TestClient) -> None:
 
 
 @pytest.mark.anyio
-async def test_several_sections_of_one_long_page_can_all_be_used(
+async def test_a_page_that_matched_in_several_places_is_sent_once_and_whole(
     client: TestClient, db: Session, store: InMemoryVectorStore
 ) -> None:
-    """A page's single best section is often not the one holding the detail that
-    was asked for, so the chosen pages get a section-level pass."""
+    """Chunks find a page; the whole page is what gets read.
+
+    Sending an excerpt per match spends the budget on one document several
+    times, invites the model to cite it as though it were several sources, and
+    still omits what sits between the matches - the sentence qualifying the
+    figure, the row above the total.
+    """
     owner, pw = create_user_with_password(db)
     ns = create_namespace(db, owner)
     invoice = create_document(
-        db, ns, owner, title="Invoice", html="<p>An invoice with several parts.</p>"
+        db,
+        ns,
+        owner,
+        title="Invoice",
+        html=(
+            "<p>Customer address and contact details for the vpn account.</p>"
+            "<p>Total due is 262.12 EUR for the vpn service period.</p>"
+            "<p>Payment history and mandate details for the vpn contract.</p>"
+        ),
     )
     await _index(
         store,
@@ -257,16 +270,25 @@ async def test_several_sections_of_one_long_page_can_all_be_used(
     db.commit()
     headers = login(client, owner, pw)
 
+    captured: dict[str, str] = {}
+
+    def _capture(request: httpx.Request) -> httpx.Response:
+        captured["prompt"] = request.content.decode()
+        return httpx.Response(200, json=_completion("262.12 EUR [1]."))
+
     with respx.mock:
-        respx.post(LLM_URL).mock(
-            return_value=httpx.Response(200, json=_completion("262.12 EUR [2]."))
-        )
+        respx.post(LLM_URL).mock(side_effect=_capture)
         body = client.post(ASK, headers=headers, json={"q": "vpn total due"}).json()
 
-    assert body["used"] == 1, "it is still one page"
-    assert body["passages"] > 1, "but several of its sections were sent"
-    indexes = {c["chunk_index"] for c in body["citations"]}
-    assert len(indexes) > 1, "different sections, not the same one repeated"
+    assert body["used"] == 1, "one page"
+    assert body["passages"] == 1, "sent once, not once per matching section"
+    assert len(body["citations"]) == 1
+
+    # And the model saw the parts that did not match, not only the one that did.
+    prompt = captured["prompt"]
+    assert "Total due is 262.12 EUR" in prompt
+    assert "Customer address" in prompt, "the whole page, including what did not match"
+    assert "Payment history" in prompt
 
 
 @pytest.mark.anyio
