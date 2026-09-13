@@ -7,6 +7,7 @@ import { type UserPublic, UsersService } from "@/client"
 import AddUser from "@/components/Admin/AddUser"
 import { ChannelsPanel } from "@/components/Admin/ChannelsPanel"
 import { columns, type UserTableData } from "@/components/Admin/columns"
+import { DataSourcesPanel } from "@/components/Admin/DataSourcesPanel"
 import { DataTable } from "@/components/Common/DataTable"
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
 import PendingUsers from "@/components/Pending/PendingUsers"
@@ -22,7 +23,7 @@ function getUsersQueryOptions() {
 }
 
 const adminSearchSchema = z.object({
-  tab: z.enum(["users", "channels"]).catch("users"),
+  tab: z.enum(["users", "channels", "data-sources"]).catch("users"),
 })
 
 export const Route = createFileRoute("/_layout/admin")({
@@ -80,7 +81,7 @@ function Admin() {
         value={tab}
         onValueChange={(value) =>
           navigate({
-            search: { tab: value as "users" | "channels" },
+            search: { tab: value as "users" | "channels" | "data-sources" },
             replace: true,
           })
         }
@@ -88,12 +89,16 @@ function Admin() {
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>
+          <TabsTrigger value="data-sources">Data sources</TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="pt-4">
           <UsersTable />
         </TabsContent>
         <TabsContent value="channels" className="pt-4">
           <ChannelsPanel />
+        </TabsContent>
+        <TabsContent value="data-sources" className="pt-4">
+          <DataSourcesPanel />
         </TabsContent>
       </Tabs>
     </PageContainer>

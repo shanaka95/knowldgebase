@@ -1,9 +1,7 @@
-import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { AlertCircle, CornerDownRight } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-
-import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
+import { DestinationFields } from "@/components/Imports/DestinationFields"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -18,17 +16,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LoadingButton } from "@/components/ui/loading-button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useCreateImport } from "@/hooks/useImports"
 import { canEditNamespace, useNamespaces } from "@/hooks/useNamespaces"
-import { foldersInTreeOrder, treeQuery } from "@/queries/namespaces"
 import { FileDropzone } from "./FileDropzone"
 
 interface Props {
@@ -85,9 +75,6 @@ export function ImportDialog({
   useEffect(() => {
     if (!spaceId && editable.length > 0) setSpaceId(editable[0].id)
   }, [spaceId, editable])
-
-  const { data: tree } = useQuery({ ...treeQuery(spaceId), enabled: !!spaceId })
-  const folders = tree?.raw.folders ?? []
 
   const chooseFiles = (next: File[]) => {
     setFiles(next)
@@ -210,82 +197,15 @@ export function ImportDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="import-space">Space</Label>
-              <Select
-                value={spaceId}
-                onValueChange={(v) => {
-                  setSpaceId(v)
-                  setFolder(null)
-                }}
-                disabled={createImport.isPending}
-              >
-                <SelectTrigger
-                  id="import-space"
-                  className="w-full"
-                  data-testid="import-space-select"
-                >
-                  <SelectValue placeholder="Select a space" />
-                </SelectTrigger>
-                <SelectContent>
-                  {editable.map((ns) => (
-                    <SelectItem key={ns.id} value={ns.id}>
-                      <span className="flex items-center gap-2">
-                        <NamespaceIcon
-                          icon={ns.icon}
-                          color={ns.color}
-                          size="xs"
-                        />
-                        {ns.name}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="import-folder">Folder</Label>
-              <Select
-                value={folder ?? "__root__"}
-                onValueChange={(v) => setFolder(v === "__root__" ? null : v)}
-                disabled={createImport.isPending}
-              >
-                <SelectTrigger
-                  id="import-folder"
-                  className="w-full"
-                  data-testid="import-folder-select"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__root__">Space root</SelectItem>
-                  {/*
-                    Indented by depth, so a nested folder reads as nested. A
-                    flat list cannot distinguish a top-level "Invoices" from
-                    one of three under different parents, which leaves the
-                    reader guessing where a document is about to go.
-                  */}
-                  {foldersInTreeOrder(folders).map(({ folder, depth }) => (
-                    <SelectItem key={folder.id} value={folder.id}>
-                      <span
-                        style={{ paddingInlineStart: `${depth * 14}px` }}
-                        className="flex min-w-0 items-center gap-1.5"
-                      >
-                        {depth > 0 && (
-                          <CornerDownRight
-                            className="size-3 shrink-0 text-muted-foreground"
-                            aria-hidden
-                          />
-                        )}
-                        <span className="truncate">{folder.name}</span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <DestinationFields
+            spaces={editable}
+            spaceId={spaceId}
+            onSpaceChange={setSpaceId}
+            folderId={folder}
+            onFolderChange={setFolder}
+            disabled={createImport.isPending}
+            idPrefix="import"
+          />
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="import-prompt">

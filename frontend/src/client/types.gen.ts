@@ -311,6 +311,56 @@ export type AskCitation = {
 };
 
 /**
+ * AskContext
+ *
+ * What an answer would be written from, handed over instead of an answer.
+ *
+ * Every caller that reaches this over MCP is itself a model: it has to phrase
+ * a reply to somebody either way. Writing an answer here and having that
+ * caller rewrite it costs a second generation and loses a little of the
+ * source each time, so this returns the same pages the answer would have been
+ * written from and lets the caller write once, from the originals.
+ */
+export type AskContext = {
+    /**
+     * Question
+     */
+    question: string;
+    /**
+     * Documents
+     */
+    documents?: Array<AskCitation>;
+    /**
+     * Searched
+     */
+    searched?: number;
+    /**
+     * Used
+     */
+    used?: number;
+    /**
+     * Passages
+     */
+    passages?: number;
+    /**
+     * Reranked
+     */
+    reranked?: boolean;
+    /**
+     * Truncated
+     */
+    truncated?: boolean;
+    /**
+     * Retrieval Ms
+     */
+    retrieval_ms?: number;
+    /**
+     * Took Ms
+     */
+    took_ms?: number;
+};
+
+/**
  * AskRequest
  */
 export type AskRequest = {
@@ -670,6 +720,103 @@ export type ChannelType = 'whatsapp' | 'telegram' | 'slack' | 'discord';
  * ContentFormat
  */
 export type ContentFormat = 'html' | 'markdown' | 'text';
+
+/**
+ * DataSourceConfigPublic
+ */
+export type DataSourceConfigPublic = {
+    source_type: DataSourceType;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Configured
+     */
+    configured: boolean;
+    /**
+     * Required Fields
+     */
+    required_fields: Array<string>;
+    /**
+     * Present Fields
+     */
+    present_fields: Array<string>;
+    /**
+     * Redirect Uri
+     */
+    redirect_uri: string;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+};
+
+/**
+ * DataSourceConfigUpdate
+ */
+export type DataSourceConfigUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Credentials
+     */
+    credentials?: {
+        [key: string]: string;
+    } | null;
+};
+
+/**
+ * DataSourceConfigsPublic
+ */
+export type DataSourceConfigsPublic = {
+    /**
+     * Data
+     */
+    data: Array<DataSourceConfigPublic>;
+};
+
+/**
+ * DataSourcePublic
+ *
+ * What one source looks like to the person who might connect it.
+ */
+export type DataSourcePublic = {
+    source_type: DataSourceType;
+    /**
+     * Available
+     */
+    available: boolean;
+    /**
+     * Connected
+     */
+    connected: boolean;
+    /**
+     * Account Email
+     */
+    account_email?: string | null;
+    /**
+     * Connected At
+     */
+    connected_at?: string | null;
+};
+
+/**
+ * DataSourceType
+ */
+export type DataSourceType = 'google_drive';
+
+/**
+ * DataSourcesPublic
+ */
+export type DataSourcesPublic = {
+    /**
+     * Data
+     */
+    data: Array<DataSourcePublic>;
+};
 
 /**
  * DocumentChunkPublic
@@ -1388,6 +1535,83 @@ export type FolderUpdate = {
      * Move To Root
      */
     move_to_root?: boolean;
+};
+
+/**
+ * GoogleDriveImportRequest
+ */
+export type GoogleDriveImportRequest = {
+    /**
+     * Files
+     */
+    files: Array<GoogleDrivePickedFile>;
+    /**
+     * Namespace Id
+     */
+    namespace_id: string;
+    /**
+     * Folder Id
+     */
+    folder_id?: string | null;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
+     * Prompt
+     */
+    prompt?: string | null;
+    /**
+     * Combine
+     */
+    combine?: boolean;
+};
+
+/**
+ * GoogleDrivePickedFile
+ */
+export type GoogleDrivePickedFile = {
+    /**
+     * File Id
+     */
+    file_id: string;
+    /**
+     * Name
+     */
+    name?: string;
+    /**
+     * Mime Type
+     */
+    mime_type?: string;
+};
+
+/**
+ * GoogleDrivePickerConfig
+ *
+ * What the browser needs to open Google's own file picker.
+ *
+ * The access token is short-lived and scoped to `drive.file`, which grants
+ * nothing until the person picks something. The API key is public by design -
+ * it is restricted by HTTP referrer at Google - and the client secret is not
+ * here, because the browser never needs it.
+ */
+export type GoogleDrivePickerConfig = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Api Key
+     */
+    api_key: string;
+    /**
+     * Access Token
+     */
+    access_token: string;
+    /**
+     * Expires In
+     */
+    expires_in: number;
 };
 
 /**
@@ -5051,6 +5275,31 @@ export type askAskQuestionResponses = {
 
 export type askAskQuestionResponse = askAskQuestionResponses[keyof askAskQuestionResponses];
 
+export type askAskContextData = {
+    body: AskRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/ask/context';
+};
+
+export type askAskContextErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type askAskContextError = askAskContextErrors[keyof askAskContextErrors];
+
+export type askAskContextResponses = {
+    /**
+     * Successful Response
+     */
+    200: AskContext;
+};
+
+export type askAskContextResponse = askAskContextResponses[keyof askAskContextResponses];
+
 export type askAskQuestionStreamData = {
     body: AskRequest;
     path?: never;
@@ -5315,6 +5564,95 @@ export type agentsDeleteConnectionResponses = {
 
 export type agentsDeleteConnectionResponse = agentsDeleteConnectionResponses[keyof agentsDeleteConnectionResponses];
 
+export type dataSourcesReadDataSourcesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data-sources/';
+};
+
+export type dataSourcesReadDataSourcesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DataSourcesPublic;
+};
+
+export type dataSourcesReadDataSourcesResponse = dataSourcesReadDataSourcesResponses[keyof dataSourcesReadDataSourcesResponses];
+
+export type dataSourcesAuthorizeGoogleDriveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data-sources/google-drive/authorize';
+};
+
+export type dataSourcesAuthorizeGoogleDriveResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type dataSourcesAuthorizeGoogleDriveResponse = dataSourcesAuthorizeGoogleDriveResponses[keyof dataSourcesAuthorizeGoogleDriveResponses];
+
+export type dataSourcesGoogleDrivePickerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data-sources/google-drive/picker';
+};
+
+export type dataSourcesGoogleDrivePickerResponses = {
+    /**
+     * Successful Response
+     */
+    200: GoogleDrivePickerConfig;
+};
+
+export type dataSourcesGoogleDrivePickerResponse = dataSourcesGoogleDrivePickerResponses[keyof dataSourcesGoogleDrivePickerResponses];
+
+export type dataSourcesDisconnectGoogleDriveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data-sources/google-drive/connection';
+};
+
+export type dataSourcesDisconnectGoogleDriveResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type dataSourcesDisconnectGoogleDriveResponse = dataSourcesDisconnectGoogleDriveResponses[keyof dataSourcesDisconnectGoogleDriveResponses];
+
+export type dataSourcesImportFromGoogleDriveData = {
+    body: GoogleDriveImportRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/data-sources/google-drive/import';
+};
+
+export type dataSourcesImportFromGoogleDriveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type dataSourcesImportFromGoogleDriveError = dataSourcesImportFromGoogleDriveErrors[keyof dataSourcesImportFromGoogleDriveErrors];
+
+export type dataSourcesImportFromGoogleDriveResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportJobsPublic;
+};
+
+export type dataSourcesImportFromGoogleDriveResponse = dataSourcesImportFromGoogleDriveResponses[keyof dataSourcesImportFromGoogleDriveResponses];
+
 export type adminChannelsReadChannelsData = {
     body?: never;
     path?: never;
@@ -5446,6 +5784,49 @@ export type adminChannelsStartPairingResponses = {
 };
 
 export type adminChannelsStartPairingResponse = adminChannelsStartPairingResponses[keyof adminChannelsStartPairingResponses];
+
+export type adminDataSourcesReadDataSourcesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/data-sources/';
+};
+
+export type adminDataSourcesReadDataSourcesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DataSourceConfigsPublic;
+};
+
+export type adminDataSourcesReadDataSourcesResponse = adminDataSourcesReadDataSourcesResponses[keyof adminDataSourcesReadDataSourcesResponses];
+
+export type adminDataSourcesUpdateDataSourceData = {
+    body: DataSourceConfigUpdate;
+    path: {
+        source_type: DataSourceType;
+    };
+    query?: never;
+    url: '/api/v1/admin/data-sources/{source_type}';
+};
+
+export type adminDataSourcesUpdateDataSourceErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminDataSourcesUpdateDataSourceError = adminDataSourcesUpdateDataSourceErrors[keyof adminDataSourcesUpdateDataSourceErrors];
+
+export type adminDataSourcesUpdateDataSourceResponses = {
+    /**
+     * Successful Response
+     */
+    200: DataSourceConfigPublic;
+};
+
+export type adminDataSourcesUpdateDataSourceResponse = adminDataSourcesUpdateDataSourceResponses[keyof adminDataSourcesUpdateDataSourceResponses];
 
 export type agentControlResolveRouteData = {
     /**

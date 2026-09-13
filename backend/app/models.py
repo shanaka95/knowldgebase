@@ -1684,6 +1684,125 @@ class ChannelLinkCodePublic(SQLModel):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Data sources
+# ---------------------------------------------------------------------------
+
+
+class DataSourceType(StrEnum):
+    google_drive = "google_drive"
+
+
+class DataSourceConfig(SQLModel, table=True):
+    """Deployment-wide setup for one data source, managed by an administrator.
+
+    The same shape as ChannelConfig, and for the same reason: the client secret
+    goes in encrypted and never comes back out, so the API can say a source is
+    configured without being a way to read the credentials back.
+    """
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    source_type: DataSourceType = Field(unique=True, index=True, sa_type=String(32))  # type: ignore
+    enabled: bool = Field(default=False)
+    credentials_encrypted: str | None = Field(default=None, sa_type=Text)
+    updated_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class DataSourceConnection(SQLModel, table=True):
+    """One person's standing authorisation for one source.
+
+    The refresh token is the whole of the grant - it is what lets the server
+    reach Google as this user tomorrow - so it is encrypted at rest like any
+    other credential, and never returned by the API. Deleting the row is what
+    "disconnect" means locally; the token is revoked at Google as well, because
+    a grant nobody can see is still a grant.
+    """
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    source_type: DataSourceType = Field(index=True, sa_type=String(32))  # type: ignore
+    # Whose account it is, so the card can say which Google this is.
+    account_email: str | None = Field(default=None, max_length=320)
+    credentials_encrypted: str | None = Field(default=None, sa_type=Text)
+    # What the user actually granted, which is not always what was asked for.
+    scopes: str = Field(default="", sa_type=Text)
+    connected_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_type", name="uq_datasource_user_source"),
+    )
+
+
+class DataSourceConfigUpdate(SQLModel):
+    enabled: bool | None = None
+    # Write-only. Absent leaves the stored credentials untouched, so an admin
+    # can switch a source off without re-entering the secret.
+    credentials: dict[str, str] | None = None
+
+
+class DataSourceConfigPublic(SQLModel):
+    source_type: DataSourceType
+    enabled: bool
+    configured: bool
+    required_fields: list[str]
+    present_fields: list[str]
+    # The URI that has to be registered with the provider. Shown to the admin
+    # so it is copied rather than retyped, which is how redirect_uri_mismatch
+    # happens.
+    redirect_uri: str
+    updated_at: datetime | None
+
+
+class DataSourceConfigsPublic(SQLModel):
+    data: list[DataSourceConfigPublic]
+
+
+class DataSourcePublic(SQLModel):
+    """What one source looks like to the person who might connect it."""
+
+    source_type: DataSourceType
+    available: bool  # an admin has configured and enabled it
+    connected: bool
+    account_email: str | None = None
+    connected_at: datetime | None = None
+
+
+class DataSourcesPublic(SQLModel):
+    data: list[DataSourcePublic]
+
+
+class GoogleDrivePickerConfig(SQLModel):
+    """What the browser needs to open Google's own file picker.
+
+    The access token is short-lived and scoped to `drive.file`, which grants
+    nothing until the person picks something. The API key is public by design -
+    it is restricted by HTTP referrer at Google - and the client secret is not
+    here, because the browser never needs it.
+    """
+
+    client_id: str
+    api_key: str
+    access_token: str
+    expires_in: int
+
+
+class GoogleDrivePickedFile(SQLModel):
+    file_id: str = Field(min_length=1, max_length=255)
+    name: str = Field(default="", max_length=255)
+    mime_type: str = Field(default="", max_length=127)
+
+
+class GoogleDriveImportRequest(SQLModel):
+    files: list[GoogleDrivePickedFile] = Field(min_length=1, max_length=25)
+    namespace_id: uuid.UUID
+    folder_id: uuid.UUID | None = None
+    doc_type: str | None = Field(default=None, max_length=100)
+    prompt: str | None = Field(default=None, max_length=2000)
+    combine: bool = False
+
+
 class ChannelConfig(SQLModel, table=True):
     """Deployment-wide setup for one channel, managed by an administrator.
 

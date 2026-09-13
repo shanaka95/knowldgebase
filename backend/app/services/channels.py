@@ -18,7 +18,6 @@ generated - hand an unauthenticated party a language model.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import secrets
 from dataclasses import dataclass
@@ -27,6 +26,11 @@ from datetime import UTC, datetime, timedelta
 from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
+from app.core.secretbox import (
+    CredentialSealError,
+    open_credentials,
+    seal_credentials,
+)
 from app.models import (
     ChannelConfig,
     ChannelConnection,
@@ -105,47 +109,9 @@ def required_fields_for(config: ChannelConfig | None, channel: ChannelType) -> l
 # ---------------------------------------------------------------------------
 
 
-class CredentialSealError(RuntimeError):
-    """Raised when credentials cannot be encrypted or decrypted."""
-
-
-def _fernet():
-    from cryptography.fernet import Fernet
-
-    key = (settings.CHANNEL_SECRET_KEY or "").strip()
-    if not key:
-        raise CredentialSealError(
-            "CHANNEL_SECRET_KEY is not set, so channel credentials cannot be "
-            "stored. Generate one with Fernet.generate_key()."
-        )
-    try:
-        return Fernet(key.encode())
-    except Exception as exc:  # noqa: BLE001 - any malformed key is the same problem
-        raise CredentialSealError("CHANNEL_SECRET_KEY is not a valid Fernet key") from exc
-
-
-def seal_credentials(values: dict[str, str]) -> str:
-    return _fernet().encrypt(json.dumps(values).encode()).decode()
-
-
-def open_credentials(sealed: str | None) -> dict[str, str]:
-    """Decrypt stored credentials. An unreadable blob yields nothing, not a crash.
-
-    A rotated or mistyped key must not take the whole admin page down; the
-    channel simply reads as unconfigured until someone re-enters it.
-    """
-    if not sealed:
-        return {}
-    try:
-        raw = _fernet().decrypt(sealed.encode())
-    except Exception:  # noqa: BLE001 - InvalidToken, bad key, corrupt column
-        logger.warning("Stored channel credentials could not be decrypted")
-        return {}
-    try:
-        data = json.loads(raw.decode())
-    except ValueError:
-        return {}
-    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+# Re-exported: callers already import these from here, and the implementation
+# is shared with data sources rather than written twice.
+__all__ = ["CredentialSealError", "open_credentials", "seal_credentials"]
 
 
 def is_configured(config: ChannelConfig | None) -> bool:

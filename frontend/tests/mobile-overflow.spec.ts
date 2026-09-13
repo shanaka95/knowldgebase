@@ -184,6 +184,7 @@ const PAGES: { path: string; name: string }[] = [
   { path: "/settings?tab=api-keys", name: "settings · api keys" },
   { path: "/admin", name: "admin · users" },
   { path: "/admin?tab=channels", name: "admin · channels" },
+  { path: "/admin?tab=data-sources", name: "admin · data sources" },
 ]
 
 test.describe("on a phone", () => {
