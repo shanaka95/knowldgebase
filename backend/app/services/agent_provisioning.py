@@ -34,9 +34,25 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# The MCP server's name doubles as a toolset name: Hermes registers an alias
+# from `plusgpt` to the `mcp-plusgpt` toolset its tools land in. Leaving it out
+# of the list below does not merely omit a nicety - it takes the knowledge base
+# away from the agent entirely.
+MCP_SERVER_NAME = "plusgpt"
+
 # Only what the agent actually needs. `terminal`, `file` and `browser` are
 # deliberately absent: see the module docstring.
-AGENT_TOOLSETS = ["skills", "todo", "vision"]
+AGENT_TOOLSETS = [MCP_SERVER_NAME, "skills", "todo", "vision"]
+
+# Hermes reads per-platform toolsets from `platform_toolsets`, and silently
+# ignores any key it does not know - so a plausible-looking `enabled_toolsets`
+# leaves the platform default in force, which for every messaging platform
+# includes terminal, file and browser. The name matters more than it looks.
+TOOLSET_CONFIG_KEY = "platform_toolsets"
+
+# The platforms an agent can be reached on. Each needs its own entry; a platform
+# with no entry falls back to Hermes' permissive default.
+AGENT_PLATFORMS = ("telegram", "whatsapp", "slack", "discord", "cli")
 
 
 def profile_name_for(agent_id: uuid.UUID) -> str:
@@ -65,6 +81,18 @@ def _yaml_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def _toolset_block_for(granted: list[str]) -> str:
+    """Per-platform toolsets, which is the only form Hermes reads."""
+    lines = [f"{TOOLSET_CONFIG_KEY}:"]
+    joined = ", ".join(granted)
+    lines += [f"  {platform}: [{joined}]" for platform in AGENT_PLATFORMS]
+    return "\n".join(lines)
+
+
+def _toolset_block() -> str:
+    return _toolset_block_for(AGENT_TOOLSETS)
+
+
 def render_config_yaml(*, model: str, mcp_url: str) -> str:
     """The profile's `config.yaml`.
 
@@ -88,7 +116,9 @@ mcp_servers:
     connect_timeout: 30
 
 # No shell, no filesystem, no browser: an injected prompt has nothing to drive.
-enabled_toolsets: [{", ".join(AGENT_TOOLSETS)}]
+# `{MCP_SERVER_NAME}` is the knowledge base itself - omitting it would leave the
+# agent with nothing to look anything up in.
+{_toolset_block()}
 
 skills:
   external_dirs:
@@ -280,7 +310,7 @@ def render_gateway_config(channels: dict[str, dict[str, object]]) -> str:
         "",
         "# This profile answers nobody directly - every real turn runs in a user's",
         "# profile - so it needs no tools of its own.",
-        "enabled_toolsets: [todo]",
+        _toolset_block_for(["todo"]),
         "",
     ]
     return "\n".join(lines)

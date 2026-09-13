@@ -112,12 +112,38 @@ def test_the_profile_grants_no_shell_or_filesystem_tools(
         agent_provisioning.profile_dir(agent.shard_id, agent.profile_name)
         / "config.yaml"
     ).read_text()
-    # Read the list itself: the file's comments mention these tools by name, so
-    # a substring search would pass on the prose and prove nothing.
-    line = next(l for l in config.splitlines() if l.startswith("enabled_toolsets:"))
-    granted = {t.strip() for t in line.split("[", 1)[1].rstrip("]").split(",")}
-    assert granted == {"skills", "todo", "vision"}
-    assert not granted & {"terminal", "file", "browser", "computer_use"}
+    # The key has to be one Hermes actually reads. It ignores anything else in
+    # silence, leaving the platform default - which includes terminal, file and
+    # browser - quietly in force. An earlier version of this test asserted on a
+    # key that did nothing, and passed.
+    from app.services.agent_provisioning import (
+        AGENT_PLATFORMS,
+        MCP_SERVER_NAME,
+        TOOLSET_CONFIG_KEY,
+    )
+
+    assert TOOLSET_CONFIG_KEY == "platform_toolsets"
+    assert f"{TOOLSET_CONFIG_KEY}:" in config
+    assert "enabled_toolsets" not in config
+
+    granted_per_platform = {}
+    for line in config.splitlines():
+        stripped = line.strip()
+        for platform in AGENT_PLATFORMS:
+            if stripped.startswith(f"{platform}: ["):
+                granted_per_platform[platform] = {
+                    t.strip() for t in stripped.split("[", 1)[1].rstrip("]").split(",")
+                }
+
+    # Every platform an agent can be reached on needs its own entry; one left
+    # out silently falls back to the permissive default.
+    assert set(granted_per_platform) == set(AGENT_PLATFORMS)
+    for platform, granted in granted_per_platform.items():
+        assert not granted & {"terminal", "file", "browser", "computer_use"}, platform
+        # The MCP server's name is also its toolset name. Leaving it out does
+        # not trim a nicety - it takes the knowledge base away entirely, which
+        # is how this was found: an agent that could not list a single document.
+        assert MCP_SERVER_NAME in granted, platform
 
 
 def test_env_file_is_not_world_readable(
