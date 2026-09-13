@@ -221,6 +221,16 @@ def delete_connection(
     connection = session.get(ChannelConnection, connection_id)
     if connection is None or connection.agent_id != agent.id:
         raise HTTPException(status_code=404, detail="Connection not found")
+    # Say so on the channel before the binding goes: afterwards the sender is a
+    # stranger again and nothing would be delivered to them.
+    agent_provisioning.queue_channel_message(
+        agent.shard_id,
+        # str(), not .value: SQLModel hands back a plain string for this
+        # column, and StrEnum stringifies to the same thing either way.
+        platform=str(connection.channel_type),
+        chat_id=connection.platform_identity,
+        text=_disconnect_notice(agent, current_user),
+    )
     session.delete(connection)
     session.commit()
     # The gateway caches who a sender is; without this the chat would keep
@@ -228,3 +238,17 @@ def delete_connection(
     # somebody who just disconnected expects it to have stopped.
     agent_provisioning.signal_revocation(agent.shard_id)
     return Message(message="Channel disconnected")
+
+
+def _disconnect_notice(agent: Agent, owner: SessionUser) -> str:
+    """What the channel is told as access is withdrawn.
+
+    Names the account, because somebody with several may not otherwise know
+    which one just went, and says how to come back so the message is not a dead
+    end.
+    """
+    return (
+        f"This chat is no longer connected to PlusGPT ({owner.email}).\n\n"
+        f"{agent.name} can't see your knowledge base from here any more, and "
+        f"won't answer until you connect it again from Agents in the dashboard."
+    )

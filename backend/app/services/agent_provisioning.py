@@ -132,6 +132,23 @@ onboarding:
   # Quoted: YAML reads a bare `off` as boolean false, and Hermes checks for
   # the string, so an unquoted value would silently leave the offer switched on.
   profile_build: "off"
+
+# A chat window is not a terminal. Nobody wants to watch their assistant narrate
+# which tool it is calling; they want the answer. Quoted for the same reason as
+# above - a bare `off` is boolean false, and this setting is compared as a string.
+display:
+  tool_progress: "off"
+  interim_assistant_messages: false
+
+# An attachment arrives as a path in the media cache, and the knowledge base
+# takes bytes. Reading the one to send the other needs the `file` toolset, which
+# this agent deliberately lacks. This plugin does that single step, for files in
+# the cache only, and is what stops the agent retyping a document by hand.
+plugins:
+  enabled: [plusgpt-files]
+  entries:
+    plusgpt-files:
+      mcp_allowlist: [{MCP_SERVER_NAME}]
 """
 
 
@@ -425,3 +442,30 @@ def signal_revocation(shard_id: int) -> None:
 def signal_revocation_everywhere() -> None:
     for shard_id in range(max(1, settings.HERMES_SHARD_COUNT)):
         signal_revocation(shard_id)
+
+
+def queue_channel_message(
+    shard_id: int, *, platform: str, chat_id: str, text: str
+) -> None:
+    """Ask a shard to deliver a notice to a channel.
+
+    There is no inbound message to answer - somebody is being told their account
+    was disconnected, which by definition happens from the dashboard - so this
+    cannot ride back on a turn. The shard drains the directory with
+    ``hermes send``, which reuses the gateway's own platform credentials.
+    """
+    directory = shard_home(shard_id) / "outbox"
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        _own(directory)
+        path = directory / f"{uuid.uuid4().hex}.json"
+        _atomic_write(
+            path,
+            json.dumps(
+                {"platform": platform, "chat_id": chat_id, "text": text, "attempts": 0}
+            ),
+        )
+    except OSError as exc:
+        # Best effort: failing to say goodbye must not stop the disconnect. The
+        # binding is what actually withdraws access.
+        logger.warning("Could not queue a notice for shard %s: %s", shard_id, exc)

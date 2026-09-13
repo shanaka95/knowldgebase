@@ -1365,3 +1365,88 @@ def test_the_agent_is_not_asked_to_run_onboarding(
     ).read_text()
     assert "home_channel_prompt: false" in config
     assert 'profile_build: "off"' in config
+
+
+def test_disconnecting_says_goodbye_on_the_channel_first(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+    enabled_telegram,
+) -> None:
+    """Told on the channel, not only in the dashboard.
+
+    Queued before the binding goes: afterwards the sender is a stranger again
+    and nothing would reach them.
+    """
+    from app.services import agent_provisioning
+
+    body = _create_agent(client, normal_user_token_headers, f"Bye {uuid.uuid4().hex[:6]}")
+    code = client.post(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/link-code",
+        headers=normal_user_token_headers,
+        json={"channel_type": "telegram"},
+    ).json()["code"]
+    client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "95001", "message_text": code},
+    )
+    detail = client.get(
+        f"{settings.API_V1_STR}/agents/{body['id']}", headers=normal_user_token_headers
+    ).json()
+    client.delete(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/{detail['connections'][0]['id']}",
+        headers=normal_user_token_headers,
+    )
+
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    outbox = agent_provisioning.shard_home(agent.shard_id) / "outbox"
+    queued = [json.loads(p.read_text()) for p in outbox.glob("*.json")]
+    mine = [m for m in queued if m["chat_id"] == "95001"]
+    assert mine, "nothing was queued for the channel being disconnected"
+    message = mine[0]
+    assert message["platform"] == "telegram"
+    assert "no longer connected" in message["text"]
+    assert "test@example.com" in message["text"], "it must name the account"
+
+
+def test_the_agent_profile_hides_tool_chatter(
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
+) -> None:
+    """A chat window is not a terminal; people want the answer, not a trace.
+
+    Both values are quoted strings because YAML reads a bare `off` as boolean
+    false while Hermes compares against the string.
+    """
+    body = _create_agent(client, normal_user_token_headers, f"Quiet2 {uuid.uuid4().hex[:6]}")
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    from app.services import agent_provisioning
+
+    config = (
+        agent_provisioning.profile_dir(agent.shard_id, agent.profile_name)
+        / "config.yaml"
+    ).read_text()
+    assert 'tool_progress: "off"' in config
+    assert "interim_assistant_messages: false" in config
+
+
+def test_the_agent_can_file_an_attachment_it_cannot_read(
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
+) -> None:
+    """It has no filesystem tools, so the plugin is the only way a PDF gets in.
+
+    Without it the agent asks the person to "re-upload" a file it is already
+    holding a path to, which is what happened before this existed.
+    """
+    body = _create_agent(client, normal_user_token_headers, f"Files {uuid.uuid4().hex[:6]}")
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    from app.services import agent_provisioning
+
+    config = (
+        agent_provisioning.profile_dir(agent.shard_id, agent.profile_name)
+        / "config.yaml"
+    ).read_text()
+    assert "plusgpt-files" in config
+    # The plugin reaches the knowledge base through the same MCP server the
+    # agent uses, and only that one: MCP access is default-deny per plugin.
+    assert f"mcp_allowlist: [{agent_provisioning.MCP_SERVER_NAME}]" in config
