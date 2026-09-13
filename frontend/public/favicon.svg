@@ -7,7 +7,15 @@
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="15" fill="url(#p)"/>
-  <!-- Rounded caps so the mark reads as a symbol rather than a crosshair, and
-       heavy enough to survive a 16px favicon. -->
-  <path d="M32 15.2v33.6M15.2 32h33.6" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+  <!--
+    The mark alone, reversed out of the brand tile. The wordmark is dropped at
+    this size: at 16px its letterforms turn to mush, and a tab strip only ever
+    needs the symbol. Scaled to 40 of 64 units so the shape keeps its own
+    breathing room inside the rounded corners.
+  -->
+  <g transform="translate(10.625 10.625) scale(0.4275)" fill="#fff">
+    <path d="M8.203,42.885l44.208,53.898c0,0-11.808-53.9,5.148-93.566L8.203,42.885z"/>
+    <path d="M54.326,32.822c0,0-6.759,30.048-0.702,55.786c0,0-2.12-29.068,31.49-66.616L54.326,32.822z"/>
+    <path d="M55.752,93.512c0,0-0.625-21.529,12.094-41.182h23.951C91.797,52.33,71.204,63.594,55.752,93.512z"/>
+  </g>
 </svg>

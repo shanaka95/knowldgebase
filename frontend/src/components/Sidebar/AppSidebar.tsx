@@ -1,7 +1,7 @@
 import {
   Bot,
+  Camera,
   Database,
-  FileUp,
   LayoutDashboard,
   Search,
   Share2,
@@ -33,7 +33,7 @@ const baseItems: Item[] = [
   { icon: Share2, title: "Shared with me", path: "/shared" },
   { icon: Sparkles, title: "Ask", path: "/ask" },
   { icon: Search, title: "Search", path: "/search" },
-  { icon: FileUp, title: "Imports", path: "/imports" },
+  { icon: Camera, title: "Capture", path: "/capture" },
   // Integrations, in the two directions they run: an agent is how you
   // reach the knowledge base, a data source is how documents reach it.
   { icon: Bot, title: "Agents", path: "/agents" },
@@ -56,7 +56,12 @@ export function AppSidebar() {
         it four pixels out expanded and eight out collapsed.
       */}
       <SidebarHeader className="gap-4 px-2 pt-3 pb-4">
-        <div className="px-1 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+        {/*
+          Centred in both states. Collapsed, that puts the mark on the icon rail
+          with the navigation below it; expanded, it sits centred over the space
+          switcher rather than hugging the left edge.
+        */}
+        <div className="flex justify-center px-1 group-data-[collapsible=icon]:px-0">
           <Logo variant="responsive" />
         </div>
         <NamespaceSwitcher />
