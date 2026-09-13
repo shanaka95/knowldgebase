@@ -645,3 +645,101 @@ def test_an_api_key_cannot_manage_accounts_through_the_admin_routes(
 
     db.refresh(victim)
     assert victim.is_superuser is False
+
+
+# ---------------------------------------------------------------------------
+# Originals reached through an agent
+#
+# An agent authenticates with an API key rather than a session, and the files
+# it can reach are the originals of whatever it filed. Same checks, but it is a
+# new way in, and "the originals are isolated" is only true if it holds here
+# too - an agent is the one consumer that reaches them unattended.
+# ---------------------------------------------------------------------------
+
+
+def _agent_key(client: TestClient, headers: dict[str, str]) -> dict[str, str]:
+    """A write-scoped key, the way provisioning mints one for an agent."""
+    created = client.post(
+        f"{API}/api-keys/",
+        headers=headers,
+        json={"name": "Agent: test", "scope": ApiKeyScope.write.value},
+    )
+    assert created.status_code == 200, created.text
+    return {"Authorization": f"Bearer {created.json()['key']}"}
+
+
+def test_an_agent_key_cannot_download_another_accounts_original(
+    client: TestClient, owner_world: dict[str, Any], stranger: dict[str, str]
+) -> None:
+    upload = client.post(
+        f"{API}/attachments/",
+        headers=owner_world["headers"],
+        data={"namespace_id": str(owner_world["namespace"].id)},
+        files={"file": ("payslip.pdf", io.BytesIO(b"%PDF-1.7 private"), "application/pdf")},
+    )
+    assert upload.status_code == 200, upload.text
+    attachment_id = upload.json()["id"]
+
+    intruder = _agent_key(client, stranger)
+    for path in (
+        f"/attachments/{attachment_id}",
+        f"/attachments/{attachment_id}/download",
+    ):
+        r = client.get(f"{API}{path}", headers=intruder)
+        assert r.status_code in DENIED, path
+        assert b"private" not in r.content
+
+
+def test_an_agent_key_cannot_list_another_accounts_originals(
+    client: TestClient, owner_world: dict[str, Any], stranger: dict[str, str]
+) -> None:
+    """`list_page_files` is this endpoint; it must not answer for a stranger."""
+    intruder = _agent_key(client, stranger)
+    r = client.get(
+        f"{API}/attachments/",
+        headers=intruder,
+        params={"namespace_id": str(owner_world["namespace"].id)},
+    )
+    assert r.status_code in DENIED
+
+
+def test_an_agent_key_reaches_only_its_owners_originals(
+    client: TestClient, owner_world: dict[str, Any]
+) -> None:
+    """The positive half: the key its owner minted does work on their own files."""
+    upload = client.post(
+        f"{API}/attachments/",
+        headers=owner_world["headers"],
+        data={"namespace_id": str(owner_world["namespace"].id)},
+        files={"file": ("mine.pdf", io.BytesIO(b"%PDF-1.7 mine"), "application/pdf")},
+    )
+    attachment_id = upload.json()["id"]
+    mine = _agent_key(client, owner_world["headers"])
+
+    assert client.get(f"{API}/attachments/{attachment_id}", headers=mine).status_code == 200
+    download = client.get(f"{API}/attachments/{attachment_id}/download", headers=mine)
+    assert download.status_code == 200
+    assert download.content == b"%PDF-1.7 mine"
+
+
+def test_originals_are_stored_under_the_space_that_owns_them(
+    client: TestClient, owner_world: dict[str, Any], db: Session
+) -> None:
+    """The object key carries the space, so nothing shares a path by accident.
+
+    Not the access boundary - that is the permission check - but it means a
+    listing of the object store is already partitioned, and a bug in one space's
+    cleanup cannot reach another's bytes.
+    """
+    from app.models import Attachment
+
+    upload = client.post(
+        f"{API}/attachments/",
+        headers=owner_world["headers"],
+        data={"namespace_id": str(owner_world["namespace"].id)},
+        files={"file": ("x.pdf", io.BytesIO(b"%PDF-1.7"), "application/pdf")},
+    )
+    row = db.get(Attachment, uuid.UUID(upload.json()["id"]))
+    assert row is not None
+    assert row.object_key.startswith(f"ns/{owner_world['namespace'].id}/")
+    assert row.namespace_id == owner_world["namespace"].id
