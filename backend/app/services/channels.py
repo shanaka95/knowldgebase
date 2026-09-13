@@ -367,6 +367,12 @@ def gateway_plan(session: Session) -> tuple[dict[str, dict[str, object]], dict[s
             secrets["WHATSAPP_ALLOW_ALL_USERS"] = "true"
             # DMs are open at the transport; the control plane is the real gate.
             secrets["WHATSAPP_DM_POLICY"] = "open"
+            # The bridge treats an empty allowlist as "nobody", deliberately, and
+            # drops unknown senders before the gateway ever sees them - silently,
+            # which is the whole difficulty in diagnosing it. A shared number has
+            # to take messages from people it has never heard of; whether any of
+            # them get an agent is decided by the control plane, not here.
+            secrets["WHATSAPP_ALLOWED_USERS"] = "*"
             if config.transport == WhatsAppTransport.cloud_api:
                 secrets["WHATSAPP_CLOUD_ACCESS_TOKEN"] = creds.get("access_token", "")
                 secrets["WHATSAPP_CLOUD_PHONE_NUMBER_ID"] = creds.get(

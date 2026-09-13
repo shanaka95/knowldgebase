@@ -322,6 +322,16 @@ class Settings(BaseSettings):
     CHANNEL_LINK_CODE_MAX_ACTIVE: int = 5
     # The model the hosted agents run on. Same provider as the knowledge base.
     AGENT_LLM_MODEL: str = "qwen/qwen3.8-flash"
+    # Which upstream providers may serve that model, best first. OpenRouter
+    # otherwise picks for itself and can land on a throttled endpoint while a
+    # healthy one sits idle - and the two differ in context window as well, so
+    # this is not only about availability.
+    AGENT_LLM_PROVIDER_ORDER: str = "Alibaba,Makora"
+    # Tried in order when the primary model is unavailable. qwen3.8-flash is
+    # the cheapest thing on the menu and is also the most contended, so a
+    # second name keeps conversations alive through a throttled spell.
+    # Comma-separated; empty disables fallback entirely.
+    AGENT_LLM_FALLBACK_MODELS: str = "openai/gpt-5-mini"
     # Agents reach the model through our own OpenAI-compatible proxy rather
     # than holding a provider key: the real key never lands in a profile .env,
     # each agent's token is revocable on its own, and usage is attributable.

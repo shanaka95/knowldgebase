@@ -1112,3 +1112,91 @@ def test_the_whatsapp_bridge_mode_is_one_the_bridge_understands(
     finally:
         db.delete(config)
         db.commit()
+
+
+def test_the_proxy_steers_the_provider_and_allows_fallback(monkeypatch) -> None:
+    """A single throttled endpoint should not fail the turn.
+
+    OpenRouter served this model from two providers; left to choose, it picked
+    the rate-limited one and every agent reply failed while a healthy provider
+    with a larger context window sat idle.
+    """
+    from app.api.routes.agent_llm import _sanitise
+
+    monkeypatch.setattr(settings, "AGENT_LLM_PROVIDER_ORDER", "Alibaba,Makora")
+    agent = Agent(user_id=uuid.uuid4(), name="x", profile_name="a-x", shard_id=0)
+    payload = _sanitise({"messages": []}, agent)
+    assert payload["provider"]["order"] == ["Alibaba", "Makora"]
+    assert payload["provider"]["allow_fallbacks"] is True
+
+
+def test_no_provider_order_means_no_steering(monkeypatch) -> None:
+    """An empty setting must not send an empty order list, which routes nowhere."""
+    from app.api.routes.agent_llm import _sanitise
+
+    monkeypatch.setattr(settings, "AGENT_LLM_PROVIDER_ORDER", "")
+    agent = Agent(user_id=uuid.uuid4(), name="x", profile_name="a-x", shard_id=0)
+    assert "provider" not in _sanitise({"messages": []}, agent)
+
+
+def test_the_whatsapp_bridge_accepts_strangers(db: Session, monkeypatch) -> None:
+    """A shared number must take messages from people it has never heard of.
+
+    The bridge treats an empty allowlist as "nobody" on purpose, and drops
+    unknown senders before the gateway sees them - with no log line, which is
+    what made this hard to find. Authorisation belongs to the control plane,
+    which resolves an unlinked sender to nobody and drops the message there.
+    """
+    monkeypatch.setattr(
+        settings, "CHANNEL_SECRET_KEY", "hn3mS8p0kq1lZ2xY4vB6wC8dE0fG2hJ4kL6mN8pQ0rM="
+    )
+    config = ChannelConfig(
+        channel_type=ChannelType.whatsapp,
+        enabled=True,
+        transport=WhatsAppTransport.bridge,
+    )
+    db.add(config)
+    db.commit()
+    try:
+        _, secrets = channel_service.gateway_plan(db)
+        assert secrets["WHATSAPP_ALLOWED_USERS"] == "*"
+    finally:
+        db.delete(config)
+        db.commit()
+
+
+def test_a_throttled_primary_falls_back_to_another_model(monkeypatch) -> None:
+    """The cheapest model is also the most contended.
+
+    Losing a whole turn to one 429 partway through a tool loop is worse than
+    spending a little more on the occasional reply.
+    """
+    from app.api.routes.agent_llm import _sanitise
+
+    monkeypatch.setattr(settings, "AGENT_LLM_MODEL", "qwen/qwen3.8-flash")
+    monkeypatch.setattr(settings, "AGENT_LLM_FALLBACK_MODELS", "openai/gpt-5-mini")
+    agent = Agent(user_id=uuid.uuid4(), name="x", profile_name="a-x", shard_id=0)
+    payload = _sanitise({"messages": []}, agent)
+    assert payload["models"] == ["qwen/qwen3.8-flash", "openai/gpt-5-mini"]
+    # The pinned model stays, so a client that ignores `models` still behaves.
+    assert payload["model"] == "qwen/qwen3.8-flash"
+
+
+def test_the_fallback_list_is_ours_not_the_agents(monkeypatch) -> None:
+    """An injected prompt must not be able to pick what a reply costs."""
+    from app.api.routes.agent_llm import _sanitise
+
+    monkeypatch.setattr(settings, "AGENT_LLM_FALLBACK_MODELS", "openai/gpt-5-mini")
+    agent = Agent(user_id=uuid.uuid4(), name="x", profile_name="a-x", shard_id=0)
+    payload = _sanitise(
+        {"messages": [], "models": ["anthropic/claude-opus-4"], "model": "x"}, agent
+    )
+    assert "anthropic/claude-opus-4" not in payload["models"]
+
+
+def test_no_fallback_configured_sends_no_models_list(monkeypatch) -> None:
+    from app.api.routes.agent_llm import _sanitise
+
+    monkeypatch.setattr(settings, "AGENT_LLM_FALLBACK_MODELS", "")
+    agent = Agent(user_id=uuid.uuid4(), name="x", profile_name="a-x", shard_id=0)
+    assert "models" not in _sanitise({"messages": []}, agent)

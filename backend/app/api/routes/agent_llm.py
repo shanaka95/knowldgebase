@@ -69,6 +69,22 @@ def _sanitise(body: dict[str, Any], agent: Agent) -> dict[str, Any]:
         payload.pop(key, None)
     # Attribute the spend without telling the provider who the human is.
     payload["user"] = f"agent-{agent.id.hex[:16]}"
+
+    # Steer OpenRouter's provider choice. Left to itself it can route to a
+    # throttled endpoint and fail the turn while another provider serving the
+    # same model is healthy - and, for this model, has four times the context.
+    order = [p.strip() for p in settings.AGENT_LLM_PROVIDER_ORDER.split(",") if p.strip()]
+    if order:
+        payload["provider"] = {"order": order, "allow_fallbacks": True}
+
+    # A model, not the model: the cheapest option is also the most contended,
+    # and a 429 partway through a tool loop loses the whole turn. The list is
+    # ours, so an injected prompt still cannot choose what it costs.
+    fallbacks = [
+        m.strip() for m in settings.AGENT_LLM_FALLBACK_MODELS.split(",") if m.strip()
+    ]
+    if fallbacks:
+        payload["models"] = [payload["model"], *fallbacks]
     return payload
 
 
