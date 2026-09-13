@@ -152,10 +152,14 @@ def write_profile(
     """
     directory = profile_dir(shard_id, profile_name)
     directory.mkdir(parents=True, exist_ok=True)
+    _own(directory)
+    _own(directory.parent)
     # Hermes creates these itself, but making them up front means the first
     # message does not race the directory into existence.
     for child in ("sessions", "memories", "cache", "logs"):
-        (directory / child).mkdir(exist_ok=True)
+        child_dir = directory / child
+        child_dir.mkdir(exist_ok=True)
+        _own(child_dir)
 
     _atomic_write(
         directory / "config.yaml",
@@ -176,6 +180,24 @@ def write_profile(
     return directory
 
 
+def _own(path: Path) -> None:
+    """Hand a path to the uid the gateway runs as.
+
+    The backend writes these files as root; the gateway reads them as an
+    unprivileged user in another container. Without this it cannot read a 0600
+    `.env`, and cannot write its own conversation store into the directories at
+    all. Best effort: a platform or filesystem that refuses chown should not
+    stop an agent being created, and the failure shows up as the gateway
+    reporting what it could not open.
+    """
+    if settings.HERMES_PROFILE_UID < 0:
+        return
+    try:
+        os.chown(path, settings.HERMES_PROFILE_UID, settings.HERMES_PROFILE_GID)
+    except (OSError, AttributeError) as exc:
+        logger.debug("Could not chown %s: %s", path, exc)
+
+
 def _atomic_write(path: Path, content: str, *, mode: int = 0o644) -> None:
     """Replace a file in one step.
 
@@ -187,6 +209,7 @@ def _atomic_write(path: Path, content: str, *, mode: int = 0o644) -> None:
         with os.fdopen(handle, "w") as fh:
             fh.write(content)
         os.chmod(tmp_name, mode)
+        _own(Path(tmp_name))
         os.replace(tmp_name, path)
     except Exception:
         # Cleanup must never mask the write error that brought us here.
@@ -280,6 +303,8 @@ def write_gateway(
 ) -> Path:
     home = shard_home(shard_id)
     (home / "profiles").mkdir(parents=True, exist_ok=True)
+    _own(home)
+    _own(home / "profiles")
     _atomic_write(home / "config.yaml", render_gateway_config(channels))
     _atomic_write(home / ".env", render_gateway_env(secrets), mode=0o600)
     return home

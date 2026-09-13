@@ -301,6 +301,11 @@ class Settings(BaseSettings):
     # Shards exist to cap the blast radius of any in-process isolation failure,
     # and to keep one gateway's bounded turn pool from becoming everyone's queue.
     HERMES_SHARD_COUNT: int = 1
+    # The gateway containers run unprivileged; the backend writes their files
+    # as root. These say who should own them afterwards. -1 disables the chown
+    # (useful in tests and on a single-uid host).
+    HERMES_PROFILE_UID: int = 10001
+    HERMES_PROFILE_GID: int = 10001
     # How the gateway reaches the MCP server. In-network, so it never leaves the
     # compose network on the way to the knowledge base.
     HERMES_MCP_URL: str = "http://mcp:8000/mcp"

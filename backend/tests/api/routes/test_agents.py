@@ -829,3 +829,81 @@ def test_one_agents_llm_token_does_not_authenticate_another(
     assert a.llm_token_hash and b.llm_token_hash
     assert a.llm_token_hash != b.llm_token_hash
     assert svc.agent_for_llm_token(db, "agl_" + "x" * 40) is None
+
+
+def test_profile_files_are_handed_to_the_gateway_user(tmp_path, monkeypatch) -> None:
+    """The backend writes as root; the gateway reads as an unprivileged user.
+
+    Without the chown the gateway cannot open a 0600 `.env` at all, and cannot
+    write its own conversation store into the directory - which is exactly how
+    this failed the first time it was deployed.
+    """
+    from app.services import agent_provisioning
+
+    monkeypatch.setattr(settings, "HERMES_PROFILES_ROOT", str(tmp_path))
+    monkeypatch.setattr(settings, "HERMES_PROFILE_UID", 10001)
+    monkeypatch.setattr(settings, "HERMES_PROFILE_GID", 10001)
+
+    chowned: list[tuple[str, int, int]] = []
+    monkeypatch.setattr(
+        agent_provisioning.os,
+        "chown",
+        lambda path, uid, gid: chowned.append((str(path), uid, gid)),
+    )
+
+    agent_provisioning.write_profile(
+        shard_id=0,
+        profile_name="a-test",
+        agent_name="Test",
+        persona=None,
+        api_key="kb_x",
+        llm_token="agl_x",
+    )
+
+    assert chowned, "nothing was handed over"
+    assert all(uid == 10001 and gid == 10001 for _, uid, gid in chowned)
+    # The directory itself, because the gateway writes state.db beside the config.
+    directory = str(agent_provisioning.profile_dir(0, "a-test"))
+    assert any(path == directory for path, _, _ in chowned)
+
+
+def test_the_chown_can_be_turned_off(tmp_path, monkeypatch) -> None:
+    """A single-uid host has nothing to hand over and should not try."""
+    from app.services import agent_provisioning
+
+    monkeypatch.setattr(settings, "HERMES_PROFILES_ROOT", str(tmp_path))
+    monkeypatch.setattr(settings, "HERMES_PROFILE_UID", -1)
+    called: list[object] = []
+    monkeypatch.setattr(
+        agent_provisioning.os, "chown", lambda *a: called.append(a)
+    )
+    agent_provisioning.write_profile(
+        shard_id=0,
+        profile_name="a-off",
+        agent_name="Test",
+        persona=None,
+        api_key="kb_x",
+        llm_token="agl_x",
+    )
+    assert called == []
+
+
+def test_a_refused_chown_does_not_stop_provisioning(tmp_path, monkeypatch) -> None:
+    """Creating an agent must not fail because a filesystem refuses chown."""
+    from app.services import agent_provisioning
+
+    monkeypatch.setattr(settings, "HERMES_PROFILES_ROOT", str(tmp_path))
+
+    def refuse(*_args: object) -> None:
+        raise PermissionError("nope")
+
+    monkeypatch.setattr(agent_provisioning.os, "chown", refuse)
+    directory = agent_provisioning.write_profile(
+        shard_id=0,
+        profile_name="a-refused",
+        agent_name="Test",
+        persona=None,
+        api_key="kb_x",
+        llm_token="agl_x",
+    )
+    assert (directory / "config.yaml").is_file()
