@@ -184,8 +184,11 @@ function ImportRow({ job }: { job: ImportJobPublic }) {
         </div>
       </div>
 
+      {/* w-auto because Alert is w-full, and a full-width box plus a left
+          margin is wider than its parent - 48px past the screen on a phone,
+          which is what made this page scroll sideways. */}
       {job.status === "failed" && job.error && (
-        <Alert variant="destructive" className="ml-12">
+        <Alert variant="destructive" className="ml-12 w-auto">
           <AlertCircle />
           <AlertDescription className="text-xs">{job.error}</AlertDescription>
         </Alert>

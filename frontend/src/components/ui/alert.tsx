@@ -55,7 +55,12 @@ function AlertDescription({
     <div
       data-slot="alert-description"
       className={cn(
-        "text-muted-foreground col-start-2 grid justify-items-start gap-1 text-sm [&_p]:leading-relaxed",
+        // Alerts carry text nobody chose the shape of - a URL, a JSON error
+        // body - so a single unbroken token must not be allowed to set the
+        // width. wrap-anywhere rather than break-words: only `overflow-wrap:
+        // anywhere` also shrinks the min-content width, and it is the
+        // min-content width that sizes this grid track.
+        "text-muted-foreground col-start-2 grid justify-items-start gap-1 text-sm wrap-anywhere [&_p]:leading-relaxed",
         className
       )}
       {...props}
