@@ -21,6 +21,7 @@ from app.models import (
     ChannelType,
     Message,
 )
+from app.services import agent_provisioning
 from app.services import agents as agent_service
 from app.services import channels as channel_service
 
@@ -123,8 +124,10 @@ def delete_agent(
     session: SessionDep, current_user: SessionUser, agent_id: uuid.UUID
 ) -> Message:
     agent = _own_agent(session, current_user.id, agent_id)
+    shard_id = agent.shard_id
     agent_service.delete_agent(session, agent)
     session.commit()
+    agent_provisioning.signal_revocation(shard_id)
     return Message(message="Agent deleted")
 
 
@@ -220,4 +223,8 @@ def delete_connection(
         raise HTTPException(status_code=404, detail="Connection not found")
     session.delete(connection)
     session.commit()
+    # The gateway caches who a sender is; without this the chat would keep
+    # working until the entry expired, which is precisely the window in which
+    # somebody who just disconnected expects it to have stopped.
+    agent_provisioning.signal_revocation(agent.shard_id)
     return Message(message="Channel disconnected")

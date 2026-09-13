@@ -30,7 +30,7 @@ from sqlmodel import Session, select
 
 from app.api.deps import SessionDep
 from app.core.config import settings
-from app.models import Agent, ChannelType
+from app.models import Agent, ChannelType, User
 from app.services import channels as channel_service
 
 logger = logging.getLogger(__name__)
@@ -94,8 +94,16 @@ def resolve_route(session: SessionDep, body: dict[str, Any]) -> dict[str, Any]:
             )
             if result.connection is not None:
                 connection = result.connection
+                agent = session.get(Agent, connection.agent_id)
+                owner = session.get(User, agent.user_id) if agent else None
+                greeting = _link_confirmation(agent, owner)
                 session.commit()
                 logger.info("Linked a %s identity to agent %s", platform, connection.agent_id)
+                return {
+                    "profile": agent.profile_name if agent else None,
+                    "agent_id": str(agent.id) if agent else None,
+                    "greeting": greeting,
+                }
             else:
                 session.rollback()
                 logger.info("Rejected a %s link attempt: %s", platform, result.reason)
@@ -109,6 +117,26 @@ def resolve_route(session: SessionDep, body: dict[str, Any]) -> dict[str, Any]:
 
     _touch(session, connection)
     return {"profile": agent.profile_name, "agent_id": str(agent.id)}
+
+
+def _link_confirmation(agent: Agent | None, owner: User | None) -> str:
+    """What somebody sees the moment their channel is connected.
+
+    Fixed wording rather than a generated reply: this is the one message that
+    has to be unambiguous about *which* account they just attached, and it
+    should not cost a model call or risk being paraphrased into something
+    vaguer.
+    """
+    name = (owner.full_name or "").strip() if owner else ""
+    who = f"Hi {name.split()[0]}" if name else "Hi"
+    agent_name = agent.name if agent else "your assistant"
+    email = owner.email if owner else "your account"
+    return (
+        f"{who} — you're connected to PlusGPT as {email}.\n\n"
+        f"I'm {agent_name}. I can look things up in your knowledge base, and file "
+        f"anything you send me — a PDF, a photo of a letter, or just a note to keep.\n\n"
+        f"Ask me something, or send me a document to start."
+    )
 
 
 def _touch(session: Session, connection: Any) -> None:

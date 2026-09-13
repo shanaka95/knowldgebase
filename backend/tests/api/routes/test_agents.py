@@ -1200,3 +1200,168 @@ def test_no_fallback_configured_sends_no_models_list(monkeypatch) -> None:
     monkeypatch.setattr(settings, "AGENT_LLM_FALLBACK_MODELS", "")
     agent = Agent(user_id=uuid.uuid4(), name="x", profile_name="a-x", shard_id=0)
     assert "models" not in _sanitise({"messages": []}, agent)
+
+
+# ---------------------------------------------------------------------------
+# What happens at the moment of linking, and unlinking
+# ---------------------------------------------------------------------------
+
+
+def test_linking_answers_with_a_confirmation_naming_the_account(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+    enabled_telegram,
+) -> None:
+    """The first thing a connected person sees should say what they connected.
+
+    Before this, the linking message was handed to the agent as ordinary text
+    and produced a reply puzzling over what the code meant.
+    """
+    body = _create_agent(client, normal_user_token_headers, f"Greet {uuid.uuid4().hex[:6]}")
+    code = client.post(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/link-code",
+        headers=normal_user_token_headers,
+        json={"channel_type": "telegram"},
+    ).json()["code"]
+
+    answer = client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "90001", "message_text": code},
+    ).json()
+
+    greeting = answer["greeting"]
+    assert "connected to PlusGPT" in greeting
+    assert "test@example.com" in greeting, "it must name the account that was joined"
+    assert code not in greeting, "the code is spent; echoing it helps nobody"
+
+
+def test_an_ordinary_message_gets_no_confirmation(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+    enabled_telegram,
+) -> None:
+    """Otherwise every message would be greeted as though it were the first."""
+    body = _create_agent(client, normal_user_token_headers, f"Once {uuid.uuid4().hex[:6]}")
+    code = client.post(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/link-code",
+        headers=normal_user_token_headers,
+        json={"channel_type": "telegram"},
+    ).json()["code"]
+    client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "90002", "message_text": code},
+    )
+    second = client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "90002", "message_text": "hello"},
+    ).json()
+    assert second.get("greeting") in (None, "")
+    assert second["profile"]
+
+
+def test_disconnecting_tells_the_shard_to_stop_trusting_its_cache(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+    enabled_telegram,
+) -> None:
+    """Removing the row is not enough: the gateway caches who a sender is.
+
+    Without a signal the disconnected chat keeps working until the entry
+    expires, which is the window in which somebody expects it to have stopped.
+    """
+    from app.services import agent_provisioning
+
+    body = _create_agent(client, normal_user_token_headers, f"Cut {uuid.uuid4().hex[:6]}")
+    code = client.post(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/link-code",
+        headers=normal_user_token_headers,
+        json={"channel_type": "telegram"},
+    ).json()["code"]
+    client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "90003", "message_text": code},
+    )
+
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    marker = agent_provisioning.shard_home(agent.shard_id) / "routes-revoked-at"
+    before = marker.stat().st_mtime if marker.exists() else 0.0
+
+    detail = client.get(
+        f"{settings.API_V1_STR}/agents/{body['id']}", headers=normal_user_token_headers
+    ).json()
+    client.delete(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/{detail['connections'][0]['id']}",
+        headers=normal_user_token_headers,
+    )
+
+    assert marker.exists(), "the shard was never told"
+    assert marker.stat().st_mtime >= before
+
+    # And the sender is nobody again.
+    after = client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "90003", "message_text": "still there?"},
+    ).json()
+    assert after["profile"] is None
+
+
+def test_deleting_an_agent_also_cuts_off_its_channels(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+    enabled_telegram,
+) -> None:
+    from app.services import agent_provisioning
+
+    body = _create_agent(client, normal_user_token_headers, f"Wipe {uuid.uuid4().hex[:6]}")
+    code = client.post(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/link-code",
+        headers=normal_user_token_headers,
+        json={"channel_type": "telegram"},
+    ).json()["code"]
+    client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "90004", "message_text": code},
+    )
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    shard = agent.shard_id
+
+    client.delete(
+        f"{settings.API_V1_STR}/agents/{body['id']}", headers=normal_user_token_headers
+    )
+    assert (agent_provisioning.shard_home(shard) / "routes-revoked-at").exists()
+    after = client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "90004", "message_text": "hello"},
+    ).json()
+    assert after["profile"] is None
+
+
+def test_the_agent_is_not_asked_to_run_onboarding(
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
+) -> None:
+    """No operator is in the chat to answer /sethome or a profile interview.
+
+    `off` is quoted because YAML reads a bare `off` as boolean false, and Hermes
+    checks for the string - so unquoted, the offer would stay switched on.
+    """
+    body = _create_agent(client, normal_user_token_headers, f"Quiet {uuid.uuid4().hex[:6]}")
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    from app.services import agent_provisioning
+
+    config = (
+        agent_provisioning.profile_dir(agent.shard_id, agent.profile_name)
+        / "config.yaml"
+    ).read_text()
+    assert "home_channel_prompt: false" in config
+    assert 'profile_build: "off"' in config

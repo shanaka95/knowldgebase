@@ -123,6 +123,15 @@ mcp_servers:
 skills:
   external_dirs:
     - /opt/plusgpt-skills
+
+# Nobody here can run /sethome, and cron delivery is not something a user of a
+# hosted assistant configures, so the onboarding prompts are noise on a first
+# message - which is the worst possible moment for them.
+onboarding:
+  home_channel_prompt: false
+  # Quoted: YAML reads a bare `off` as boolean false, and Hermes checks for
+  # the string, so an unquoted value would silently leave the offer switched on.
+  profile_build: "off"
 """
 
 
@@ -393,3 +402,26 @@ def pairing_status(shard_id: int) -> dict[str, object]:
     except (OSError, ValueError):
         return {"state": "unknown", "detail": "The gateway's status could not be read."}
     return data if isinstance(data, dict) else {"state": "unknown"}
+
+
+def signal_revocation(shard_id: int) -> None:
+    """Tell a shard that some access has been withdrawn.
+
+    The gateway caches route answers so it does not call us on every message,
+    which means a disconnected channel would otherwise keep working until the
+    entry expired. Touching one file per shard is enough: the gateway clears
+    the whole cache and re-asks, and the cost is a stat per message rather than
+    a list we would have to keep in sync.
+    """
+    path = shard_home(shard_id) / "routes-revoked-at"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(time.time()))
+        _own(path)
+    except OSError as exc:
+        logger.warning("Could not signal revocation to shard %s: %s", shard_id, exc)
+
+
+def signal_revocation_everywhere() -> None:
+    for shard_id in range(max(1, settings.HERMES_SHARD_COUNT)):
+        signal_revocation(shard_id)
