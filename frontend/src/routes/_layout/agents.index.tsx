@@ -5,6 +5,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import { AgentsService } from "@/client"
+import { ChannelIcon } from "@/components/Common/ChannelIcon"
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -48,7 +49,7 @@ function AgentsPage() {
     <PageContainer className="flex flex-col gap-6">
       <PageHeader
         title="Agents"
-        description="An assistant you can message from WhatsApp or Telegram. It answers from your knowledge base, and files whatever you send it."
+        description="An assistant you can message from WhatsApp or Telegram. It answers from your knowledge base, and can write pages from what you tell it."
         actions={
           <Button onClick={() => setCreating(true)} data-testid="agent-new">
             <Plus />
@@ -72,7 +73,7 @@ function AgentsPage() {
             <EmptyDescription>
               An agent is your knowledge base with a chat window in front of it.
               Create one, connect a messaging channel, and you can ask it things
-              — or send it a receipt to file — without opening PlusGPT.
+              — or dictate a note to keep — without opening PlusGPT.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -103,14 +104,30 @@ function AgentsPage() {
                         <Badge variant="secondary">{agent.status}</Badge>
                       )}
                     </div>
-                    <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MessageSquare className="size-3.5 shrink-0" />
-                      {agent.connections.length === 0
-                        ? "No channels connected"
-                        : agent.connections
+                    {agent.connections.length === 0 ? (
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MessageSquare className="size-3.5 shrink-0" />
+                        No channels connected
+                      </p>
+                    ) : (
+                      // The marks alone: at a glance the reader is looking for
+                      // which platforms, and the logos answer that faster than
+                      // the words do.
+                      <p className="mt-1.5 flex items-center gap-1.5">
+                        {agent.connections.map((c) => (
+                          <ChannelIcon
+                            key={c.id}
+                            channel={c.channel_type}
+                            className="size-4"
+                          />
+                        ))}
+                        <span className="sr-only">
+                          {agent.connections
                             .map((c) => channelLabel(c.channel_type))
                             .join(", ")}
-                    </p>
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -159,8 +176,8 @@ function CreateAgentDialog({
         <DialogHeader>
           <DialogTitle>New agent</DialogTitle>
           <DialogDescription>
-            It can read and write your knowledge base. Connect a channel next,
-            and you can talk to it from there.
+            It reads your knowledge base and can write pages from what you tell
+            it. Connect a channel next, and you can talk to it from there.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">

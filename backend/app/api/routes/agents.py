@@ -125,6 +125,20 @@ def delete_agent(
 ) -> Message:
     agent = _own_agent(session, current_user.id, agent_id)
     shard_id = agent.shard_id
+
+    # Disconnect first, so each channel is told before it stops working. The
+    # rows would go anyway - they cascade - but silently: somebody would message
+    # the bot tomorrow and get nothing back, with no idea why.
+    for connection in agent_service.connections_for(session, agent.id):
+        agent_provisioning.queue_channel_message(
+            shard_id,
+            platform=str(connection.channel_type),
+            chat_id=connection.platform_identity,
+            text=_disconnect_notice(agent, current_user),
+        )
+        session.delete(connection)
+    session.commit()
+
     agent_service.delete_agent(session, agent)
     session.commit()
     agent_provisioning.signal_revocation(shard_id)

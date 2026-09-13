@@ -5,7 +5,6 @@ import {
   Copy,
   ExternalLink,
   Loader2,
-  MessageSquare,
   Trash2,
   Unplug,
 } from "lucide-react"
@@ -13,6 +12,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { AgentsService } from "@/client"
+import { ChannelIcon } from "@/components/Common/ChannelIcon"
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
 import {
   AlertDialog,
@@ -135,7 +135,10 @@ function AgentDetailPage() {
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
+                <ChannelIcon
+                  channel={connection.channel_type}
+                  className="size-5 shrink-0"
+                />
                 <div className="min-w-0">
                   <p className="font-medium">
                     {channelLabel(connection.channel_type)}
@@ -209,7 +212,7 @@ function ConnectRow({
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-3">
         <div className="flex items-center gap-3">
-          <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
+          <ChannelIcon channel={channelType} className="size-5 shrink-0" />
           <p className="font-medium">{channelLabel(channelType)}</p>
         </div>
         <Button

@@ -44,6 +44,18 @@ MCP_SERVER_NAME = "plusgpt"
 # deliberately absent: see the module docstring.
 AGENT_TOOLSETS = [MCP_SERVER_NAME, "skills", "todo", "vision"]
 
+# The file-ingestion tools, and only those. A channel agent can still write a
+# page from what somebody types or pastes - that is often the quickest way to
+# capture something - but it cannot take a document in. Uploading is the web
+# app's job, where the file is in front of the person sending it.
+#
+# These are excluded at the MCP layer rather than left to the agent's
+# judgement: a prompt asking for a file to be uploaded then finds no tool.
+WITHHELD_MCP_TOOLS = [
+    "upload_document",
+    "retry_import",
+]
+
 # Hermes reads per-platform toolsets from `platform_toolsets`, and silently
 # ignores any key it does not know - so a plausible-looking `enabled_toolsets`
 # leaves the platform default in force, which for every messaging platform
@@ -122,7 +134,10 @@ model:
   default: {_yaml_quote(model)}
   api_key: '${{PLUSGPT_LLM_TOKEN}}'
 
-# The knowledge base, reached as this user and only this user.
+# The knowledge base, reached as this user and only this user, and read-only.
+# A channel agent answers questions; it does not write. Excluding the writing
+# tools here rather than trusting the agent not to call them means a prompt
+# that asks for a page to be created finds no tool to create one.
 mcp_servers:
   plusgpt:
     url: {_yaml_quote(mcp_url)}
@@ -130,11 +145,20 @@ mcp_servers:
       Authorization: 'Bearer ${{PLUSGPT_API_KEY}}'
     timeout: 120
     connect_timeout: 30
+    tools:
+      exclude: [{", ".join(WITHHELD_MCP_TOOLS)}]
 
 # No shell, no filesystem, no browser: an injected prompt has nothing to drive.
 # `{MCP_SERVER_NAME}` is the knowledge base itself - omitting it would leave the
 # agent with nothing to look anything up in.
 {_toolset_block()}
+
+# Attachments are refused before a turn starts. A channel agent reads the
+# knowledge base and nothing else, so a file sent here has nowhere to go; saying
+# so immediately beats a model discovering mid-turn that it has no way to file
+# it, which is what the person actually experienced.
+gateway:
+  refuse_attachments: true
 
 skills:
   external_dirs:
@@ -156,15 +180,12 @@ display:
   tool_progress: "off"
   interim_assistant_messages: false
 
-# An attachment arrives as a path in the media cache, and the knowledge base
-# takes bytes. Reading the one to send the other needs the `file` toolset, which
-# this agent deliberately lacks. This plugin does that single step, for files in
-# the cache only, and is what stops the agent retyping a document by hand.
+# No plugins. `plusgpt-files` still ships in the image and could be enabled
+# here, but filing from a chat is switched off: attachments are refused at the
+# gateway before a turn starts, so a tool for uploading them would have nothing
+# to act on.
 plugins:
-  enabled: [plusgpt-files]
-  entries:
-    plusgpt-files:
-      mcp_allowlist: [{MCP_SERVER_NAME}]
+  enabled: []
 
 agent:
   disabled_toolsets: [{", ".join(DENIED_TOOLSETS)}]
@@ -198,9 +219,15 @@ file anything worth keeping.
 You are talking to one person, in a chat window. Keep replies short enough to
 read on a phone. Lead with the answer; add detail only if it was asked for.
 
-When they send you a document or a photograph, pass the file to the knowledge
-base rather than transcribing it yourself, and say where you filed it. When
-they ask for a document back, fetch the original and send it.
+You can write pages from what they tell you. If they dictate a note, paste some
+text, or ask you to keep something, make a page for it and say where you put it.
+
+You cannot take files. If someone sends a document or a photograph, say plainly
+that files are added in PlusGPT on the web, and offer the alternative: if they
+paste the text, you will make a page from it now. Do not offer to transcribe an
+attachment yourself, and do not promise to file it later.
+
+When they ask for a document itself, fetch the original and send it.
 
 If the knowledge base has nothing on a topic, say so plainly rather than
 filling the gap from memory. Being wrong about someone's own paperwork is worse

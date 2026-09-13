@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { CheckCircle2, CircleDashed, MessageSquare } from "lucide-react"
+import { CheckCircle2, CircleDashed } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
 import { AdminChannelsService, type ChannelConfigPublic } from "@/client"
+import { ChannelIcon } from "@/components/Common/ChannelIcon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -100,7 +101,7 @@ function ChannelCard({ channel }: { channel: ChannelConfigPublic }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="size-4" />
+              <ChannelIcon channel={channel.channel_type} className="size-5" />
               {channelLabel(channel.channel_type)}
               {channel.configured ? (
                 <Badge variant="secondary" className="gap-1">

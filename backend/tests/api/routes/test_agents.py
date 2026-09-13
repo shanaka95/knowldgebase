@@ -1431,26 +1431,69 @@ def test_the_agent_profile_hides_tool_chatter(
     assert "interim_assistant_messages: false" in config
 
 
-def test_the_agent_can_file_an_attachment_it_cannot_read(
+def test_a_channel_agent_can_write_pages_but_not_take_files(
     client: TestClient, normal_user_token_headers: dict[str, str], db: Session
 ) -> None:
-    """It has no filesystem tools, so the plugin is the only way a PDF gets in.
+    """Pasted text becomes a page; a file does not.
 
-    Without it the agent asks the person to "re-upload" a file it is already
-    holding a path to, which is what happened before this existed.
+    Withheld at the MCP layer rather than left to the agent's judgement: a
+    prompt asking for a file to be uploaded then finds no tool to upload it.
     """
-    body = _create_agent(client, normal_user_token_headers, f"Files {uuid.uuid4().hex[:6]}")
-    agent = db.get(Agent, uuid.UUID(body["id"]))
     from app.services import agent_provisioning
 
+    body = _create_agent(client, normal_user_token_headers, f"RO {uuid.uuid4().hex[:6]}")
+    agent = db.get(Agent, uuid.UUID(body["id"]))
     config = (
         agent_provisioning.profile_dir(agent.shard_id, agent.profile_name)
         / "config.yaml"
     ).read_text()
-    assert "plusgpt-files" in config
-    # The plugin reaches the knowledge base through the same MCP server the
-    # agent uses, and only that one: MCP access is default-deny per plugin.
-    assert f"mcp_allowlist: [{agent_provisioning.MCP_SERVER_NAME}]" in config
+
+    line = next(l for l in config.splitlines() if "exclude:" in l)
+    excluded = {t.strip() for t in line.split("[", 1)[1].rstrip("]").split(",")}
+    assert excluded == {"upload_document", "retry_import"}, (
+        "file ingestion only; a chat is the wrong place to hand over a document"
+    )
+
+    # Writing a page from dictated or pasted text is often the quickest way to
+    # capture something, so it stays.
+    assert "create_page" not in excluded
+    assert "update_page" not in excluded
+    # And reading is untouched - that is the point of the agent.
+    assert "ask_knowledge_base" not in excluded
+    assert "get_page_file" not in excluded, "it can still hand back a document"
+
+
+def test_attachments_are_refused_at_the_gateway(
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
+) -> None:
+    """Before a turn starts, not after a model discovers it has no tool."""
+    from app.services import agent_provisioning
+
+    body = _create_agent(client, normal_user_token_headers, f"NoFile {uuid.uuid4().hex[:6]}")
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    config = (
+        agent_provisioning.profile_dir(agent.shard_id, agent.profile_name)
+        / "config.yaml"
+    ).read_text()
+    assert "refuse_attachments: true" in config
+    assert "enabled: []" in config, "the filing plugin is not switched on"
+
+
+def test_the_persona_does_not_promise_filing(
+    client: TestClient, normal_user_token_headers: dict[str, str], db: Session
+) -> None:
+    """An agent that offers to file things it cannot file wastes somebody's time."""
+    from app.services import agent_provisioning
+
+    body = _create_agent(client, normal_user_token_headers, f"Says {uuid.uuid4().hex[:6]}")
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    soul = (
+        agent_provisioning.profile_dir(agent.shard_id, agent.profile_name) / "SOUL.md"
+    ).read_text()
+    assert "cannot take files" in soul
+    assert "PlusGPT on the web" in soul
+    assert "paste the text" in soul, "the message must offer what it can do"
+
 
 
 def test_code_execution_is_denied_as_well_as_ungranted(
@@ -1476,3 +1519,57 @@ def test_code_execution_is_denied_as_well_as_ungranted(
     # Every toolset that carries execute_code, a shell, or the filesystem.
     assert {"code_execution", "coding", "terminal", "file"} <= denied
     assert "computer_use" in denied
+
+
+def test_deleting_an_agent_disconnects_its_channels_first(
+    client: TestClient,
+    normal_user_token_headers: dict[str, str],
+    db: Session,
+    enabled_telegram,
+) -> None:
+    """Each channel is told before it stops working.
+
+    The connection rows cascade away with the agent regardless, but silently:
+    somebody would message the bot tomorrow and get nothing back, with no idea
+    why. Deleting without disconnecting is the common case, not the rare one.
+    """
+    from app.services import agent_provisioning
+
+    body = _create_agent(client, normal_user_token_headers, f"Full {uuid.uuid4().hex[:6]}")
+    code = client.post(
+        f"{settings.API_V1_STR}/agents/{body['id']}/channels/link-code",
+        headers=normal_user_token_headers,
+        json={"channel_type": "telegram"},
+    ).json()["code"]
+    client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "96001", "message_text": code},
+    )
+    agent = db.get(Agent, uuid.UUID(body["id"]))
+    shard = agent.shard_id
+
+    assert (
+        client.delete(
+            f"{settings.API_V1_STR}/agents/{body['id']}",
+            headers=normal_user_token_headers,
+        ).status_code
+        == 200
+    )
+
+    outbox = agent_provisioning.shard_home(shard) / "outbox"
+    queued = [json.loads(p.read_text()) for p in outbox.glob("*.json")]
+    mine = [m for m in queued if m["chat_id"] == "96001"]
+    assert mine, "the channel was never told the agent was going"
+    assert "no longer connected" in mine[0]["text"]
+
+    # And it really is gone, not merely quiet. expire_all because the route ran
+    # on its own session; this one still holds the object it loaded earlier.
+    db.expire_all()
+    assert db.get(Agent, uuid.UUID(body["id"])) is None
+    after = client.post(
+        f"{settings.API_V1_STR}/agent-control/route",
+        headers=_shard_headers(),
+        json={"platform": "telegram", "chat_id": "96001", "message_text": "hello"},
+    ).json()
+    assert after["profile"] is None
