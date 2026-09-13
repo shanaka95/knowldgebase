@@ -1715,3 +1715,21 @@ class AvailableChannel(SQLModel):
 
 class AvailableChannelsPublic(SQLModel):
     data: list[AvailableChannel]
+
+
+class WhatsAppPairingPublic(SQLModel):
+    """How pairing the local WhatsApp bridge is going.
+
+    ``state`` is whatever the shard last reported: ``idle`` before anything has
+    been asked of it, ``starting`` while the bridge boots, ``qr`` when there is
+    a code to scan, ``connected`` once a phone has scanned it, ``paired`` when a
+    session already exists, ``unavailable`` when the gateway is not running, and
+    ``error`` with a reason.
+    """
+
+    state: str
+    detail: str | None = None
+    account: str | None = None
+    # The QR rendered server-side, so the dashboard needs no encoder of its own.
+    qr_svg: str | None = None
+    updated_at: float | None = None

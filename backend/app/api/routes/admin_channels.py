@@ -19,6 +19,7 @@ from app.models import (
     ChannelConfigUpdate,
     ChannelType,
     Message,
+    WhatsAppPairingPublic,
     WhatsAppTransport,
 )
 from app.services import channels as channel_service
@@ -140,3 +141,94 @@ def clear_channel(session: SessionDep, channel_type: ChannelType) -> Message:
     session.commit()
     channel_service.apply_to_shards(session)
     return Message(message="Channel credentials cleared")
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp bridge pairing
+#
+# The bridge signs in like WhatsApp Web: it shows a QR code and somebody scans
+# it with a phone. That is why this exists at all - there is no token an
+# administrator could paste in instead.
+# ---------------------------------------------------------------------------
+
+
+def _pairing_shard() -> int:
+    """Which shard holds the WhatsApp session.
+
+    One WhatsApp account means one bridge, and the bridge belongs to the shard
+    that owns the adapter - shard 0, the same one every platform's shared bot
+    runs on.
+    """
+    return 0
+
+
+@router.get("/whatsapp/pairing", response_model=WhatsAppPairingPublic)
+def read_pairing(session: SessionDep) -> Any:
+    """How the current pairing attempt is going.
+
+    The QR comes back as an SVG rather than the raw string the bridge emits, so
+    the dashboard can show it without shipping a QR encoder of its own.
+    """
+    from app.services import agent_provisioning
+
+    status = agent_provisioning.pairing_status(_pairing_shard())
+    qr = str(status.get("qr") or "")
+    return WhatsAppPairingPublic(
+        state=str(status.get("state") or "unknown"),
+        detail=str(status.get("detail") or "") or None,
+        account=str(status.get("account") or "") or None,
+        qr_svg=_qr_svg(qr) if qr else None,
+        updated_at=status.get("updated_at"),
+    )
+
+
+@router.post("/whatsapp/pairing", response_model=WhatsAppPairingPublic)
+def start_pairing(session: SessionDep) -> Any:
+    """Ask the shard to show a QR code."""
+    from app.services import agent_provisioning
+
+    config = session.exec(
+        select(ChannelConfig).where(ChannelConfig.channel_type == ChannelType.whatsapp)
+    ).first()
+    if config is None or config.transport != WhatsAppTransport.bridge:
+        raise HTTPException(
+            status_code=400,
+            detail="Pairing applies to the local bridge. The Cloud API uses tokens instead.",
+        )
+    try:
+        agent_provisioning.request_pairing(_pairing_shard())
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="The gateway's storage is not reachable, so pairing cannot start.",
+        ) from exc
+    return read_pairing(session)
+
+
+@router.delete("/whatsapp/pairing")
+def stop_pairing(session: SessionDep, forget: bool = False) -> Message:
+    """Cancel the attempt, or sign the account out entirely.
+
+    ``forget`` deletes the session, which is the only way to sign out: the
+    bridge has no logout that survives a restart.
+    """
+    from app.services import agent_provisioning
+
+    if forget:
+        agent_provisioning.request_pairing(_pairing_shard(), action="unpair")
+        return Message(message="Signing out of WhatsApp")
+    agent_provisioning.cancel_pairing(_pairing_shard())
+    return Message(message="Pairing cancelled")
+
+
+def _qr_svg(payload: str) -> str:
+    """Render the bridge's QR string as an inline SVG."""
+    import io
+
+    import qrcode
+    import qrcode.image.svg
+
+    image = qrcode.make(payload, image_factory=qrcode.image.svg.SvgPathImage, border=2)
+    buffer = io.BytesIO()
+    image.save(buffer)
+    return buffer.getvalue().decode()

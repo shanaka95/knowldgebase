@@ -25,6 +25,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { adminChannelsQuery, agentKeys, channelLabel } from "@/queries/agents"
+import { WhatsAppPairing } from "./WhatsAppPairing"
 
 /** What each credential field is, in the words an admin would look for. */
 const FIELD_LABELS: Record<string, string> = {
@@ -164,6 +165,8 @@ function ChannelCard({ channel }: { channel: ChannelConfigPublic }) {
             </p>
           </div>
         )}
+
+        {isWhatsApp && transport === "bridge" && <WhatsAppPairing />}
 
         <div className="flex flex-col gap-2">
           <Label htmlFor={`handle-${channel.channel_type}`}>

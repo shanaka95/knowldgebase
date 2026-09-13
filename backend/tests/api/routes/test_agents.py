@@ -6,6 +6,7 @@ same bot, so identity has to be proved, and a failure to prove it has to end in
 silence rather than in somebody else's agent.
 """
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -907,3 +908,181 @@ def test_a_refused_chown_does_not_stop_provisioning(tmp_path, monkeypatch) -> No
         llm_token="agl_x",
     )
     assert (directory / "config.yaml").is_file()
+
+
+# ---------------------------------------------------------------------------
+# Pairing the WhatsApp bridge
+#
+# The bridge signs in like WhatsApp Web - a QR code, scanned with a phone - so
+# unlike every other channel there is no credential an administrator can paste
+# in. The dashboard has to be able to show that code, including when the
+# gateway is refusing to start for want of the very pairing being attempted.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def whatsapp_bridge(client: TestClient, superuser_token_headers, db: Session):
+    client.patch(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp",
+        headers=superuser_token_headers,
+        json={"transport": "bridge"},
+    )
+    yield
+    config = db.exec(
+        select(ChannelConfig).where(ChannelConfig.channel_type == ChannelType.whatsapp)
+    ).first()
+    if config is not None:
+        db.delete(config)
+        db.commit()
+
+
+def test_starting_pairing_asks_the_shard_for_a_code(
+    client: TestClient, superuser_token_headers, whatsapp_bridge, tmp_path
+) -> None:
+    from app.services import agent_provisioning
+
+    response = client.post(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 200, response.text
+    request = agent_provisioning.pairing_dir(0) / "request.json"
+    assert request.is_file()
+    assert json.loads(request.read_text())["action"] == "pair"
+
+
+def test_the_qr_comes_back_as_an_image_the_dashboard_can_show(
+    client: TestClient, superuser_token_headers, whatsapp_bridge
+) -> None:
+    """The bridge emits an opaque string; a person needs something scannable."""
+    from app.services import agent_provisioning
+
+    directory = agent_provisioning.pairing_dir(0)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "status.json").write_text(
+        json.dumps({"state": "qr", "qr": "2@abcdef/ghijkl+mnop==", "updated_at": 1.0})
+    )
+
+    body = client.get(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing",
+        headers=superuser_token_headers,
+    ).json()
+    assert body["state"] == "qr"
+    svg = body["qr_svg"] or ""
+    assert "<svg" in svg and "</svg>" in svg
+    # Actual geometry, not an empty canvas: a blank SVG would render as a
+    # white square and look like a QR code that simply would not scan.
+    assert svg.count("<path") >= 1
+    assert len(svg) > 500
+    # The payload is encoded into the paths, so the literal string is absent.
+    assert "2@abcdef" not in svg
+
+
+def test_a_stopped_gateway_says_so_rather_than_spinning(
+    client: TestClient, superuser_token_headers, whatsapp_bridge
+) -> None:
+    """A missing status file is a real answer, not a reason to keep waiting."""
+    from app.services import agent_provisioning
+
+    status = agent_provisioning.pairing_dir(0) / "status.json"
+    if status.exists():
+        status.unlink()
+    body = client.get(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing",
+        headers=superuser_token_headers,
+    ).json()
+    assert body["state"] == "unavailable"
+    assert "gateway" in (body["detail"] or "").lower()
+
+
+def test_pairing_is_refused_for_the_cloud_api(
+    client: TestClient, superuser_token_headers, db: Session
+) -> None:
+    """There is nothing to scan: the Cloud API authenticates with tokens."""
+    client.patch(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp",
+        headers=superuser_token_headers,
+        json={"transport": "cloud_api"},
+    )
+    response = client.post(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing",
+        headers=superuser_token_headers,
+    )
+    assert response.status_code == 400
+    assert "Cloud API" in response.json()["detail"]
+
+
+def test_cancelling_withdraws_the_request(
+    client: TestClient, superuser_token_headers, whatsapp_bridge
+) -> None:
+    from app.services import agent_provisioning
+
+    client.post(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing",
+        headers=superuser_token_headers,
+    )
+    assert (agent_provisioning.pairing_dir(0) / "request.json").is_file()
+
+    client.delete(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing",
+        headers=superuser_token_headers,
+    )
+    assert not (agent_provisioning.pairing_dir(0) / "request.json").exists()
+
+
+def test_signing_out_asks_the_shard_to_forget_the_account(
+    client: TestClient, superuser_token_headers, whatsapp_bridge
+) -> None:
+    """Deleting the session is the only logout the bridge has."""
+    from app.services import agent_provisioning
+
+    client.delete(
+        f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing?forget=true",
+        headers=superuser_token_headers,
+    )
+    request = agent_provisioning.pairing_dir(0) / "request.json"
+    assert json.loads(request.read_text())["action"] == "unpair"
+
+
+def test_pairing_is_admin_only(
+    client: TestClient, normal_user_token_headers: dict[str, str]
+) -> None:
+    assert (
+        client.get(
+            f"{settings.API_V1_STR}/admin/channels/whatsapp/pairing",
+            headers=normal_user_token_headers,
+        ).status_code
+        == 403
+    )
+
+
+def test_the_whatsapp_bridge_mode_is_one_the_bridge_understands(
+    db: Session, monkeypatch
+) -> None:
+    """The bridge does not validate this, it just goes quiet.
+
+    An unrecognised mode falls through every branch in bridge.js that handles an
+    inbound message, so messages are dropped without a log line anywhere - which
+    is exactly how this was found, by a person messaging a bot that never replied.
+    """
+    monkeypatch.setattr(
+        settings, "CHANNEL_SECRET_KEY", "hn3mS8p0kq1lZ2xY4vB6wC8dE0fG2hJ4kL6mN8pQ0rM="
+    )
+    config = ChannelConfig(
+        channel_type=ChannelType.whatsapp,
+        enabled=True,
+        transport=WhatsAppTransport.bridge,
+    )
+    db.add(config)
+    db.commit()
+    try:
+        _, secrets = channel_service.gateway_plan(db)
+        assert secrets["WHATSAPP_MODE"] in channel_service.WHATSAPP_BRIDGE_MODES
+        # A shared number fronting many people is a bot, not self-chat: in
+        # self-chat only the owner's messages to themself are processed.
+        assert secrets["WHATSAPP_MODE"] == "bot"
+        # And everyone must be able to reach it; the control plane is the gate.
+        assert secrets["WHATSAPP_DM_POLICY"] == "open"
+    finally:
+        db.delete(config)
+        db.commit()

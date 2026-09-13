@@ -2641,6 +2641,40 @@ export type ValidationError = {
 };
 
 /**
+ * WhatsAppPairingPublic
+ *
+ * How pairing the local WhatsApp bridge is going.
+ *
+ * ``state`` is whatever the shard last reported: ``idle`` before anything has
+ * been asked of it, ``starting`` while the bridge boots, ``qr`` when there is
+ * a code to scan, ``connected`` once a phone has scanned it, ``paired`` when a
+ * session already exists, ``unavailable`` when the gateway is not running, and
+ * ``error`` with a reason.
+ */
+export type WhatsAppPairingPublic = {
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Account
+     */
+    account?: string | null;
+    /**
+     * Qr Svg
+     */
+    qr_svg?: string | null;
+    /**
+     * Updated At
+     */
+    updated_at?: number | null;
+};
+
+/**
  * WhatsAppTransport
  *
  * Which WhatsApp backend the deployment talks to.
@@ -5350,6 +5384,68 @@ export type adminChannelsUpdateChannelResponses = {
 };
 
 export type adminChannelsUpdateChannelResponse = adminChannelsUpdateChannelResponses[keyof adminChannelsUpdateChannelResponses];
+
+export type adminChannelsStopPairingData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Forget
+         */
+        forget?: boolean;
+    };
+    url: '/api/v1/admin/channels/whatsapp/pairing';
+};
+
+export type adminChannelsStopPairingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminChannelsStopPairingError = adminChannelsStopPairingErrors[keyof adminChannelsStopPairingErrors];
+
+export type adminChannelsStopPairingResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type adminChannelsStopPairingResponse = adminChannelsStopPairingResponses[keyof adminChannelsStopPairingResponses];
+
+export type adminChannelsReadPairingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/channels/whatsapp/pairing';
+};
+
+export type adminChannelsReadPairingResponses = {
+    /**
+     * Successful Response
+     */
+    200: WhatsAppPairingPublic;
+};
+
+export type adminChannelsReadPairingResponse = adminChannelsReadPairingResponses[keyof adminChannelsReadPairingResponses];
+
+export type adminChannelsStartPairingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/channels/whatsapp/pairing';
+};
+
+export type adminChannelsStartPairingResponses = {
+    /**
+     * Successful Response
+     */
+    200: WhatsAppPairingPublic;
+};
+
+export type adminChannelsStartPairingResponse = adminChannelsStartPairingResponses[keyof adminChannelsStartPairingResponses];
 
 export type agentControlResolveRouteData = {
     /**

@@ -44,6 +44,11 @@ _CODE_GROUPS = 2
 _CODE_GROUP_LEN = 4
 CODE_PREFIX = "LINK-"
 
+# The only two the bridge understands (scripts/whatsapp-bridge/bridge.js).
+WHATSAPP_BRIDGE_MODES = ("bot", "self-chat")
+# One account fronting many people is a bot, not somebody talking to themself.
+WHATSAPP_BRIDGE_MODE = "bot"
+
 
 @dataclass(frozen=True)
 class ChannelSpec:
@@ -370,8 +375,13 @@ def gateway_plan(session: Session) -> tuple[dict[str, dict[str, object]], dict[s
                 secrets["WHATSAPP_CLOUD_VERIFY_TOKEN"] = creds.get("verify_token", "")
             else:
                 # The bridge logs in by QR at runtime, so there is nothing to
-                # inject here beyond telling it to serve everyone.
-                secrets["WHATSAPP_MODE"] = "contacts"
+                # inject here beyond telling it who to listen to.
+                #
+                # "bot" and "self-chat" are the only modes the bridge knows, and
+                # it does not validate: an unrecognised value falls through every
+                # message-handling branch and drops inbound messages in silence.
+                # A shared account serving many people is "bot".
+                secrets["WHATSAPP_MODE"] = WHATSAPP_BRIDGE_MODE
 
     return platforms, {k: v for k, v in secrets.items() if v}
 

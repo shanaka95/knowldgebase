@@ -21,10 +21,12 @@ Three properties of the layout are load-bearing for isolation:
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 import shutil
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -308,3 +310,56 @@ def write_gateway(
     _atomic_write(home / "config.yaml", render_gateway_config(channels))
     _atomic_write(home / ".env", render_gateway_env(secrets), mode=0o600)
     return home
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp pairing
+#
+# The local bridge signs in the way WhatsApp Web does: it shows a QR code and
+# somebody scans it. That has to happen on the shard, where the bridge and its
+# session directory live, so the backend asks for it through the volume the two
+# already share and reads the answer back the same way. No new port, nothing
+# else to authenticate.
+# ---------------------------------------------------------------------------
+
+
+def pairing_dir(shard_id: int) -> Path:
+    return shard_home(shard_id) / "pairing"
+
+
+def request_pairing(shard_id: int, *, action: str = "pair") -> None:
+    """Ask the shard to start pairing, or to forget the paired account."""
+    directory = pairing_dir(shard_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    _own(directory)
+    _atomic_write(
+        directory / "request.json",
+        json.dumps({"action": action, "requested_at": time.time()}),
+    )
+
+
+def cancel_pairing(shard_id: int) -> None:
+    """Withdraw the request. The shard notices and stops the bridge."""
+    try:
+        (pairing_dir(shard_id) / "request.json").unlink()
+    except OSError:
+        pass
+
+
+def pairing_status(shard_id: int) -> dict[str, object]:
+    """What the shard last reported.
+
+    A missing file means the shard has not started, which is a real answer: the
+    administrator needs to know that rather than watch a spinner.
+    """
+    path = pairing_dir(shard_id) / "status.json"
+    try:
+        data = json.loads(path.read_text())
+    except FileNotFoundError:
+        return {
+            "state": "unavailable",
+            "detail": "The gateway has not started yet, so pairing cannot begin.",
+        }
+    except (OSError, ValueError):
+        return {"state": "unknown", "detail": "The gateway's status could not be read."}
+    return data if isinstance(data, dict) else {"state": "unknown"}
