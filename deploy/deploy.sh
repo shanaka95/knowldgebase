@@ -83,6 +83,17 @@ done
 [[ ${#SERVICES[@]} -eq 0 ]] && { echo "nothing selected"; exit 1; }
 
 # --- pull and recreate ------------------------------------------------------
+# --- host-side state the images do not carry -------------------------------
+# The agents' skill is a read-only bind mount, not baked into the gateway
+# image, so pushing a new image leaves it exactly as it was. That drifted
+# once already: the ask tool started returning documents while the mounted
+# skill still told every agent to expect a written answer.
+if printf '%s\n' "${SERVICES[@]}" | grep -qx hermes-gw-0; then
+  say "syncing the agent skill"
+  ssh "$HOST" "mkdir -p $REMOTE_DIR/hermes-skills"
+  scp -qr hermes-skills/. "$HOST:$REMOTE_DIR/hermes-skills/"
+fi
+
 say "deploying: ${SERVICES[*]}"
 # --force-recreate because an unchanged tag leaves the old container running,
 # and --pull always because a moved :latest is otherwise invisible to compose.
