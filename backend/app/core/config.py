@@ -252,6 +252,26 @@ class Settings(BaseSettings):
     ASK_MAX_TOKENS: int = 900
     ASK_TEMPERATURE: float = 0.2
 
+    # --- Ask conversations ---------------------------------------------------
+    # How many earlier question/answer pairs travel with a follow-up. Three
+    # covers the way people actually follow up ("and the second one?", "why?")
+    # while keeping the prompt short: the excerpts of earlier turns are never
+    # resent, so history costs a few hundred tokens, not a few thousand.
+    ASK_HISTORY_TURNS: int = 3
+    # Earlier answers are carried as a gist, not in full. The model needs to
+    # know what it said, not to re-read it; the sources are re-retrieved anyway.
+    ASK_HISTORY_ANSWER_CHARS: int = 700
+    ASK_HISTORY_QUESTION_CHARS: int = 500
+    # A follow-up shorter than this is assumed to lean on the question before
+    # it, and the previous question joins the *retrieval* query so that "and in
+    # euros?" still finds the invoice. Generation is unaffected: it gets the
+    # real history either way. This replaces the usual condense-with-an-LLM
+    # step, which would add a whole round trip to every follow-up.
+    ASK_FOLLOWUP_CHARS: int = 80
+    # Stored citations keep a preview instead of the whole page.
+    ASK_STORED_CITATION_CHARS: int = 600
+    ASK_MAX_CONVERSATIONS_PER_USER: int = 500
+
     # --- Reranking -----------------------------------------------------------
     # Fusion decides which pages are worth looking at; a cross-encoder decides
     # which of those actually answer the question. It reads the query and each

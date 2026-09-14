@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import uuid
 
+from app.core.config import settings
 from app.services.answering import (
     NO_CONTEXT_ANSWER,
     Passage,
+    Turn,
     build_context,
     build_messages,
     cited_indexes,
+    conversation_title,
     render_prompt,
+    retrieval_query,
+    trim_history,
 )
 
 
@@ -96,10 +101,97 @@ def test_prompt_labels_each_excerpt_with_its_number_and_origin() -> None:
 def test_messages_carry_the_rules_and_the_question() -> None:
     context = build_context([_passage("some content")])
     messages = build_messages("  Why is the sky blue?  ", context)
-    assert messages[0]["role"] == "system"
+    assert [m["role"] for m in messages] == ["system", "user"]
     assert "only the knowledge-base excerpts" in messages[0]["content"]
-    assert messages[1]["content"].startswith("Question: Why is the sky blue?")
-    assert "some content" in messages[1]["content"]
+    assert "some content" in messages[0]["content"]
+    assert messages[-1]["content"] == "Question: Why is the sky blue?"
+
+
+def test_the_excerpts_lead_so_a_pinned_page_is_a_stable_prefix() -> None:
+    """Two turns on the same page must share everything before the history.
+
+    That shared opening is what a serving stack's prefix cache keys on, and it
+    is the difference between re-reading a whole page and not.
+    """
+    context = build_context([_passage("the page, unchanged between turns")])
+    first = build_messages("What is this?", context)
+    second = build_messages(
+        "And the second part?", context, [Turn("What is this?", "An answer.")]
+    )
+    assert first[0] == second[0], "the system message must not move between turns"
+    assert second[0]["content"].index("Excerpts:") < len(second[0]["content"])
+
+
+def test_history_becomes_alternating_turns_before_the_question() -> None:
+    context = build_context([_passage("content")])
+    messages = build_messages(
+        "And in euros?",
+        context,
+        [Turn("What did March cost?", "It cost $100. [1]")],
+    )
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    assert messages[1]["content"] == "What did March cost?"
+    assert messages[2]["content"] == "It cost $100. [1]"
+    assert messages[3]["content"] == "Question: And in euros?"
+
+
+# -------------------------------------------------------------------- history
+
+
+def test_only_the_last_few_turns_travel() -> None:
+    history = [Turn(f"q{i}", f"a{i}") for i in range(10)]
+    kept = trim_history(history)
+    assert len(kept) == settings.ASK_HISTORY_TURNS
+    assert kept[-1].question == "q9", "the most recent turn must survive"
+
+
+def test_an_earlier_answer_is_carried_as_a_gist() -> None:
+    kept = trim_history([Turn("q", "word " * 5000)])
+    assert len(kept[0].answer) <= settings.ASK_HISTORY_ANSWER_CHARS + 2
+    assert kept[0].answer.endswith("…")
+
+
+def test_empty_turns_are_dropped() -> None:
+    assert trim_history([Turn("  ", "  ")]) == []
+
+
+# ------------------------------------------------------------ retrieval query
+
+
+def test_a_first_question_is_searched_for_as_asked() -> None:
+    assert retrieval_query("What did March cost?", []) == "What did March cost?"
+
+
+def test_a_follow_up_borrows_the_question_before_it() -> None:
+    """ "And in euros?" finds nothing alone; with its predecessor it finds the page."""
+    query = retrieval_query("And in euros?", [Turn("What did March cost?", "$100")])
+    assert "What did March cost?" in query
+    assert "And in euros?" in query
+
+
+def test_a_self_contained_follow_up_is_searched_for_on_its_own() -> None:
+    question = (
+        "Which supplier issued the credit note that the finance team disputed "
+        "in the second quarter, and what was the stated reason for it?"
+    )
+    assert retrieval_query(question, [Turn("earlier", "answer")]) == question
+
+
+# ---------------------------------------------------------------------- title
+
+
+def test_a_thread_is_named_after_its_first_question() -> None:
+    assert conversation_title("  How do I   get set up? ") == "How do I get set up?"
+
+
+def test_a_long_first_question_is_cut_at_a_word() -> None:
+    title = conversation_title("word " * 40)
+    assert len(title) <= 61
+    assert title.endswith("…")
+
+
+def test_an_empty_question_still_names_the_thread() -> None:
+    assert conversation_title("   ") == "New thread"
 
 
 # ------------------------------------------------------------------ citations

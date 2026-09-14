@@ -23,6 +23,7 @@ Rules:
 - Use only the excerpts. Never add facts, numbers, names or dates from your own knowledge.
 - If the excerpts do not answer the question, say so plainly and name what is missing. Do not guess.
 - Cite the excerpt each claim comes from with a bracketed number at the end of the sentence, like [2]. Use [1][3] when several support it.
+- The excerpts are renumbered every turn. Cite the numbers below, never one from an earlier answer.
 - If excerpts disagree, say so and cite both.
 - Lead with the answer, then the supporting detail. No preamble, no "based on the excerpts".
 - Do not describe your sources in prose ("this comes from excerpt 2"). The bracketed number is the citation; nothing else is needed.
@@ -123,14 +124,136 @@ def render_prompt(passages: Sequence[Passage]) -> str:
     return "\n\n".join(blocks)
 
 
-def build_messages(question: str, context: AnswerContext) -> list[dict[str, str]]:
+@dataclass(slots=True)
+class Turn:
+    """One earlier exchange, carried into a follow-up."""
+
+    question: str
+    answer: str
+
+
+def trim_history(history: Sequence[Turn]) -> list[Turn]:
+    """Keep the last few turns, each shortened to its gist.
+
+    The excerpts of earlier turns are deliberately not carried: they were
+    retrieved for a different question, they would double the prompt, and the
+    current turn re-retrieves whatever is actually needed. What the model needs
+    from its own past is the thread of the conversation, which survives the
+    truncation.
+    """
+    kept = list(history)[-settings.ASK_HISTORY_TURNS :]
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": f"Question: {question.strip()}\n\nExcerpts:\n{context.prompt}",
-        },
+        Turn(
+            question=_clip(t.question, settings.ASK_HISTORY_QUESTION_CHARS),
+            answer=_clip(t.answer, settings.ASK_HISTORY_ANSWER_CHARS),
+        )
+        for t in kept
+        if t.question.strip() or t.answer.strip()
     ]
+
+
+def _clip(text: str, limit: int) -> str:
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0] + " …"
+
+
+# Openers that only mean something next to the question before them. Bare
+# question words are deliberately absent: "Which supplier issued the credit
+# note?" stands on its own, and only its *short* forms ("Which one?") need the
+# previous question - which the length test below already catches.
+_FOLLOWUP_OPENERS = (
+    "and ",
+    "but ",
+    "what about",
+    "how about",
+    "it ",
+    "its ",
+    "that ",
+    "this ",
+    "they ",
+    "them ",
+    "those ",
+    "these ",
+    "the second",
+    "the first",
+    "the last",
+    "same ",
+    "also",
+    "instead",
+    "again",
+)
+
+
+def is_followup(question: str) -> bool:
+    q = (question or "").strip().lower()
+    if not q:
+        return False
+    if len(q) <= settings.ASK_FOLLOWUP_CHARS:
+        return True
+    return q.startswith(_FOLLOWUP_OPENERS)
+
+
+def retrieval_query(question: str, history: Sequence[Turn]) -> str:
+    """What to search for, given that the question may lean on the last one.
+
+    "And in euros?" retrieves nothing on its own. The textbook fix is to ask a
+    model to rewrite it into a standalone question first, which costs a whole
+    extra round trip on every follow-up - seconds of latency and a second
+    generation - before the search has even started.
+
+    Concatenating the previous question instead costs nothing and does the same
+    work for hybrid search: BM25 picks up the terms that were dropped
+    ("invoice", "March"), and the dense vector lands between the two questions,
+    which is where the answer usually is. Only the search sees this; the model
+    is given the real history.
+    """
+    q = (question or "").strip()
+    if not history or not is_followup(q):
+        return q
+    previous = history[-1].question.strip()
+    if not previous:
+        return q
+    return f"{previous}\n{q}"
+
+
+def conversation_title(question: str) -> str:
+    """Name a thread from its first question - no model call, no cost."""
+    text = " ".join((question or "").split())
+    if not text:
+        return "New thread"
+    if len(text) <= 60:
+        return text
+    return text[:60].rsplit(" ", 1)[0].rstrip(",;:.-") + "…"
+
+
+def build_messages(
+    question: str,
+    context: AnswerContext,
+    history: Sequence[Turn] = (),
+) -> list[dict[str, str]]:
+    """Rules and excerpts first, then the thread, then the question.
+
+    The order is chosen for the prefill cache rather than for reading: every
+    serving stack (vLLM, vMLX, the hosted providers) caches on a *prefix*, so
+    the part that does not change between turns has to come first. On a thread
+    pinned to one page the excerpts are byte-for-byte identical every turn, and
+    that page can be a hundred thousand characters - putting it at the front
+    turns the second question's prefill into a cache hit instead of a re-read.
+    """
+    system = SYSTEM_PROMPT
+    if context.prompt:
+        system = f"{SYSTEM_PROMPT}\n\nExcerpts:\n{context.prompt}"
+
+    messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+    for turn in trim_history(history):
+        if turn.question:
+            messages.append({"role": "user", "content": turn.question})
+        if turn.answer:
+            messages.append({"role": "assistant", "content": turn.answer})
+    messages.append({"role": "user", "content": f"Question: {question.strip()}"})
+    return messages
 
 
 _CITATION_RE = re.compile(r"\[(\d{1,2})\]")
@@ -152,11 +275,12 @@ async def answer(
     context: AnswerContext,
     *,
     max_tokens: int | None = None,
+    history: Sequence[Turn] = (),
 ) -> str:
     if not context:
         return NO_CONTEXT_ANSWER
     return await llm.chat(
-        build_messages(question, context),
+        build_messages(question, context, history),
         max_tokens=max_tokens or settings.ASK_MAX_TOKENS,
         temperature=settings.ASK_TEMPERATURE,
     )
@@ -168,12 +292,13 @@ async def stream_answer(
     context: AnswerContext,
     *,
     max_tokens: int | None = None,
+    history: Sequence[Turn] = (),
 ) -> AsyncIterator[str]:
     if not context:
         yield NO_CONTEXT_ANSWER
         return
     async for piece in llm.stream_chat(
-        build_messages(question, context),
+        build_messages(question, context, history),
         max_tokens=max_tokens or settings.ASK_MAX_TOKENS,
         temperature=settings.ASK_TEMPERATURE,
     ):

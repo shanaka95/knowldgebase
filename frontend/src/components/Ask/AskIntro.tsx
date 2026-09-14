@@ -1,4 +1,4 @@
-import { FileSearch, Quote, ShieldCheck } from "lucide-react"
+import { FileSearch, MessagesSquare, Pin, Quote } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -7,6 +7,13 @@ const EXAMPLES = [
   "How do I get set up?",
   "What changed recently?",
   "Who owns this and how do I reach them?",
+]
+
+/** What a single page is usually asked. */
+const PAGE_EXAMPLES = [
+  "Summarise this page",
+  "What are the key dates and numbers?",
+  "What does this page not cover?",
 ]
 
 const POINTS = [
@@ -21,38 +28,56 @@ const POINTS = [
     body: "Every claim points at the page it came from, so you can check it in one click.",
   },
   {
-    icon: ShieldCheck,
-    title: "Only your pages",
-    body: "The model reads the excerpts it is given and nothing else. No pages on the topic means it says so.",
+    icon: MessagesSquare,
+    title: "Keeps the thread",
+    body: "Follow-ups remember what was asked, so “and in euros?” works. Every chat is kept in the rail beside this one.",
   },
 ]
 
-export function AskIntro({ onExample }: { onExample: (q: string) => void }) {
+interface AskIntroProps {
+  onExample: (question: string) => void
+  /** The page the next question is pinned to, if there is one. */
+  pageTitle?: string
+}
+
+export function AskIntro({ onExample, pageTitle }: AskIntroProps) {
+  const examples = pageTitle ? PAGE_EXAMPLES : EXAMPLES
+
   return (
     <div className="flex flex-col gap-5 rounded-lg border border-dashed px-6 py-8">
       <div>
-        <h2 className="text-base font-medium">Ask your knowledge base</h2>
+        <h2 className="flex items-center gap-2 text-base font-medium">
+          {pageTitle && <Pin className="size-4 text-muted-foreground" />}
+          {pageTitle ? `Ask about “${pageTitle}”` : "Ask your knowledge base"}
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Put a question in your own words. The best matching pages are found
-          first, then an answer is written from them.
+          {pageTitle
+            ? "Nothing is searched: the answer is written from this page alone, which makes it the fastest way to ask."
+            : "Put a question in your own words. The best matching pages are found first, then an answer is written from them."}
         </p>
       </div>
 
-      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {POINTS.map((point) => (
-          <div key={point.title} className="rounded-md border bg-muted/20 p-3">
-            <dt className="flex items-center gap-1.5 text-sm font-medium">
-              <point.icon className="size-3.5 text-muted-foreground" />
-              {point.title}
-            </dt>
-            <dd className="mt-1 text-sm text-muted-foreground">{point.body}</dd>
-          </div>
-        ))}
-      </dl>
+      {!pageTitle && (
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {POINTS.map((point) => (
+            <div
+              key={point.title}
+              className="rounded-md border bg-muted/20 p-3"
+            >
+              <dt className="flex items-center gap-1.5 text-sm font-medium">
+                <point.icon className="size-3.5 text-muted-foreground" />
+                {point.title}
+              </dt>
+              <dd className="mt-1 text-sm text-muted-foreground">
+                {point.body}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">Try:</span>
-        {EXAMPLES.map((example) => (
+        {examples.map((example) => (
           <Button
             key={example}
             variant="outline"

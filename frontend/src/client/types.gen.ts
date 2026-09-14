@@ -213,6 +213,10 @@ export type AskAnswer = {
      */
     answer: string;
     /**
+     * Conversation Id
+     */
+    conversation_id?: string | null;
+    /**
      * Citations
      */
     citations?: Array<AskCitation>;
@@ -361,6 +365,153 @@ export type AskContext = {
 };
 
 /**
+ * AskConversationDetail
+ */
+export type AskConversationDetail = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Namespace Id
+     */
+    namespace_id?: string | null;
+    /**
+     * Document Id
+     */
+    document_id?: string | null;
+    /**
+     * Document Title
+     */
+    document_title?: string | null;
+    /**
+     * Namespace Slug
+     */
+    namespace_slug?: string | null;
+    /**
+     * Message Count
+     */
+    message_count?: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Messages
+     */
+    messages?: Array<AskMessagePublic>;
+};
+
+/**
+ * AskConversationPublic
+ *
+ * A row in the history rail: enough to label it, nothing more.
+ */
+export type AskConversationPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Namespace Id
+     */
+    namespace_id?: string | null;
+    /**
+     * Document Id
+     */
+    document_id?: string | null;
+    /**
+     * Document Title
+     */
+    document_title?: string | null;
+    /**
+     * Namespace Slug
+     */
+    namespace_slug?: string | null;
+    /**
+     * Message Count
+     */
+    message_count?: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * AskConversationUpdate
+ */
+export type AskConversationUpdate = {
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * AskConversationsPublic
+ */
+export type AskConversationsPublic = {
+    /**
+     * Data
+     */
+    data: Array<AskConversationPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * AskMessagePublic
+ */
+export type AskMessagePublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Seq
+     */
+    seq: number;
+    role: AskRole;
+    /**
+     * Content
+     */
+    content: string;
+    /**
+     * Citations
+     */
+    citations?: Array<AskCitation>;
+    /**
+     * Stats
+     */
+    stats?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
  * AskRequest
  */
 export type AskRequest = {
@@ -376,7 +527,20 @@ export type AskRequest = {
      * Top K
      */
     top_k?: number | null;
+    /**
+     * Document Id
+     */
+    document_id?: string | null;
+    /**
+     * Conversation Id
+     */
+    conversation_id?: string | null;
 };
+
+/**
+ * AskRole
+ */
+export type AskRole = 'user' | 'assistant';
 
 /**
  * AttachmentPublic
@@ -5322,6 +5486,130 @@ export type askAskQuestionStreamResponses = {
      */
     200: unknown;
 };
+
+export type askReadConversationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/v1/ask/conversations';
+};
+
+export type askReadConversationsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type askReadConversationsError = askReadConversationsErrors[keyof askReadConversationsErrors];
+
+export type askReadConversationsResponses = {
+    /**
+     * Successful Response
+     */
+    200: AskConversationsPublic;
+};
+
+export type askReadConversationsResponse = askReadConversationsResponses[keyof askReadConversationsResponses];
+
+export type askRemoveConversationData = {
+    body?: never;
+    path: {
+        /**
+         * Conversation Id
+         */
+        conversation_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ask/conversations/{conversation_id}';
+};
+
+export type askRemoveConversationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type askRemoveConversationError = askRemoveConversationErrors[keyof askRemoveConversationErrors];
+
+export type askRemoveConversationResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type askRemoveConversationResponse = askRemoveConversationResponses[keyof askRemoveConversationResponses];
+
+export type askReadConversationData = {
+    body?: never;
+    path: {
+        /**
+         * Conversation Id
+         */
+        conversation_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ask/conversations/{conversation_id}';
+};
+
+export type askReadConversationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type askReadConversationError = askReadConversationErrors[keyof askReadConversationErrors];
+
+export type askReadConversationResponses = {
+    /**
+     * Successful Response
+     */
+    200: AskConversationDetail;
+};
+
+export type askReadConversationResponse = askReadConversationResponses[keyof askReadConversationResponses];
+
+export type askRenameConversationData = {
+    body: AskConversationUpdate;
+    path: {
+        /**
+         * Conversation Id
+         */
+        conversation_id: string;
+    };
+    query?: never;
+    url: '/api/v1/ask/conversations/{conversation_id}';
+};
+
+export type askRenameConversationErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type askRenameConversationError = askRenameConversationErrors[keyof askRenameConversationErrors];
+
+export type askRenameConversationResponses = {
+    /**
+     * Successful Response
+     */
+    200: AskConversationPublic;
+};
+
+export type askRenameConversationResponse = askRenameConversationResponses[keyof askRenameConversationResponses];
 
 export type workersReadWorkersData = {
     body?: never;

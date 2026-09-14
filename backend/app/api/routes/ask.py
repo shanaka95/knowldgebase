@@ -4,6 +4,16 @@ Retrieval is always the full fusion - every method against every target - becaus
 a question is not the place to make the reader choose search settings. The top
 pages become excerpts, the model answers from those alone, and the excerpts come
 back with the answer so every claim can be checked.
+
+Two things change that shape:
+
+* **A pinned page.** When the question names the page it is about, there is
+  nothing to search for. The page is loaded by id, permission-checked, and read
+  whole - no embedding call, no vector query, no reranker, no fusion. That is
+  the entire retrieval cost of the request, and it is the cheapest and fastest
+  path in the feature.
+* **A thread.** Follow-ups carry the last few exchanges, never their excerpts.
+  See `app/services/conversations.py` for what is kept and why.
 """
 
 from __future__ import annotations
@@ -11,9 +21,9 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, col, select
 
@@ -26,25 +36,47 @@ from app.api.deps import (
 )
 from app.api.routes.search import _access_scope, _lexical_source, rerank_hits
 from app.core.config import settings
-from app.core.permissions import accessible_documents_filter
+from app.core.db import engine
+from app.core.permissions import accessible_documents_filter, require_document
 from app.models import (
     AskAnswer,
     AskCitation,
     AskContext,
+    AskConversation,
+    AskConversationDetail,
+    AskConversationPublic,
+    AskConversationsPublic,
+    AskConversationUpdate,
+    AskMessage,
+    AskMessagePublic,
     AskRequest,
+    AskRole,
     Document,
     DocumentChunk,
     EmbeddingKind,
+    Message,
     Namespace,
     User,
 )
 from app.services.answering import (
     AnswerContext,
     Passage,
+    Turn,
     answer,
     build_context,
     cited_indexes,
+    retrieval_query,
     stream_answer,
+)
+from app.services.conversations import (
+    append_message,
+    delete_conversation,
+    get_conversation,
+    history_for_prompt,
+    list_conversations,
+    load_messages,
+    prune_conversations,
+    start_conversation,
 )
 from app.services.llm import LLMClient
 from app.services.reranking import Reranker, keep_count
@@ -249,6 +281,34 @@ def _citations(
     return citations
 
 
+def _pinned_passages(
+    session: Session, user: User, document_id: uuid.UUID
+) -> list[Passage]:
+    """The one page the question is pinned to, read whole.
+
+    No search runs: the reader already said which page they mean, so ranking it
+    against itself would only add an embedding call, a vector query and a
+    reranker pass to a question whose answer is already on the table. The
+    permission check is the same one the page itself uses, so pinning cannot
+    reach a page the asker could not open.
+    """
+    document, _ = require_document(session, user, document_id, "viewer")
+    namespace = session.get(Namespace, document.namespace_id)
+    text = document.content_text or document.summary or ""
+    if not text.strip():
+        return []
+    return [
+        Passage(
+            index=1,
+            document_id=document.id,
+            title=document.title,
+            namespace_name=namespace.name if namespace else "",
+            text=text,
+            score=1.0,
+        )
+    ]
+
+
 async def _search(
     session: Session,
     auth: AuthDep,
@@ -256,6 +316,8 @@ async def _search(
     embeddings: EmbeddingsDep,
     reranker: Reranker | None,
     body: AskRequest,
+    *,
+    query: str | None = None,
 ) -> tuple[list[Passage], float, int, bool]:
     """Find the pages worth reading, then narrow them to the ones worth quoting.
 
@@ -267,7 +329,9 @@ async def _search(
     the citations honest.
     """
     started = time.perf_counter()
-    question = body.q.strip()
+    # What is searched for can differ from what is asked: a follow-up carries
+    # the question before it so that "and in euros?" still finds the invoice.
+    question = (query or body.q).strip()
     namespace_ids, document_ids = _access_scope(session, auth.user, body.namespace_id)
     result = await retrieve(
         question,
@@ -302,6 +366,95 @@ async def _search(
     )
 
 
+# ---------------------------------------------------------------------------
+# Preparing a turn
+# ---------------------------------------------------------------------------
+
+
+async def _prepare(
+    session: Session,
+    auth: AuthDep,
+    vectors: VectorsDep,
+    embeddings: EmbeddingsDep,
+    reranker: Reranker | None,
+    body: AskRequest,
+    *,
+    history: Sequence[Turn] = (),
+) -> tuple[list[Passage], float, int, bool]:
+    """Find what this turn should be answered from.
+
+    Returns the passages, how long finding them took, how many pages were
+    considered, and whether a reranker chose between them.
+    """
+    if body.document_id is not None:
+        started = time.perf_counter()
+        passages = _pinned_passages(session, auth.user, body.document_id)
+        return passages, (time.perf_counter() - started) * 1000, len(passages), False
+
+    return await _search(
+        session,
+        auth,
+        vectors,
+        embeddings,
+        reranker,
+        body,
+        query=retrieval_query(body.q, history),
+    )
+
+
+def _stats(context: AnswerContext, searched: int, took_ms: float) -> dict[str, object]:
+    """The footer under an answer, kept with it so a reopened thread has it."""
+    return {
+        "searched": searched,
+        "used": len({p.document_id for p in context.passages}),
+        "passages": len(context.passages),
+        "truncated": context.truncated,
+        "model": settings.LLM_MODEL,
+        "took_ms": round(took_ms),
+    }
+
+
+def _resolve_conversation(
+    session: Session, user: User, body: AskRequest
+) -> AskConversation:
+    """The thread this question belongs to, started if it is the first one.
+
+    The thread owns its scope: whichever space or pinned page the asker has
+    selected is written back on every turn, so reopening it later restores the
+    setup it was last used with.
+    """
+    if body.conversation_id is None:
+        conversation = start_conversation(
+            session,
+            user,
+            question=body.q,
+            namespace_id=body.namespace_id,
+            document_id=body.document_id,
+        )
+        prune_conversations(session, user)
+        return conversation
+
+    existing = get_conversation(session, user, body.conversation_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = existing
+    if (
+        conversation.namespace_id != body.namespace_id
+        or conversation.document_id != body.document_id
+    ):
+        conversation.namespace_id = body.namespace_id
+        conversation.document_id = body.document_id
+        session.add(conversation)
+        session.commit()
+        session.refresh(conversation)
+    return conversation
+
+
+# ---------------------------------------------------------------------------
+# Answering
+# ---------------------------------------------------------------------------
+
+
 @router.post("/", response_model=AskAnswer)
 async def ask_question(
     session: SessionDep,
@@ -316,20 +469,45 @@ async def ask_question(
         raise HTTPException(status_code=422, detail="Ask a question")
 
     started = time.perf_counter()
-    passages, retrieval_ms, searched, reranked = await _search(
-        session, auth, vectors, embeddings, reranker, body
+    # A thread is only continued here, never started: this endpoint is what
+    # API keys and MCP callers use, and they would otherwise leave a trail of
+    # one-question threads in somebody's history. The UI streams instead.
+    conversation = (
+        _resolve_conversation(session, auth.user, body)
+        if body.conversation_id is not None
+        else None
+    )
+    history = (
+        history_for_prompt(session, conversation.id) if conversation is not None else []
+    )
+    passages, retrieval_ms, searched, reranked = await _prepare(
+        session, auth, vectors, embeddings, reranker, body, history=history
     )
     context = build_context(passages)
     llm = LLMClient()
     try:
-        text = await answer(llm, body.q, context)
+        text = await answer(llm, body.q, context, history=history)
     finally:
         await llm.close()
+
+    citations = _citations(session, context, text)
+    took_ms = (time.perf_counter() - started) * 1000
+    if conversation is not None:
+        append_message(session, conversation, role=AskRole.user, content=body.q.strip())
+        append_message(
+            session,
+            conversation,
+            role=AskRole.assistant,
+            content=text,
+            citations=citations,
+            stats=_stats(context, searched, took_ms),
+        )
 
     return AskAnswer(
         question=body.q.strip(),
         answer=text,
-        citations=_citations(session, context, text),
+        conversation_id=conversation.id if conversation is not None else None,
+        citations=citations,
         searched=searched,
         used=len({p.document_id for p in context.passages}),
         passages=len(context.passages),
@@ -337,7 +515,7 @@ async def ask_question(
         truncated=context.truncated,
         model=settings.LLM_MODEL,
         retrieval_ms=retrieval_ms,
-        took_ms=(time.perf_counter() - started) * 1000,
+        took_ms=took_ms,
     )
 
 
@@ -361,7 +539,7 @@ async def ask_context(
         raise HTTPException(status_code=422, detail="Ask a question")
 
     started = time.perf_counter()
-    passages, retrieval_ms, searched, reranked = await _search(
+    passages, retrieval_ms, searched, reranked = await _prepare(
         session, auth, vectors, embeddings, reranker, body
     )
     context = build_context(passages)
@@ -390,27 +568,73 @@ async def ask_question_stream(
 ) -> StreamingResponse:
     """The same answer, streamed as server-sent events.
 
-    Event order: ``sources`` once the search is done (so the reader can start
-    reading the pages immediately), then ``delta`` for each piece of the answer,
-    then ``done`` with the timings. Errors arrive as an ``error`` event rather
-    than a broken stream.
+    Event order: ``conversation`` with the thread this turn belongs to, then
+    ``sources`` once the search is done (so the reader can start reading the
+    pages immediately), then ``delta`` for each piece of the answer, then
+    ``done`` with the timings. Errors arrive as an ``error`` event rather than
+    a broken stream.
     """
     if not body.q.strip():
         raise HTTPException(status_code=422, detail="Ask a question")
 
     started = time.perf_counter()
-    passages, retrieval_ms, searched, reranked = await _search(
-        session, auth, vectors, embeddings, reranker, body
+    conversation = _resolve_conversation(session, auth.user, body)
+    # Read before the new question is stored, or the question would be in its
+    # own history.
+    history = history_for_prompt(session, conversation.id)
+    # Stored now rather than at the end: a reader who closes the tab mid-answer
+    # still finds the thread, with the question they asked in it.
+    append_message(session, conversation, role=AskRole.user, content=body.q.strip())
+
+    passages, retrieval_ms, searched, reranked = await _prepare(
+        session, auth, vectors, embeddings, reranker, body, history=history
     )
     context = build_context(passages)
     # Citations are resolved up front so they can be shown while the answer is
     # still being written; `cited` is filled in by the final event.
     citations = _citations(session, context, "")
+    conversation_id = conversation.id
+    conversation_title_now = conversation.title
+    user_id = auth.user.id
 
     def event(name: str, payload: dict[str, object]) -> str:
         return f"event: {name}\ndata: {json.dumps(payload, default=str)}\n\n"
 
+    def save_answer(text: str, took_ms: float) -> None:
+        """Store the finished answer on a connection of its own.
+
+        The request's session is not used here: generation takes tens of
+        seconds, and holding a pooled database connection open across it would
+        tie up the pool for the whole answer. A short transaction at the end
+        costs nothing and keeps the connection free meanwhile.
+        """
+        if not text.strip():
+            return
+        with Session(engine) as write_session:
+            stored = write_session.get(AskConversation, conversation_id)
+            if stored is None or stored.user_id != user_id:
+                return
+            cited = set(cited_indexes(text, len(citations)))
+            append_message(
+                write_session,
+                stored,
+                role=AskRole.assistant,
+                content=text,
+                citations=[
+                    c.model_copy(update={"cited": c.index in cited}) for c in citations
+                ],
+                stats=_stats(context, searched, took_ms),
+            )
+
     async def stream() -> AsyncIterator[str]:
+        yield event(
+            "conversation",
+            {
+                "id": str(conversation_id),
+                "title": conversation_title_now,
+                "document_id": str(body.document_id) if body.document_id else None,
+            },
+        )
         yield event(
             "sources",
             {
@@ -419,6 +643,7 @@ async def ask_question_stream(
                 "used": len({p.document_id for p in context.passages}),
                 "passages": len(context.passages),
                 "reranked": reranked,
+                "pinned": body.document_id is not None,
                 "truncated": context.truncated,
                 "retrieval_ms": retrieval_ms,
                 "model": settings.LLM_MODEL,
@@ -427,13 +652,16 @@ async def ask_question_stream(
         llm = LLMClient()
         collected: list[str] = []
         try:
-            async for piece in stream_answer(llm, body.q, context):
+            async for piece in stream_answer(llm, body.q, context, history=history):
                 collected.append(piece)
                 yield event("delta", {"text": piece})
         except Exception as exc:  # noqa: BLE001 - the reader gets a message, not a stall
             yield event("error", {"message": str(exc)[:300]})
         finally:
             await llm.close()
+            # Also reached when the reader navigates away mid-answer, which is
+            # why a partial answer is kept rather than lost.
+            save_answer("".join(collected), (time.perf_counter() - started) * 1000)
         text = "".join(collected)
         yield event(
             "done",
@@ -448,3 +676,109 @@ async def ask_question_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Threads
+# ---------------------------------------------------------------------------
+
+
+def _conversation_public(
+    conversation: AskConversation,
+    document_title: str | None = None,
+    namespace_slug: str | None = None,
+) -> AskConversationPublic:
+    return AskConversationPublic(
+        id=conversation.id,
+        title=conversation.title,
+        namespace_id=conversation.namespace_id,
+        document_id=conversation.document_id,
+        document_title=document_title,
+        namespace_slug=namespace_slug,
+        message_count=conversation.message_count,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+    )
+
+
+def _message_public(message: AskMessage) -> AskMessagePublic:
+    return AskMessagePublic(
+        id=message.id,
+        seq=message.seq,
+        role=message.role,
+        content=message.content,
+        citations=[AskCitation(**c) for c in (message.citations or [])],
+        stats=message.stats,
+        created_at=message.created_at,
+    )
+
+
+@router.get("/conversations", response_model=AskConversationsPublic)
+def read_conversations(
+    session: SessionDep,
+    auth: AuthDep,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> AskConversationsPublic:
+    """The asker's threads, newest first.
+
+    Titles and counts only - the messages of a thread are fetched when one is
+    opened, so the rail stays a few kilobytes however long the history is.
+    """
+    rows, count = list_conversations(session, auth.user, limit=limit, offset=offset)
+    return AskConversationsPublic(
+        data=[_conversation_public(c, title, slug) for c, title, slug in rows],
+        count=count,
+    )
+
+
+@router.get("/conversations/{conversation_id}", response_model=AskConversationDetail)
+def read_conversation(
+    session: SessionDep, auth: AuthDep, conversation_id: uuid.UUID
+) -> AskConversationDetail:
+    conversation = get_conversation(session, auth.user, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    document_title: str | None = None
+    namespace_slug: str | None = None
+    if conversation.document_id is not None:
+        document = session.get(Document, conversation.document_id)
+        if document is not None:
+            document_title = document.title
+            namespace = session.get(Namespace, document.namespace_id)
+            namespace_slug = namespace.slug if namespace else None
+
+    base = _conversation_public(conversation, document_title, namespace_slug)
+    return AskConversationDetail(
+        **base.model_dump(),
+        messages=[_message_public(m) for m in load_messages(session, conversation.id)],
+    )
+
+
+@router.patch("/conversations/{conversation_id}", response_model=AskConversationPublic)
+def rename_conversation(
+    session: SessionDep,
+    auth: AuthDep,
+    conversation_id: uuid.UUID,
+    body: AskConversationUpdate,
+) -> AskConversationPublic:
+    conversation = get_conversation(session, auth.user, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation.title = body.title.strip()[:120]
+    session.add(conversation)
+    session.commit()
+    session.refresh(conversation)
+    return _conversation_public(conversation)
+
+
+@router.delete("/conversations/{conversation_id}")
+def remove_conversation(
+    session: SessionDep, auth: AuthDep, conversation_id: uuid.UUID
+) -> Message:
+    conversation = get_conversation(session, auth.user, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    delete_conversation(session, conversation)
+    return Message(message="Conversation deleted")

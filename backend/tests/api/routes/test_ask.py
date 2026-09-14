@@ -129,7 +129,7 @@ async def test_answer_is_grounded_and_cites_the_page_it_used(
 
     # the model only ever saw the excerpts we handed it
     sent = json.loads(route.calls[0].request.content)
-    prompt = sent["messages"][1]["content"]
+    prompt = "\n".join(m["content"] for m in sent["messages"])
     assert "what does vpn error 407 mean" in prompt
     assert "Error 407" in prompt
     assert "[1]" in prompt
@@ -353,9 +353,7 @@ async def test_context_returns_whole_pages_not_excerpts(
     db.commit()
     headers = login(client, owner, pw)
 
-    body = client.post(
-        ASK_CONTEXT, headers=headers, json={"q": "vpn total due"}
-    ).json()
+    body = client.post(ASK_CONTEXT, headers=headers, json={"q": "vpn total due"}).json()
 
     assert body["passages"] == 1, "one page, sent once"
     text = body["documents"][0]["text"]
@@ -374,9 +372,7 @@ async def test_context_is_scoped_to_the_caller(
     stranger, stranger_pw = create_user_with_password(db)
     headers = login(client, stranger, stranger_pw)
 
-    body = client.post(
-        ASK_CONTEXT, headers=headers, json={"q": "vpn error 407"}
-    ).json()
+    body = client.post(ASK_CONTEXT, headers=headers, json={"q": "vpn error 407"}).json()
 
     assert body["documents"] == [], "another account's pages are not context"
     assert body["used"] == 0
@@ -445,11 +441,13 @@ async def test_streaming_sends_sources_first_then_the_answer(
         json.loads(line[6:]) for line in body.splitlines() if line.startswith("data: ")
     ]
 
-    assert events[0] == "sources", "citations arrive before the answer is written"
+    assert events[0] == "conversation", "the thread is named before anything else"
+    assert payloads[0]["id"]
+    assert events[1] == "sources", "citations arrive before the answer is written"
     assert events[-1] == "done"
     assert events.count("delta") == 3
-    assert payloads[0]["used"] >= 1
-    assert payloads[0]["citations"][0]["title"]
+    assert payloads[1]["used"] >= 1
+    assert payloads[1]["citations"][0]["title"]
 
     answer = "".join(
         p["text"] for e, p in zip(events, payloads, strict=True) if e == "delta"
@@ -503,5 +501,282 @@ async def test_an_unchunked_page_sends_its_text_not_its_summary(
         )
         client.post(ASK, headers=headers, json={"q": "vpn cluster cost"})
 
-    prompt = json.loads(route.calls[0].request.content)["messages"][1]["content"]
+    sent = json.loads(route.calls[0].request.content)["messages"]
+    prompt = "\n".join(m["content"] for m in sent)
     assert "57,500" in prompt, "the figure must reach the model"
+
+
+# ---------------------------------------------------------------------------
+# A pinned page
+# ---------------------------------------------------------------------------
+
+
+class ExplodingEmbeddings:
+    """Proves a code path never embeds anything - the call would fail loudly."""
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        raise AssertionError("a pinned page must not embed the question")
+
+    async def embed_query(self, text: str) -> list[float]:
+        raise AssertionError("a pinned page must not embed the question")
+
+
+@pytest.mark.anyio
+async def test_a_pinned_page_answers_from_that_page_without_searching(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    """The reader named the page, so nothing is embedded, retrieved or reranked.
+
+    This is the cheap path: the embedding client is replaced with one that
+    raises, so a single vector call anywhere in the request fails the test.
+    """
+    owner, pw = create_user_with_password(db)
+    _, vpn = await _seed(db, store, (owner, pw))
+    headers = login(client, owner, pw)
+    app.dependency_overrides[get_embedding_client] = ExplodingEmbeddings
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, json=_completion("Error 407 [1]."))
+        )
+        body = client.post(
+            ASK,
+            headers=headers,
+            json={"q": "what does this page say", "document_id": str(vpn.id)},
+        ).json()
+
+    assert body["used"] == 1
+    assert body["searched"] == 1
+    assert body["reranked"] is False, "one chosen page has nothing to rank against"
+    assert body["retrieval_ms"] < 50, "no search ran, so there was nothing to wait for"
+    assert [c["document_id"] for c in body["citations"]] == [str(vpn.id)]
+    assert "Error 407" in body["citations"][0]["text"]
+
+
+@pytest.mark.anyio
+async def test_a_page_the_asker_cannot_read_cannot_be_pinned(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    owner, _ = create_user_with_password(db)
+    stranger, stranger_pw = create_user_with_password(db)
+    _, vpn = await _seed(db, store, (owner, "x"))
+    headers = login(client, stranger, stranger_pw)
+
+    with respx.mock:
+        route = respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, json=_completion("leaked"))
+        )
+        r = client.post(
+            ASK, headers=headers, json={"q": "anything", "document_id": str(vpn.id)}
+        )
+
+    assert r.status_code in (403, 404)
+    assert not route.called
+
+
+# ---------------------------------------------------------------------------
+# Threads
+# ---------------------------------------------------------------------------
+
+
+CONVERSATIONS = f"{API}/ask/conversations"
+
+
+def _stream(
+    client: TestClient, headers: dict[str, str], payload: dict[str, Any]
+) -> tuple[list[str], list[dict[str, Any]]]:
+    with client.stream("POST", ASK_STREAM, headers=headers, json=payload) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+    events = [line[7:] for line in body.splitlines() if line.startswith("event: ")]
+    payloads = [
+        json.loads(line[6:]) for line in body.splitlines() if line.startswith("data: ")
+    ]
+    return events, payloads
+
+
+@pytest.mark.anyio
+async def test_a_question_starts_a_thread_named_after_it(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    owner, pw = create_user_with_password(db)
+    await _seed(db, store, (owner, pw))
+    headers = login(client, owner, pw)
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, stream=_sse(["Request a token [1]."]))
+        )
+        events, payloads = _stream(client, headers, {"q": "what does vpn 407 mean"})
+
+    assert events[0] == "conversation"
+    conversation_id = payloads[0]["id"]
+    assert payloads[0]["title"] == "what does vpn 407 mean"
+
+    listed = client.get(CONVERSATIONS, headers=headers).json()
+    assert listed["count"] == 1
+    assert listed["data"][0]["id"] == conversation_id
+    assert listed["data"][0]["message_count"] == 2
+
+    detail = client.get(f"{CONVERSATIONS}/{conversation_id}", headers=headers).json()
+    assert [m["role"] for m in detail["messages"]] == ["user", "assistant"]
+    assert detail["messages"][0]["content"] == "what does vpn 407 mean"
+    assert detail["messages"][1]["content"] == "Request a token [1]."
+    assert detail["messages"][1]["citations"][0]["cited"] is True
+    assert detail["messages"][1]["stats"]["model"] == settings.LLM_MODEL
+
+
+@pytest.mark.anyio
+async def test_a_follow_up_carries_the_earlier_exchange_but_not_its_excerpts(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    owner, pw = create_user_with_password(db)
+    await _seed(db, store, (owner, pw))
+    headers = login(client, owner, pw)
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, stream=_sse(["Request a token [1]."]))
+        )
+        _, payloads = _stream(client, headers, {"q": "what does vpn 407 mean"})
+    conversation_id = payloads[0]["id"]
+
+    with respx.mock:
+        route = respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, stream=_sse(["From the IT portal [1]."]))
+        )
+        _stream(
+            client,
+            headers,
+            {"q": "and where do I get one?", "conversation_id": conversation_id},
+        )
+
+    messages = json.loads(route.calls[0].request.content)["messages"]
+    roles = [m["role"] for m in messages]
+    assert roles == ["system", "user", "assistant", "user"]
+    assert messages[1]["content"] == "what does vpn 407 mean"
+    assert messages[2]["content"] == "Request a token [1]."
+    assert messages[-1]["content"].endswith("and where do I get one?")
+
+    detail = client.get(f"{CONVERSATIONS}/{conversation_id}", headers=headers).json()
+    assert detail["message_count"] == 4
+    assert [m["seq"] for m in detail["messages"]] == [1, 2, 3, 4]
+
+
+@pytest.mark.anyio
+async def test_a_thread_keeps_the_page_it_was_pinned_to(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    owner, pw = create_user_with_password(db)
+    _, vpn = await _seed(db, store, (owner, pw))
+    headers = login(client, owner, pw)
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, stream=_sse(["It says 407 [1]."]))
+        )
+        _, payloads = _stream(
+            client,
+            headers,
+            {"q": "summarise this page", "document_id": str(vpn.id)},
+        )
+
+    detail = client.get(f"{CONVERSATIONS}/{payloads[0]['id']}", headers=headers).json()
+    assert detail["document_id"] == str(vpn.id)
+    assert detail["document_title"] == "Connecting to the VPN"
+
+
+@pytest.mark.anyio
+async def test_a_stored_citation_keeps_a_preview_not_the_whole_page(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    """A thread must not become a second copy of the knowledge base."""
+    owner, pw = create_user_with_password(db)
+    ns = create_namespace(db, owner)
+    page = create_document(
+        db,
+        ns,
+        owner,
+        title="Long page",
+        html="<p>" + ("vpn token renewal steps. " * 400) + "</p>",
+    )
+    await _index(store, db, page, summary="vpn token renewal")
+    db.commit()
+    headers = login(client, owner, pw)
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, stream=_sse(["See the page [1]."]))
+        )
+        _, payloads = _stream(client, headers, {"q": "vpn token renewal"})
+
+    detail = client.get(f"{CONVERSATIONS}/{payloads[0]['id']}", headers=headers).json()
+    stored = detail["messages"][1]["citations"][0]["text"]
+    assert len(stored) <= settings.ASK_STORED_CITATION_CHARS + 2
+    assert stored.endswith("…")
+
+
+@pytest.mark.anyio
+async def test_threads_are_private_to_the_person_who_asked(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    owner, pw = create_user_with_password(db)
+    stranger, stranger_pw = create_user_with_password(db)
+    await _seed(db, store, (owner, pw))
+    headers = login(client, owner, pw)
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, stream=_sse(["Answer [1]."]))
+        )
+        _, payloads = _stream(client, headers, {"q": "vpn error 407"})
+    conversation_id = payloads[0]["id"]
+
+    other = login(client, stranger, stranger_pw)
+    assert (
+        client.get(f"{CONVERSATIONS}/{conversation_id}", headers=other).status_code
+        == 404
+    )
+    assert client.get(CONVERSATIONS, headers=other).json()["count"] == 0
+    assert (
+        client.delete(f"{CONVERSATIONS}/{conversation_id}", headers=other).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            ASK_STREAM,
+            headers=other,
+            json={"q": "sneak in", "conversation_id": conversation_id},
+        ).status_code
+        == 404
+    )
+
+
+@pytest.mark.anyio
+async def test_a_thread_can_be_renamed_and_deleted(
+    client: TestClient, db: Session, store: InMemoryVectorStore
+) -> None:
+    owner, pw = create_user_with_password(db)
+    await _seed(db, store, (owner, pw))
+    headers = login(client, owner, pw)
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(200, stream=_sse(["Answer [1]."]))
+        )
+        _, payloads = _stream(client, headers, {"q": "vpn error 407"})
+    conversation_id = payloads[0]["id"]
+
+    renamed = client.patch(
+        f"{CONVERSATIONS}/{conversation_id}",
+        headers=headers,
+        json={"title": "VPN troubleshooting"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "VPN troubleshooting"
+
+    assert (
+        client.delete(f"{CONVERSATIONS}/{conversation_id}", headers=headers).status_code
+        == 200
+    )
+    assert client.get(CONVERSATIONS, headers=headers).json()["count"] == 0

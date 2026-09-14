@@ -57,8 +57,10 @@ shadcn/ui + Tiptap on the frontend; Postgres, Qdrant and MinIO as services.
   findable the moment they are saved. The rankings are fused with RRF, and each method can be
   toggled per query from the search page.
 * **Ask** (see [docs/ASK.md](docs/ASK.md)): ask a question, get an answer written from your own
-  pages with citations you can click through. Always runs the full hybrid retrieval, streams the
-  answer, and refuses rather than guessing when the knowledge base has no answer.
+  pages with citations you can click through. Runs the full hybrid retrieval, streams the
+  answer, and refuses rather than guessing when the knowledge base has no answer. Follow-ups stay
+  in a thread, kept in a rail beside the page; pin a page - from the **Ask** button on it - and the
+  answer is written from that page alone, with no search at all.
 * **Imports** (see [docs/IMPORTS.md](docs/IMPORTS.md)): upload a PDF or image, MinerU2.5 parses it
   into headings, text and tables, and the original file stays attached to the page.
 * **Sharing** (see [docs/SHARING.md](docs/SHARING.md)): share a page with named people,

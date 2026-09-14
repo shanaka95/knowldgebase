@@ -1,5 +1,6 @@
+import { Link } from "@tanstack/react-router"
 import { format, formatDistanceToNowStrict } from "date-fns"
-import { Check, Pencil } from "lucide-react"
+import { Check, Pencil, Sparkles } from "lucide-react"
 
 import type { DocumentPublic } from "@/client"
 import { EmbeddingStatusPill } from "@/components/Embeddings/EmbeddingStatusPill"
@@ -99,6 +100,24 @@ export function DocumentHeader({
               onRetry={() => void autosave.retry()}
             />
           )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                data-testid="ask-about-page"
+              >
+                <Link to="/ask" search={{ q: "", doc: document.id }}>
+                  <Sparkles className="size-3.5" />
+                  Ask
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Ask a question answered from this page alone
+            </TooltipContent>
+          </Tooltip>
           {canEdit &&
             (mode === "view" ? (
               <Tooltip>

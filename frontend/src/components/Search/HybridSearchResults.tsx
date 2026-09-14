@@ -161,15 +161,6 @@ export function HybridSearchResults({
   )
 }
 
-const EXAMPLES = [
-  { q: "error 407 vpn token", why: "exact codes — keyword search shines" },
-  {
-    q: "how do I reduce cloud spending",
-    why: "a question — semantic search shines",
-  },
-  { q: "python 3.14 migration", why: "both, fused together" },
-]
-
 function SearchIntro() {
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-dashed px-6 py-8">
@@ -202,17 +193,6 @@ function SearchIntro() {
           )
         })}
       </dl>
-      <div>
-        <p className="text-xs font-medium text-muted-foreground">Try</p>
-        <ul className="mt-1.5 flex flex-col gap-1">
-          {EXAMPLES.map((e) => (
-            <li key={e.q} className="text-sm">
-              <span className="font-mono text-foreground">“{e.q}”</span>
-              <span className="text-muted-foreground"> — {e.why}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
     </div>
   )
 }

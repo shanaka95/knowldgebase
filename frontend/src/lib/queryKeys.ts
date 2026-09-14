@@ -33,6 +33,11 @@ export const queryKeys = {
     ["public", "invitation", token] as const,
   search: (q: string, namespaceId?: string | null) =>
     ["search", q, namespaceId ?? null] as const,
+  askConversations: {
+    all: ["ask", "conversations"] as const,
+    list: () => ["ask", "conversations", "list"] as const,
+    detail: (id: string) => ["ask", "conversations", id] as const,
+  },
   apiKeys: ["api-keys"] as const,
   health: ["health"] as const,
   workers: ["workers"] as const,

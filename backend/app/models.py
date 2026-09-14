@@ -1239,6 +1239,11 @@ class AskRequest(SQLModel):
     q: str = Field(min_length=1, max_length=1000)
     namespace_id: uuid.UUID | None = None
     top_k: int | None = Field(default=None, ge=1, le=25)
+    # Pin one page: the answer is written from that page alone, with no search
+    # and no reranking. See `ask.py:_pinned_passages`.
+    document_id: uuid.UUID | None = None
+    # Continue an existing thread. Absent, a new one is started.
+    conversation_id: uuid.UUID | None = None
 
 
 class AskCitation(SQLModel):
@@ -1286,6 +1291,7 @@ class AskContext(SQLModel):
 class AskAnswer(SQLModel):
     question: str
     answer: str
+    conversation_id: uuid.UUID | None = None
     citations: list[AskCitation] = []
     searched: int = 0  # pages the hybrid search returned
     used: int = 0  # distinct pages that contributed an excerpt
@@ -1295,6 +1301,108 @@ class AskAnswer(SQLModel):
     model: str = ""
     retrieval_ms: float = 0.0
     took_ms: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Ask conversations
+# ---------------------------------------------------------------------------
+
+
+class AskRole(StrEnum):
+    user = "user"
+    assistant = "assistant"
+
+
+class AskConversation(SQLModel, table=True):
+    """One thread of questions and answers, owned by the person who asked.
+
+    Threads are private: there is no sharing model here, so every query is
+    scoped by ``user_id`` and nothing else can reach one.
+    """
+
+    __table_args__ = (
+        # The history rail asks exactly one question - "my threads, newest
+        # first" - and this index answers it without touching the table.
+        Index("ix_askconversation_user_updated", "user_id", "updated_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    title: str = Field(max_length=120)
+    # The space the thread was asked in, remembered so reopening it restores
+    # the scope. Null means every space the asker can read.
+    namespace_id: uuid.UUID | None = Field(
+        default=None, foreign_key="namespace.id", ondelete="SET NULL"
+    )
+    # Set when the thread is pinned to a single page. If that page is deleted
+    # the thread survives as an ordinary one rather than vanishing with it.
+    document_id: uuid.UUID | None = Field(
+        default=None, foreign_key="document.id", ondelete="SET NULL"
+    )
+    message_count: int = 0
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class AskMessage(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_askmessage_conversation_seq", "conversation_id", "seq"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    conversation_id: uuid.UUID = Field(
+        foreign_key="askconversation.id", nullable=False, ondelete="CASCADE"
+    )
+    seq: int  # 1-based position in the thread; user and assistant share the run
+    role: AskRole = Field(sa_type=String(16))  # type: ignore
+    content: str = Field(sa_type=Text)
+    # Assistant turns only: the sources that answer was written from, each
+    # carrying a short preview rather than the whole page. Storing the full
+    # excerpt would put hundreds of kilobytes per turn in the row and make
+    # reopening a thread slower than asking the question again.
+    citations: list[dict[str, Any]] | None = Field(default=None, sa_type=JSONB)
+    # searched / used / passages / truncated / model / took_ms
+    stats: dict[str, Any] | None = Field(default=None, sa_type=JSONB)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class AskMessagePublic(SQLModel):
+    id: uuid.UUID
+    seq: int
+    role: AskRole
+    content: str
+    citations: list[AskCitation] = []
+    stats: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class AskConversationPublic(SQLModel):
+    """A row in the history rail: enough to label it, nothing more."""
+
+    id: uuid.UUID
+    title: str
+    namespace_id: uuid.UUID | None = None
+    document_id: uuid.UUID | None = None
+    document_title: str | None = None
+    namespace_slug: str | None = None
+    message_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class AskConversationsPublic(SQLModel):
+    data: list[AskConversationPublic]
+    count: int
+
+
+class AskConversationDetail(AskConversationPublic):
+    messages: list[AskMessagePublic] = []
+
+
+class AskConversationUpdate(SQLModel):
+    title: str = Field(min_length=1, max_length=120)
 
 
 # ---------------------------------------------------------------------------
@@ -1579,7 +1687,7 @@ class Agent(AgentBase, table=True):
     created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
     updated_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
 
-    connections: list["ChannelConnection"] = Relationship(
+    connections: list[ChannelConnection] = Relationship(
         back_populates="agent", cascade_delete=True
     )
 

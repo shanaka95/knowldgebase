@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { FileText, Puzzle } from "lucide-react"
+import { ChevronRight, FileText, Puzzle } from "lucide-react"
 import { useState } from "react"
 
 import type { AskCitation } from "@/client"
@@ -9,44 +9,75 @@ import { Button } from "@/components/ui/button"
 import { useNamespaces } from "@/hooks/useNamespaces"
 import { cn } from "@/lib/utils"
 
-export const sourceElementId = (index: number) => `ask-source-${index}`
+/** Citations repeat their numbers every turn, so the turn is part of the id. */
+export const sourceElementId = (turnId: string, index: number) =>
+  `ask-source-${turnId}-${index}`
 
 interface SourceListProps {
+  turnId: string
   citations: AskCitation[]
   /** Set once the answer is finished; before that nothing is marked as cited. */
   showCited: boolean
   flashed: number | null
+  /** Open on the newest turn, folded away on the ones above it. */
+  defaultOpen?: boolean
 }
 
-export function SourceList({ citations, showCited, flashed }: SourceListProps) {
+export function SourceList({
+  turnId,
+  citations,
+  showCited,
+  flashed,
+  defaultOpen = false,
+}: SourceListProps) {
+  const [open, setOpen] = useState(defaultOpen)
   if (citations.length === 0) return null
+
+  const cited = citations.filter((c) => c.cited).length
+  const label = showCited
+    ? `${citations.length} source${citations.length === 1 ? "" : "s"} · ${cited} used in the answer`
+    : `Reading ${citations.length} page${citations.length === 1 ? "" : "s"}…`
 
   return (
     <section className="flex flex-col gap-2" aria-label="Sources">
-      <h2 className="text-sm font-medium text-muted-foreground">
-        {showCited
-          ? `Sources · ${citations.filter((c) => c.cited).length} of ${citations.length} used in the answer`
-          : `Reading ${citations.length} page${citations.length === 1 ? "" : "s"}…`}
-      </h2>
-      <ul className="flex flex-col gap-2">
-        {citations.map((citation) => (
-          <SourceRow
-            key={citation.index}
-            citation={citation}
-            cited={showCited && citation.cited === true}
-            flashed={flashed === citation.index}
-          />
-        ))}
-      </ul>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-auto w-fit gap-1.5 px-1.5 py-1 text-xs text-muted-foreground"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        data-testid="ask-sources-toggle"
+      >
+        <ChevronRight
+          className={cn("size-3.5 transition-transform", open && "rotate-90")}
+        />
+        {label}
+      </Button>
+
+      {open && (
+        <ul className="flex flex-col gap-2">
+          {citations.map((citation) => (
+            <SourceRow
+              key={citation.index}
+              turnId={turnId}
+              citation={citation}
+              cited={showCited && citation.cited === true}
+              flashed={flashed === citation.index}
+            />
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
 
 function SourceRow({
+  turnId,
   citation,
   cited,
   flashed,
 }: {
+  turnId: string
   citation: AskCitation
   cited: boolean
   flashed: boolean
@@ -60,7 +91,7 @@ function SourceRow({
 
   return (
     <li
-      id={sourceElementId(citation.index)}
+      id={sourceElementId(turnId, citation.index)}
       data-testid="ask-source"
       data-cited={cited}
       className={cn(

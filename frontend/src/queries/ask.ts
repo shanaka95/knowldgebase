@@ -9,12 +9,20 @@ import type { AskCitation } from "@/client"
  * hundred milliseconds and the answer arrives as it is written.
  */
 
+export interface AskConversationEvent {
+  id: string
+  title: string
+  document_id: string | null
+}
+
 export interface AskSourcesEvent {
   citations: AskCitation[]
   searched: number
   used: number
   /** excerpts sent to the model; one long page can contribute several */
   passages?: number
+  /** true when the answer was written from one page the reader chose */
+  pinned?: boolean
   truncated: boolean
   retrieval_ms: number
   model: string
@@ -26,6 +34,7 @@ export interface AskDoneEvent {
 }
 
 export interface AskStreamHandlers {
+  onConversation?: (event: AskConversationEvent) => void
   onSources?: (event: AskSourcesEvent) => void
   onDelta?: (text: string) => void
   onError?: (message: string) => void
@@ -35,6 +44,10 @@ export interface AskStreamHandlers {
 export interface AskStreamRequest {
   q: string
   namespaceId?: string
+  /** Answer from this page alone: no search, no reranking. */
+  documentId?: string
+  /** Continue a thread. Absent, the server starts one and names it. */
+  conversationId?: string
   topK?: number
   signal?: AbortSignal
 }
@@ -58,7 +71,14 @@ function parseEvent(block: string): { name: string; data: unknown } | null {
 }
 
 export async function streamAsk(
-  { q, namespaceId, topK, signal }: AskStreamRequest,
+  {
+    q,
+    namespaceId,
+    documentId,
+    conversationId,
+    topK,
+    signal,
+  }: AskStreamRequest,
   handlers: AskStreamHandlers,
 ): Promise<void> {
   const response = await fetch(`${baseUrl()}/api/v1/ask/stream`, {
@@ -71,6 +91,8 @@ export async function streamAsk(
     body: JSON.stringify({
       q,
       namespace_id: namespaceId ?? null,
+      document_id: documentId ?? null,
+      conversation_id: conversationId ?? null,
       top_k: topK ?? null,
     }),
     signal,
@@ -95,6 +117,9 @@ export async function streamAsk(
     const event = parseEvent(block)
     if (!event) return
     switch (event.name) {
+      case "conversation":
+        handlers.onConversation?.(event.data as AskConversationEvent)
+        break
       case "sources":
         handlers.onSources?.(event.data as AskSourcesEvent)
         break
