@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.deps import SessionDep, WriteAuth
+from app.api.deps import AuthDep, SessionDep, WriteAuth
 from app.core.permissions import has_min_role, require_document
 from app.models import (
     DocumentNote,
@@ -57,7 +57,7 @@ def _to_public(
 
 
 @router.get("/", response_model=DocumentNotesPublic)
-def read_notes(session: SessionDep, auth: WriteAuth, document_id: uuid.UUID) -> Any:
+def read_notes(session: SessionDep, auth: AuthDep, document_id: uuid.UUID) -> Any:
     """Every note on a page, oldest first."""
     document, role = require_document(session, auth.user, document_id, "viewer")
     rows = notes_service.list_notes(session, document.id)

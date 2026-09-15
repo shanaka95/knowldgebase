@@ -227,9 +227,7 @@ def test_the_allowance_is_administered_like_every_other_limit(
     client: TestClient, superuser_token_headers: dict[str, str]
 ) -> None:
     """It is in the registry, so the admin form draws itself."""
-    r = client.get(
-        f"{API}/admin/user-groups/limits", headers=superuser_token_headers
-    )
+    r = client.get(f"{API}/admin/user-groups/limits", headers=superuser_token_headers)
     assert r.status_code == 200, r.text
     keys = {limit["key"] for limit in r.json()["data"]}
     assert "monthly_credits" in keys
@@ -257,3 +255,79 @@ def test_a_group_can_be_given_its_own_allowance(
     db.refresh(user)
     balance = credits.balance_for(db, user)
     assert balance.allowance_milli == 50_000 * credits.MILLI
+
+
+# ----------------------------------------------------- the agent proxy's bill
+
+
+def _agent_for(db: Session, owner: User) -> tuple[object, str]:
+    from app.models import Agent
+    from app.services.agents import generate_llm_token
+
+    token, token_hash = generate_llm_token()
+    agent = Agent(
+        user_id=owner.id,
+        name=f"Shard {uuid.uuid4().hex[:6]}",
+        profile_name=f"a-{uuid.uuid4().hex[:6]}",
+        shard_id=0,
+        llm_token_hash=token_hash,
+    )
+    db.add(agent)
+    db.commit()
+    return agent, token
+
+
+def test_an_agent_cannot_spend_past_its_owners_limit(
+    client: TestClient, db: Session
+) -> None:
+    """The proxy was metered but not limited: an agent token had no ceiling."""
+    owner, _ = create_user_with_password(db)
+    _drain(owner, db)
+    _, token = _agent_for(db, owner)
+
+    r = client.post(
+        f"{API}/agent-llm/v1/chat/completions",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert r.status_code == 402, r.text
+
+
+def test_the_proxy_bounds_what_one_turn_can_cost(db: Session) -> None:
+    """`n` multiplies the bill and `max_tokens` sets its size; both are ours."""
+    from app.api.routes.agent_llm import _sanitise
+    from app.core.config import settings
+    from app.models import Agent
+
+    agent = Agent(user_id=uuid.uuid4(), name="x", profile_name="a-x", shard_id=0)
+    payload = _sanitise(
+        {
+            "messages": [],
+            "n": 128,
+            "best_of": 64,
+            "max_tokens": 10_000_000,
+        },
+        agent,
+    )
+    assert "n" not in payload, "n asks for several completions and bills for each"
+    assert "best_of" not in payload
+    assert payload["max_tokens"] == settings.AGENT_LLM_MAX_OUTPUT_TOKENS
+
+    # A modest ask is left alone; an absent one is capped rather than unbounded.
+    assert _sanitise({"messages": [], "max_tokens": 50}, agent)["max_tokens"] == 50
+    assert (
+        _sanitise({"messages": []}, agent)["max_tokens"]
+        == settings.AGENT_LLM_MAX_OUTPUT_TOKENS
+    )
+
+
+def test_an_oversized_proxy_body_is_refused(client: TestClient, db: Session) -> None:
+    owner, _ = create_user_with_password(db)
+    _, token = _agent_for(db, owner)
+
+    r = client.post(
+        f"{API}/agent-llm/v1/chat/completions",
+        headers={"Authorization": f"Bearer {token}"},
+        content=b'{"messages":[{"role":"user","content":"' + b"x" * 1_100_000 + b'"}]}',
+    )
+    assert r.status_code == 413, r.text

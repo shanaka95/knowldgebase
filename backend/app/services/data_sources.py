@@ -23,6 +23,7 @@ public by design and restricted by HTTP referrer at Google's end.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import uuid
 from base64 import urlsafe_b64encode
@@ -53,6 +54,20 @@ AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 DRIVE_FILES = "https://www.googleapis.com/drive/v3/files"
+
+# What a Drive file id may contain. Checked here as well as on the request
+# schema because this is the function that builds the URL: `httpx` resolves
+# `..` against the base, so anything else could steer the call - and the call
+# carries somebody's OAuth token.
+DRIVE_ID = re.compile(r"^[A-Za-z0-9_-]{1,255}$")
+
+
+def _safe_file_id(file_id: str) -> str:
+    if not DRIVE_ID.match(file_id):
+        raise DataSourceError("That is not a Google Drive file id.")
+    return file_id
+
+
 DRIVE_ABOUT = "https://www.googleapis.com/drive/v3/about"
 
 # What an admin has to supply per source. Server-driven so the admin form is
@@ -305,7 +320,7 @@ class DriveFile:
 async def describe_file(access_token: str, file_id: str) -> DriveFile:
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
         response = await client.get(
-            f"{DRIVE_FILES}/{file_id}",
+            f"{DRIVE_FILES}/{_safe_file_id(file_id)}",
             params={"fields": "id,name,mimeType,size", "supportsAllDrives": "true"},
             headers={"Authorization": f"Bearer {access_token}"},
         )
@@ -336,7 +351,7 @@ async def download_file(access_token: str, file_id: str, *, max_bytes: int) -> b
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
         async with client.stream(
             "GET",
-            f"{DRIVE_FILES}/{file_id}",
+            f"{DRIVE_FILES}/{_safe_file_id(file_id)}",
             params={"alt": "media", "supportsAllDrives": "true"},
             headers={"Authorization": f"Bearer {access_token}"},
         ) as response:

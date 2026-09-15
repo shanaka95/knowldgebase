@@ -27,9 +27,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.api.deps import SessionDep
 from app.core.config import settings
-from app.models import Agent, AgentStatus, UsageFeature, UsageKind
+from app.models import Agent, AgentStatus, UsageFeature, UsageKind, User
 from app.services import agents as agent_service
-from app.services import usage
+from app.services import credits, usage
 
 logger = logging.getLogger(__name__)
 
@@ -87,15 +87,30 @@ def _upstream_headers() -> dict[str, str]:
 
 
 def _sanitise(body: dict[str, Any], agent: Agent) -> dict[str, Any]:
-    """Pin the model and drop anything that is ours to decide.
+    """Pin the model, bound the cost, and drop anything that is ours to decide.
 
     An agent choosing its own model would let a prompt injection pick the most
-    expensive one on the menu.
+    expensive one on the menu. The same reasoning applies to *how much* of it:
+    a shard runs somebody's prompt, so it is the least trusted thing here that
+    can spend money, and the knobs that multiply a bill are ours to set.
     """
     payload = dict(body)
     payload["model"] = settings.AGENT_LLM_MODEL
     for key in ("api_key", "extra_headers", "user"):
         payload.pop(key, None)
+
+    # `n` asks the provider for several completions and bills for each. There
+    # is no use for it here, and it is the cheapest possible amplification.
+    payload.pop("n", None)
+    payload.pop("best_of", None)
+
+    # A turn may be long, but not unbounded: left alone this is whatever the
+    # caller asked for, up to the model's ceiling, on every single request.
+    ceiling = settings.AGENT_LLM_MAX_OUTPUT_TOKENS
+    asked = payload.get("max_tokens")
+    payload["max_tokens"] = (
+        min(int(asked), ceiling) if isinstance(asked, int) and asked > 0 else ceiling
+    )
     # Attribute the spend without telling the provider who the human is.
     payload["user"] = f"agent-{agent.id.hex[:16]}"
 
@@ -121,12 +136,25 @@ def _sanitise(body: dict[str, Any], agent: Agent) -> dict[str, Any]:
 
 async def _proxy(path: str, request: Request, session: SessionDep) -> Any:
     agent = _authenticate(request, session)
+    raw = await request.body()
+    if len(raw) > settings.AGENT_LLM_MAX_BODY_BYTES:
+        # Read before parsing: a refusal after json.loads has already walked a
+        # hundred megabytes has not saved anything.
+        raise HTTPException(status_code=413, detail="That request is too large")
     try:
-        body = await request.json()
-    except Exception as exc:  # noqa: BLE001 - any unparsable body is the same error
+        body = json.loads(raw)
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail="Expected a JSON body") from exc
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Expected a JSON object")
+
+    # Whose bill this is. An agent is not an account, but it belongs to one,
+    # and that account's limit is the ceiling on what its agents can spend.
+    owner = session.get(User, agent.user_id)
+    try:
+        credits.ensure_credit(session, owner)
+    except credits.CreditsExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
 
     payload = _sanitise(body, agent)
     url = f"{str(settings.LLM_BASE_URL).rstrip('/')}{path}"

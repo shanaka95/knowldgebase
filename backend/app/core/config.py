@@ -139,6 +139,15 @@ class Settings(BaseSettings):
     # see app/services/credits.py for why those three are the same unit.
     MONTHLY_CREDITS: int = 1000
 
+    # --- Agent proxy ceilings -----------------------------------------------
+    # An agent's shard holds a token that reaches the model provider through
+    # us. These bound what one turn can cost, because the shard is the least
+    # trusted thing that can spend money here: it runs somebody's prompt.
+    AGENT_LLM_MAX_OUTPUT_TOKENS: int = 4096
+    # Bytes of JSON one proxied turn may carry. A tool loop with a long history
+    # is large; a megabyte of it is somebody probing.
+    AGENT_LLM_MAX_BODY_BYTES: int = 1_000_000
+
     # --- API keys -----------------------------------------------------------
     API_KEY_PREFIX: str = "kb_"
 

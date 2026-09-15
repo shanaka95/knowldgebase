@@ -1,9 +1,10 @@
+import re
 import uuid
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import EmailStr
+from pydantic import EmailStr, field_validator
 from sqlalchemy import (
     BigInteger,
     Column,
@@ -2338,10 +2339,31 @@ class GoogleDrivePickerConfig(SQLModel):
     expires_in: int
 
 
+# What a Google Drive file id may contain.
+DRIVE_FILE_ID = re.compile(r"^[A-Za-z0-9_-]{1,255}$")
+
+
 class GoogleDrivePickedFile(SQLModel):
     file_id: str = Field(min_length=1, max_length=255)
     name: str = Field(default="", max_length=255)
     mime_type: str = Field(default="", max_length=127)
+
+    @field_validator("file_id")
+    @classmethod
+    def _is_a_drive_id(cls, value: str) -> str:
+        """Constrain the id, because it is interpolated into a URL.
+
+        `httpx` resolves `..` against the base, so an unconstrained id lets a
+        crafted pick steer the request to any other googleapis.com endpoint -
+        carrying the account's live OAuth token with it.
+
+        A validator rather than `Field(regex=...)`: SQLModel accepts that
+        keyword and silently drops it, which is worse than no constraint at all
+        because it reads like one.
+        """
+        if not DRIVE_FILE_ID.match(value):
+            raise ValueError("That is not a Google Drive file id")
+        return value
 
 
 class GoogleDriveImportRequest(SQLModel):

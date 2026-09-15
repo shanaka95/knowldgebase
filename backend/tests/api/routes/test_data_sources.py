@@ -705,3 +705,49 @@ def test_a_note_given_at_import_becomes_the_page_s_first_note(
     jobs = _jobs_in(db, ns.id)
     assert len(jobs) == 1
     assert jobs[0].note == "Signed copy; the countersigned one is still coming."
+
+
+@respx.mock
+def test_a_crafted_file_id_cannot_steer_the_request(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    """`httpx` resolves `..` against the base, so an id is a URL fragment.
+
+    Unconstrained, `../../../oauth2/v1/tokeninfo` would send the account's live
+    OAuth token to a different Google endpoint entirely. Refused before any
+    request is made, which is why nothing here is mocked: a call would fail the
+    test by being unmatched.
+    """
+    _configure(client, superuser_token_headers)
+    user, pw = create_user_with_password(db)
+    ns = create_namespace(db, user)
+    _connect(db, user.id)
+    headers = login(client, user, pw)
+
+    for crafted in (
+        "../../../oauth2/v1/tokeninfo",
+        "abc/../../about",
+        "abc?alt=media",
+        "abc#fragment",
+        "../",
+    ):
+        response = client.post(
+            f"{SOURCES}/google-drive/import",
+            headers=headers,
+            json={
+                "files": [{"file_id": crafted, "name": "x.pdf"}],
+                "namespace_id": str(ns.id),
+            },
+        )
+        assert response.status_code == 422, f"{crafted!r} was accepted"
+    assert _jobs_in(db, ns.id) == []
+
+
+def test_the_service_refuses_a_crafted_id_even_without_the_schema() -> None:
+    """Defence in depth: the function that builds the URL checks it too."""
+    import pytest
+
+    assert service._safe_file_id("1a2B3c-_") == "1a2B3c-_"
+    for crafted in ("../x", "a/b", "a?b", "", "a" * 256):
+        with pytest.raises(service.DataSourceError):
+            service._safe_file_id(crafted)
