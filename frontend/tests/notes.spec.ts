@@ -15,7 +15,7 @@ test.describe("Notes on a page", () => {
     request,
   }) => {
     const token = await adminToken(request)
-    const ns = await createNamespace(request, token, `Notes ${uid()}`)
+    const ns = await createNamespace(request, token, { name: `Notes ${uid()}` })
     const doc = await createDocument(request, token, ns.id, {
       title: `Invoice ${uid()}`,
       content: "<p>An invoice.</p>",
@@ -43,7 +43,7 @@ test.describe("Notes on a page", () => {
     request,
   }) => {
     const token = await adminToken(request)
-    const ns = await createNamespace(request, token, `Notes ${uid()}`)
+    const ns = await createNamespace(request, token, { name: `Notes ${uid()}` })
     const doc = await createDocument(request, token, ns.id, {
       title: `Contract ${uid()}`,
       content: "<p>A contract.</p>",
@@ -71,7 +71,7 @@ test.describe("Notes on a page", () => {
     // The claim the whole design rests on. Through the API, because what is
     // being checked is the index rather than the interface.
     const token = await adminToken(request)
-    const ns = await createNamespace(request, token, `Notes ${uid()}`)
+    const ns = await createNamespace(request, token, { name: `Notes ${uid()}` })
     const doc = await createDocument(request, token, ns.id, {
       title: `Policy ${uid()}`,
       content: "<p>Nothing in the body mentions it.</p>",

@@ -16,6 +16,10 @@ import {
 } from "@/client"
 import { AuthAlert } from "@/components/Common/AuthAlert"
 import { AuthLayout } from "@/components/Common/AuthLayout"
+import {
+  LandingHero,
+  LandingHeroCompact,
+} from "@/components/Common/LandingHero"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -74,7 +78,7 @@ function Login() {
   } = useAuth()
 
   return (
-    <AuthLayout>
+    <AuthLayout hero={<LandingHero />} heroCompact={<LandingHeroCompact />}>
       {challenge ? (
         <CodePane
           challenge={challenge}
@@ -125,8 +129,13 @@ function PasswordPane({
         onSubmit={form.handleSubmit(onSubmit)}
         className="flex flex-col gap-6"
       >
-        <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-bold">Login to your account</h1>
+        <div className="flex flex-col gap-1.5">
+          <h1 className="font-semibold text-2xl tracking-tight">
+            Welcome back
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Sign in to your knowledge base.
+          </p>
         </div>
 
         {loginMutation.error && (
@@ -212,11 +221,25 @@ function PasswordPane({
           </LoadingButton>
         </div>
 
-        <div className="text-center text-sm">
-          Don't have an account yet?{" "}
-          <RouterLink to="/signup" className="underline underline-offset-4">
-            Sign up
-          </RouterLink>
+        <div className="flex flex-col gap-3 text-center text-sm">
+          <span>
+            Don't have an account yet?{" "}
+            <RouterLink to="/signup" className="underline underline-offset-4">
+              Sign up
+            </RouterLink>
+          </span>
+          {/* Said where the decision is made rather than only in a footer. */}
+          <span className="text-muted-foreground text-xs leading-relaxed">
+            By continuing you agree to the{" "}
+            <RouterLink to="/terms" className="underline underline-offset-4">
+              Terms
+            </RouterLink>{" "}
+            and the{" "}
+            <RouterLink to="/privacy" className="underline underline-offset-4">
+              Privacy Policy
+            </RouterLink>
+            .
+          </span>
         </div>
       </form>
     </Form>
