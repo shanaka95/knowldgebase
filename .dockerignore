@@ -5,6 +5,10 @@ backend/htmlcov
 frontend/blob-report
 frontend/dist
 frontend/node_modules
+# A local `bun run build` writes here, and `COPY ./backend/app` would bake
+# that developer's chunks into the image underneath the one built above -
+# which is why production was serving four entry chunks from four builds.
+backend/app/frontend
 frontend/playwright-report
 frontend/test-results
 node_modules

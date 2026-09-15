@@ -136,3 +136,89 @@ test.describe("Detecting a replaced build", () => {
     expect(stale).toBe(false)
   })
 })
+
+/**
+ * The cost of cancelling `vite:preloadError`.
+ *
+ * Vite's preload helper is, in full:
+ *
+ * ```js
+ * const onError = (err) => {
+ *   const e = new Event("vite:preloadError", { cancelable: true })
+ *   e.payload = err
+ *   window.dispatchEvent(e)
+ *   if (!e.defaultPrevented) throw err
+ * }
+ * return deps.then(() => importer().catch(onError))
+ * ```
+ *
+ * Cancel that event and `onError` returns rather than throws, so the import
+ * *resolves* — with `undefined`. The router reads `component` off it and a
+ * momentary network failure becomes a permanent
+ * "Cannot read properties of undefined (reading 'component')" on a page whose
+ * chunks are all present. These tests run that helper's own logic, because
+ * asserting on `defaultPrevented` alone would not show what it costs.
+ */
+test.describe("A preload failure nobody is going to reload for", () => {
+  const VITE_HELPER = `
+    const onError = (err) => {
+      const e = new Event("vite:preloadError", { cancelable: true })
+      e.payload = err
+      window.dispatchEvent(e)
+      if (!e.defaultPrevented) throw err
+    }
+  `
+
+  test("is left to reject, not turned into an undefined module", async ({
+    page,
+  }) => {
+    await page.goto("/")
+    await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
+
+    const outcome = await page.evaluate(async (helper) => {
+      // Cooldown on: this tab has already tried a reload, so nothing is going
+      // to rescue this import. It must surface as an error.
+      sessionStorage.setItem("stale-build-reload", String(Date.now()))
+      const onError = new Function(`${helper}; return onError`)() as (
+        e: unknown,
+      ) => never
+      return Promise.reject(
+        new Error(
+          "Failed to fetch dynamically imported module: /assets/search-abc.js",
+        ),
+      )
+        .catch(onError)
+        .then(
+          (module) => (module === undefined ? "resolved undefined" : "loaded"),
+          () => "rejected",
+        )
+    }, VITE_HELPER)
+
+    expect(
+      outcome,
+      "swallowing it hands the router `undefined` to read `component` off",
+    ).toBe("rejected")
+  })
+
+  test("a stylesheet that would not load is still survivable", async ({
+    page,
+  }) => {
+    await page.goto("/")
+    await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
+
+    // The only dependency Vite waits on is a stylesheet, and it reports that
+    // through the same event. Letting it throw would cost the whole route for
+    // a missing stylesheet, so this one is swallowed even on cooldown.
+    const cancelled = await page.evaluate(() => {
+      sessionStorage.setItem("stale-build-reload", String(Date.now()))
+      const event = new Event("vite:preloadError", { cancelable: true })
+      Object.assign(event, {
+        payload: new Error("Unable to preload CSS for /assets/index-abc.css"),
+      })
+      window.dispatchEvent(event)
+      return event.defaultPrevented
+    })
+
+    expect(cancelled).toBe(true)
+  })
+})

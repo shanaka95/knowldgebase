@@ -106,24 +106,69 @@ export function reloadForNewBuild(): boolean {
 }
 
 /**
+ * A stylesheet that failed to preload, which is survivable.
+ *
+ * Vite's preload helper reports two quite different things through one event.
+ * It walks the route's dependencies first, and the only one that can reject is
+ * a `<link rel=stylesheet>` - everything else is `modulepreload`, which it does
+ * not wait on. That rejection is worth swallowing: the module import itself
+ * still runs, the link is in the document either way, and a flaky stylesheet
+ * fetch should not cost somebody the page.
+ *
+ * The other thing it reports is the module import failing, and that one is
+ * fatal - see below.
+ */
+const CSS_PRELOAD = /Unable to preload CSS/i
+
+/**
  * Catch the failures that never reach a React error boundary.
  *
  * Vite fires `vite:preloadError` when a dynamic import fails, and an unhandled
  * rejection covers the rest. Both happen outside the render tree, which is why
  * a route-level error component alone is not enough.
+ *
+ * **`preventDefault` here is not free.** Vite's helper is, in full:
+ *
+ * ```js
+ * const onError = (err) => {
+ *   const e = new Event("vite:preloadError", { cancelable: true })
+ *   e.payload = err
+ *   window.dispatchEvent(e)
+ *   if (!e.defaultPrevented) throw err
+ * }
+ * return deps.then(() => importer().catch(onError))
+ * ```
+ *
+ * Cancel the event and `onError` returns instead of throwing - so
+ * `importer().catch(onError)` *resolves*, with `undefined`. The router then
+ * reads `component` off that, and a momentary network failure surfaces for ever
+ * after as `Cannot read properties of undefined (reading 'component')`, on a
+ * page whose chunks are all present and correct. That cost three wrong
+ * diagnoses before the minified helper was read.
+ *
+ * So the event is only cancelled when a reload is genuinely under way and the
+ * page is about to be replaced. Otherwise it is left to throw, the import
+ * rejects, and the failure arrives at the error boundary as what it actually
+ * is - a chunk that would not load, which that boundary already knows how to
+ * offer a reload for.
  */
 export function watchForStaleBuild(entryUrl?: string): void {
   runningBuild = entryUrl ? (ENTRY.exec(entryUrl)?.[0] ?? null) : null
 
   window.addEventListener("vite:preloadError", (event) => {
-    event.preventDefault()
-    reloadForNewBuild()
+    const reason = (event as Event & { payload?: unknown }).payload
+    const message = reason instanceof Error ? reason.message : String(reason)
+    if (CSS_PRELOAD.test(message)) {
+      event.preventDefault()
+      return
+    }
+    if (reloadForNewBuild()) event.preventDefault()
   })
   window.addEventListener("unhandledrejection", (event) => {
-    if (isStaleChunkError(event.reason)) {
+    // Cancelled only when reloading, for the same reason: otherwise this is the
+    // last place the failure could have been printed.
+    if (isStaleChunkError(event.reason) && reloadForNewBuild())
       event.preventDefault()
-      reloadForNewBuild()
-    }
   })
 }
 
