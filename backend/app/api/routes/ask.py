@@ -63,6 +63,7 @@ from app.services.answering import (
     Passage,
     Turn,
     answer,
+    answer_language,
     build_context,
     cited_indexes,
     retrieval_query,
@@ -78,7 +79,7 @@ from app.services.conversations import (
     prune_conversations,
     start_conversation,
 )
-from app.services.llm import LLMClient
+from app.services.llm import LLMClient, LLMTask
 from app.services.reranking import Reranker, keep_count
 from app.services.retrieval import FusedHit, retrieve
 from app.services.sparse import encode_query
@@ -409,7 +410,7 @@ def _stats(context: AnswerContext, searched: int, took_ms: float) -> dict[str, o
         "used": len({p.document_id for p in context.passages}),
         "passages": len(context.passages),
         "truncated": context.truncated,
-        "model": settings.LLM_MODEL,
+        "model": settings.LLM_ANSWER_MODEL,
         "took_ms": round(took_ms),
     }
 
@@ -484,9 +485,15 @@ async def ask_question(
         session, auth, vectors, embeddings, reranker, body, history=history
     )
     context = build_context(passages)
-    llm = LLMClient()
+    llm = LLMClient(task=LLMTask.answer)
     try:
-        text = await answer(llm, body.q, context, history=history)
+        text = await answer(
+            llm,
+            body.q,
+            context,
+            history=history,
+            language=answer_language(body.q, history),
+        )
     finally:
         await llm.close()
 
@@ -513,7 +520,7 @@ async def ask_question(
         passages=len(context.passages),
         reranked=reranked,
         truncated=context.truncated,
-        model=settings.LLM_MODEL,
+        model=settings.LLM_ANSWER_MODEL,
         retrieval_ms=retrieval_ms,
         took_ms=took_ms,
     )
@@ -593,6 +600,10 @@ async def ask_question_stream(
     # Citations are resolved up front so they can be shown while the answer is
     # still being written; `cited` is filled in by the final event.
     citations = _citations(session, context, "")
+    # Detected here rather than inside the generator: it is the reader's own
+    # words being read, and doing it before the response starts keeps the
+    # first byte as early as it was.
+    language = answer_language(body.q, history)
     conversation_id = conversation.id
     conversation_title_now = conversation.title
     user_id = auth.user.id
@@ -646,13 +657,15 @@ async def ask_question_stream(
                 "pinned": body.document_id is not None,
                 "truncated": context.truncated,
                 "retrieval_ms": retrieval_ms,
-                "model": settings.LLM_MODEL,
+                "model": settings.LLM_ANSWER_MODEL,
             },
         )
-        llm = LLMClient()
+        llm = LLMClient(task=LLMTask.answer)
         collected: list[str] = []
         try:
-            async for piece in stream_answer(llm, body.q, context, history=history):
+            async for piece in stream_answer(
+                llm, body.q, context, history=history, language=language
+            ):
                 collected.append(piece)
                 yield event("delta", {"text": piece})
         except Exception as exc:  # noqa: BLE001 - the reader gets a message, not a stall

@@ -77,3 +77,26 @@ def _localize(base_url: str) -> str:
 def model_setting(role: str, key: str, fallback: Any = None) -> Any:
     """One value for a role, falling back to the built-in default."""
     return load_models_config().get(role, {}).get(key, fallback)
+
+
+def task_setting(task: str, key: str, fallback: Any = None) -> Any:
+    """One value for a single LLM task, from ``[llm.tasks.<task>]``.
+
+    Tasks want different models: translating a page is a cheaper, more
+    mechanical job than answering a question about twelve of them. This reads
+    the per-task override; `config.py` decides what to do when there is none.
+    """
+    tasks = load_models_config().get("llm", {}).get("tasks") or {}
+    section = tasks.get(task) or {}
+    return section.get(key, fallback) if isinstance(section, dict) else fallback
+
+
+def names_one_model() -> bool:
+    """True when the deployment's config file names a single chat model.
+
+    That is what a local `models.toml` does - one server, one model loaded -
+    and it has to win over the per-task defaults, which name models only a
+    hosted provider serves. Without a config file (the deployed image has
+    none) this is false and each task uses its own default.
+    """
+    return bool(model_setting("llm", "model"))

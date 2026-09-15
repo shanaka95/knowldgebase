@@ -462,7 +462,7 @@ def pairing_status(shard_id: int) -> dict[str, object]:
             "state": "unavailable",
             "detail": "The gateway has not started yet, so pairing cannot begin.",
         }
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return {"state": "unknown", "detail": "The gateway's status could not be read."}
     return data if isinstance(data, dict) else {"state": "unknown"}
 

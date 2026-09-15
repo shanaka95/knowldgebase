@@ -14,7 +14,8 @@ import pytest
 import respx
 
 from app.core.config import settings
-from app.services.llm import LLMClient, LLMError, clean_completion
+from app.services.llm import LLMClient, LLMError, LLMTask, clean_completion
+from app.services.model_client import ModelServerError
 
 pytestmark = pytest.mark.anyio
 
@@ -120,3 +121,111 @@ async def test_thinking_tags_and_code_fences_are_stripped() -> None:
     assert clean_completion("<think>hmm</think>Answer.") == "Answer."
     assert clean_completion('```json\n{"a": 1}\n```') == '{"a": 1}'
     assert clean_completion("plain") == "plain"
+
+
+# ---------------------------------------------------------------------------
+# A model per task
+# ---------------------------------------------------------------------------
+
+
+async def test_each_task_asks_for_its_own_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "LLM_TRANSLATION_MODEL", "cheap/translator")
+    monkeypatch.setattr(settings, "LLM_TRANSLATION_FALLBACK_MODELS", "")
+    llm = LLMClient(task=LLMTask.translation)
+    try:
+        with respx.mock:
+            route = respx.post(URL).mock(return_value=completion("hallo"))
+            await llm.chat([{"role": "user", "content": "hi"}])
+    finally:
+        await llm.close()
+    assert json.loads(route.calls[0].request.content)["model"] == "cheap/translator"
+
+
+async def test_a_model_named_outright_is_not_second_guessed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`model=` is the whole instruction; a fallback would answer as another model."""
+    monkeypatch.setattr(settings, "LLM_ANSWER_FALLBACK_MODELS", "some/fallback")
+    assert LLMClient(model="exactly/this").fallback_models == []
+
+
+async def test_the_fallback_model_answers_when_the_first_one_will_not() -> None:
+    """A busy provider is a reason to ask another model, not to wait two minutes."""
+    llm = LLMClient(model="first/model", fallback_models=["second/model"])
+    try:
+        with respx.mock:
+            route = respx.post(URL).mock(
+                side_effect=[
+                    httpx.Response(429, json={"error": "busy"}),
+                    completion("ok"),
+                ]
+            )
+            assert await llm.chat([{"role": "user", "content": "hi"}]) == "ok"
+    finally:
+        await llm.close()
+    assert route.call_count == 2
+    assert json.loads(route.calls[1].request.content)["model"] == "second/model"
+
+
+async def test_the_original_failure_is_reported_when_every_model_fails() -> None:
+    llm = LLMClient(model="first/model", fallback_models=["second/model"])
+    try:
+        with respx.mock:
+            route = respx.post(URL).mock(return_value=httpx.Response(500, text="down"))
+            with pytest.raises(ModelServerError):
+                await llm.chat([{"role": "user", "content": "hi"}])
+    finally:
+        await llm.close()
+    assert route.call_count == 2, "each model is tried exactly once"
+
+
+async def test_the_whole_list_travels_so_a_router_can_do_it_server_side() -> None:
+    """OpenRouter re-routes without a second round trip when it sees `models`."""
+    llm = LLMClient(model="first/model", fallback_models=["second/model"])
+    try:
+        with respx.mock:
+            route = respx.post(URL).mock(return_value=completion("ok"))
+            await llm.chat([{"role": "user", "content": "hi"}])
+    finally:
+        await llm.close()
+    body = json.loads(route.calls[0].request.content)
+    assert body["models"] == ["first/model", "second/model"]
+
+
+async def test_one_model_sends_no_models_array() -> None:
+    llm = LLMClient(model="only/model")
+    try:
+        with respx.mock:
+            route = respx.post(URL).mock(return_value=completion("ok"))
+            await llm.chat([{"role": "user", "content": "hi"}])
+    finally:
+        await llm.close()
+    assert "models" not in json.loads(route.calls[0].request.content)
+
+
+async def test_a_stream_that_fails_before_a_token_falls_back() -> None:
+    llm = LLMClient(model="first/model", fallback_models=["second/model"])
+    stream = (
+        "".join(
+            f"data: {json.dumps({'choices': [{'delta': {'content': piece}}]})}\n\n"
+            for piece in ["par", "tial"]
+        )
+        + "data: [DONE]\n\n"
+    )
+    try:
+        with respx.mock:
+            route = respx.post(URL).mock(
+                side_effect=[
+                    httpx.Response(503, text="no capacity"),
+                    httpx.Response(200, content=stream.encode()),
+                ]
+            )
+            pieces = [
+                p async for p in llm.stream_chat([{"role": "user", "content": "hi"}])
+            ]
+    finally:
+        await llm.close()
+    assert "".join(pieces) == "partial"
+    assert route.call_count == 2

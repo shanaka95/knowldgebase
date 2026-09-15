@@ -208,14 +208,19 @@ def test_delete_namespace_enqueues_cleanup(client: TestClient, db: Session) -> N
     assert client.get(f"{API}/namespaces/{ns.id}", headers=headers).status_code == 404
 
 
-def test_superuser_sees_everything(
+def test_superuser_can_open_everything_without_being_a_member_of_it(
     client: TestClient, superuser_token_headers: dict[str, str], db: Session
 ) -> None:
+    """Reading every space is the account; being an admin of one is a relationship.
+
+    Conflating them put an ADMIN badge on spaces belonging to other people that
+    had never been shared with anybody.
+    """
     owner, _ = create_user_with_password(db)
     ns = create_namespace(db, owner)
     r = client.get(f"{API}/namespaces/{ns.id}", headers=superuser_token_headers)
-    assert r.status_code == 200
-    assert r.json()["my_role"] == "admin"
+    assert r.status_code == 200, "an administrator can still open it"
+    assert r.json()["my_role"] is None, "but holds no role in it"
 
 
 def test_editor_member_can_create_content_but_not_manage(

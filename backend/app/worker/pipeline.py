@@ -16,6 +16,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.core.config import settings
 from app.core.content import blocks_to_text, html_to_blocks
@@ -30,6 +31,7 @@ from app.models import (
 from app.services.embeddings import EmbeddingClient, EmbeddingDimensionError
 from app.services.llm import LLMClient
 from app.services.sparse import encode_document
+from app.services.suggestions import question_for_document
 from app.services.vectors import Point, VectorStore, build_payload, point_id
 from app.worker import queue
 from app.worker.chunking import semantic_chunk
@@ -116,6 +118,32 @@ def build_points(
         )
         cursor += 1
     return points
+
+
+async def _write_search_suggestion(doc: Any, summary: str | None) -> None:
+    """One example search drawn from this page, kept for its owner.
+
+    The summary has just been written, so this is a short prompt against a few
+    hundred characters rather than another pass over the document.
+    """
+    if not summary:
+        return
+    try:
+        question = await question_for_document(doc.title, summary)
+        if not question:
+            return
+        owner = await asyncio.to_thread(queue.document_owner, doc.id)
+        if owner is None:
+            return
+        await asyncio.to_thread(
+            queue.save_search_suggestion,
+            owner,
+            doc.id,
+            doc.namespace_id,
+            question,
+        )
+    except Exception:  # noqa: BLE001 - a suggestion is never worth a failed job
+        logger.info("no example search stored for %s", str(doc.id)[:8], exc_info=True)
 
 
 async def _embed_all(
@@ -221,6 +249,11 @@ async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
             method,
             len(points),
         )
+
+        # --- an example search, for the person whose page this is -------------
+        # After the job is committed, and never allowed to fail it: the page is
+        # indexed either way and this only decorates an empty search box.
+        await _write_search_suggestion(doc, summary)
         return JobStatus.succeeded
 
     except JobSuperseded:

@@ -13,6 +13,7 @@ from app.core.permissions import (
     get_document_role,
     get_namespace_role,
     has_min_role,
+    held_namespace_role,
 )
 from app.models import (
     Attachment,
@@ -58,7 +59,9 @@ def to_namespace_public(
     role: NamespaceRole | None = None,
 ) -> NamespacePublic:
     if role is None:
-        role = get_namespace_role(session, user, namespace)
+        # The relationship, not the administrator override: a space nobody
+        # shared with you is not a space you are an admin of.
+        role = held_namespace_role(session, user, namespace)
 
     # Counts are scoped to the caller. Somebody who was shared a single page can
     # see the space around it, and must not learn from these numbers how much
@@ -119,23 +122,22 @@ def to_namespace_publics(
 
     ids = [ns.id for ns in namespaces]
 
-    roles: dict[uuid.UUID, NamespaceRole | None] = {}
-    if user.is_superuser:
-        roles = {ns.id: NamespaceRole.admin for ns in namespaces}
-    else:
-        memberships = session.exec(
-            select(NamespaceMember).where(
-                col(NamespaceMember.namespace_id).in_(ids),
-                NamespaceMember.user_id == user.id,
-            )
-        ).all()
-        by_namespace = {m.namespace_id: m.role for m in memberships}
-        for ns in namespaces:
-            roles[ns.id] = (
-                NamespaceRole.admin
-                if ns.owner_id == user.id
-                else by_namespace.get(ns.id)
-            )
+    # The role each space is labelled with is the one actually held here. An
+    # administrator is not a member of everybody's spaces, and saying so put an
+    # ADMIN badge on spaces that had never been shared with them.
+    memberships = session.exec(
+        select(NamespaceMember).where(
+            col(NamespaceMember.namespace_id).in_(ids),
+            NamespaceMember.user_id == user.id,
+        )
+    ).all()
+    by_namespace = {m.namespace_id: m.role for m in memberships}
+    roles: dict[uuid.UUID, NamespaceRole | None] = {
+        ns.id: (
+            NamespaceRole.admin if ns.owner_id == user.id else by_namespace.get(ns.id)
+        )
+        for ns in namespaces
+    }
 
     # Page counts stay scoped to the caller, exactly as the single-space path
     # does: a share on one page must not reveal how much else is in the space.
@@ -239,20 +241,36 @@ def to_document_public(
         my_role = get_document_role(session, user, document)
     refs = user_refs_by_id(session, [document.created_by, document.updated_by])
     summary = to_document_summary(document, my_role)
-    source: AttachmentPublic | None = None
-    if document.source_attachment_id is not None:
-        # The original PDF/image an imported page was built from stays available.
+    # Every file the page was imported from, in the order they were uploaded.
+    # A page combined from eight scans used to offer the first one and keep the
+    # other seven to itself.
+    originals = [
+        to_attachment_public(a)
+        for a in session.exec(
+            select(Attachment)
+            .where(
+                Attachment.document_id == document.id,
+                col(Attachment.source_order).is_not(None),
+            )
+            .order_by(col(Attachment.source_order))
+        ).all()
+    ]
+    if not originals and document.source_attachment_id is not None:
+        # Imported before originals were numbered, and not covered by the
+        # backfill: the page still has the one file it always showed.
         attachment = session.get(Attachment, document.source_attachment_id)
         if attachment is not None:
-            source = to_attachment_public(attachment)
+            originals = [to_attachment_public(attachment)]
     return DocumentPublic(
         **summary.model_dump(),
         content_html=document.content_html,
         content_text=document.content_text,
         summary=document.summary,
+        language=document.language,
         updated_by_user=refs.get(document.updated_by) if document.updated_by else None,
         created_by_user=refs.get(document.created_by) if document.created_by else None,
-        source_attachment=source,
+        source_attachment=originals[0] if originals else None,
+        source_attachments=originals,
     )
 
 
@@ -274,6 +292,8 @@ def to_attachment_public(attachment: Attachment) -> AttachmentPublic:
         content_type=attachment.content_type,
         size=attachment.size,
         download_url=attachment_download_url(attachment.id),
+        source_order=attachment.source_order,
+        source_version=attachment.source_version,
         created_at=attachment.created_at,
     )
 

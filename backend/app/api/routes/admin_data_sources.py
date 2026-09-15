@@ -31,9 +31,7 @@ router = APIRouter(
 def _to_public(
     source: DataSourceType, config: DataSourceConfig | None
 ) -> DataSourceConfigPublic:
-    present = service.open_credentials(
-        config.credentials_encrypted if config else None
-    )
+    present = service.open_credentials(config.credentials_encrypted if config else None)
     return DataSourceConfigPublic(
         source_type=source,
         enabled=bool(config and config.enabled),

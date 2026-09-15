@@ -73,7 +73,9 @@ def _sanitise(body: dict[str, Any], agent: Agent) -> dict[str, Any]:
     # Steer OpenRouter's provider choice. Left to itself it can route to a
     # throttled endpoint and fail the turn while another provider serving the
     # same model is healthy - and, for this model, has four times the context.
-    order = [p.strip() for p in settings.AGENT_LLM_PROVIDER_ORDER.split(",") if p.strip()]
+    order = [
+        p.strip() for p in settings.AGENT_LLM_PROVIDER_ORDER.split(",") if p.strip()
+    ]
     if order:
         payload["provider"] = {"order": order, "allow_fallbacks": True}
 
@@ -133,7 +135,9 @@ async def _proxy(path: str, request: Request, session: SessionDep) -> Any:
     except httpx.HTTPError as exc:
         await client.aclose()
         logger.warning("Agent LLM proxy upstream error: %s", exc)
-        raise HTTPException(status_code=502, detail="The model provider is unreachable") from exc
+        raise HTTPException(
+            status_code=502, detail="The model provider is unreachable"
+        ) from exc
 
 
 def _safe_json(content: bytes) -> Any:
@@ -142,7 +146,9 @@ def _safe_json(content: bytes) -> Any:
     try:
         return json.loads(content or b"{}")
     except ValueError:
-        return {"error": {"message": "The model provider returned an unreadable response"}}
+        return {
+            "error": {"message": "The model provider returned an unreadable response"}
+        }
 
 
 @router.post("/v1/chat/completions")

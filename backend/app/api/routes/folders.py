@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from sqlmodel import Session, col, select
 
+from app import crud
 from app.api.deps import AuthDep, SessionDep, WriteAuth
 from app.api.serializers import role_for_documents, to_document_summary
 from app.core.permissions import require_folder, require_namespace
@@ -84,6 +85,16 @@ def create_folder(session: SessionDep, auth: WriteAuth, folder_in: FolderCreate)
             raise HTTPException(
                 status_code=400, detail="Parent folder not in this namespace"
             )
+    if crud.folder_name_taken(
+        session,
+        namespace_id=namespace.id,
+        parent_id=folder_in.parent_id,
+        name=folder_in.name,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="There is already a folder with this name here",
+        )
     folder = Folder(
         name=folder_in.name,
         namespace_id=namespace.id,
@@ -125,10 +136,14 @@ def update_folder(
 ) -> Any:
     """Rename and/or move a folder (``parent_id`` or ``move_to_root``)."""
     folder, namespace, _ = require_folder(session, auth.user, folder_id, "editor")
-    if folder_in.name is not None:
-        folder.name = folder_in.name
+
+    # Worked out before anything is assigned. Setting a field on a tracked row
+    # and then running a query autoflushes the change, which would hit the
+    # database constraint before this check could give a useful answer.
+    name = folder.name if folder_in.name is None else folder_in.name
+    parent_id = folder.parent_id
     if folder_in.move_to_root:
-        folder.parent_id = None
+        parent_id = None
     elif folder_in.parent_id is not None and folder_in.parent_id != folder.parent_id:
         if folder_in.parent_id == folder.id:
             raise HTTPException(
@@ -143,7 +158,24 @@ def update_folder(
             raise HTTPException(
                 status_code=400, detail="Cannot move a folder into its own subtree"
             )
-        folder.parent_id = parent.id
+        parent_id = parent.id
+
+    # Either the rename or the move can be what puts two folders of the same
+    # name side by side, so this is checked against where it is going to land.
+    if crud.folder_name_taken(
+        session,
+        namespace_id=folder.namespace_id,
+        parent_id=parent_id,
+        name=name,
+        exclude_id=folder.id,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="There is already a folder with this name here",
+        )
+
+    folder.name = name
+    folder.parent_id = parent_id
     folder.updated_at = datetime.now(UTC)
     session.add(folder)
     session.commit()

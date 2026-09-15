@@ -36,6 +36,8 @@ from app.models import (
     RetrievalSourceReport,
     SearchResult,
     SearchResults,
+    SearchSuggestionPublic,
+    SearchSuggestionsPublic,
     User,
 )
 from app.services.model_client import ModelServerError
@@ -46,6 +48,7 @@ from app.services.reranking import (
 )
 from app.services.retrieval import FusedHit, retrieve
 from app.services.sparse import tokenize
+from app.services.suggestions import sample_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -490,4 +493,29 @@ async def retrieve_documents(
             for s in result.sources
         ],
         took_ms=round((time.perf_counter() - started) * 1000, 2),
+    )
+
+
+@router.get("/suggestions", response_model=SearchSuggestionsPublic)
+def read_search_suggestions(
+    session: SessionDep,
+    auth: AuthDep,
+    limit: int = Query(default=0, ge=0, le=10),
+) -> SearchSuggestionsPublic:
+    """A few example searches, written from this person's own pages.
+
+    Private by construction: the query is scoped to the asker, and a suggestion
+    is only ever written for the person who created the page behind it. Nobody
+    sees an example drawn from somebody else's document, shared or not.
+
+    A different few come back each time, so an empty search box does not become
+    wallpaper.
+    """
+    rows = sample_for_user(session, auth.user.id, limit or None)
+    return SearchSuggestionsPublic(
+        data=[
+            SearchSuggestionPublic(question=r.question, document_id=r.document_id)
+            for r in rows
+        ],
+        count=len(rows),
     )

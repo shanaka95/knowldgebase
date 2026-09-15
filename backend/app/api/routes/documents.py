@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import col, func, select
+from sqlmodel import Session, col, func, select
 
 from app import crud
 from app.api.deps import (
@@ -21,6 +21,7 @@ from app.api.serializers import (
     to_job_public,
     to_namespace_publics,
     user_ref,
+    user_refs_by_id,
 )
 from app.core.config import settings
 from app.core.content import html_to_text, normalize_content
@@ -35,6 +36,7 @@ from app.core.permissions import (
 )
 from app.models import (
     COMMON_DOCUMENT_TYPES,
+    Attachment,
     CleanupKind,
     CleanupTask,
     Document,
@@ -43,6 +45,7 @@ from app.models import (
     DocumentClone,
     DocumentCreate,
     DocumentEmbeddingsPublic,
+    DocumentLanguages,
     DocumentMove,
     DocumentPublic,
     DocumentShare,
@@ -54,12 +57,17 @@ from app.models import (
     DocumentTypeCount,
     DocumentTypesPublic,
     DocumentUpdate,
+    DocumentVersion,
+    DocumentVersionPublic,
+    DocumentVersionsPublic,
+    DocumentVersionSummary,
     EmbeddingJob,
     EmbeddingJobPublic,
     EmbeddingStatus,
     EmbeddingSummary,
     Folder,
     JobStatus,
+    LanguageOption,
     Message,
     Namespace,
     NamespaceMember,
@@ -71,7 +79,10 @@ from app.models import (
     ShareResult,
     ShareRole,
     ShareSkipped,
+    TranslationPublic,
+    TranslationRequest,
     User,
+    UserRef,
     clean_document_type,
 )
 from app.services import sharing
@@ -82,6 +93,18 @@ from app.services.email import (
     get_email_sender,
     share_invitation_email,
     share_notice_email,
+)
+from app.services.language import LANGUAGES, is_supported, language_name
+from app.services.translation import (
+    TranslationError,
+    translate_version,
+    translated_languages,
+)
+from app.services.versioning import (
+    detect_document_language,
+    get_version,
+    list_versions,
+    record_version,
 )
 
 logger = logging.getLogger(__name__)
@@ -220,19 +243,31 @@ def create_document(
         if folder is None or folder.namespace_id != namespace.id:
             raise HTTPException(status_code=400, detail="Folder not in this namespace")
     html, text = normalize_content(document_in.content, document_in.content_format)
+    title = document_in.title.strip()
+    if crud.document_title_taken(
+        session,
+        namespace_id=namespace.id,
+        folder_id=document_in.folder_id,
+        title=title,
+    ):
+        raise HTTPException(
+            status_code=409, detail="There is already a page with this name here"
+        )
     document = Document(
         namespace_id=namespace.id,
         folder_id=document_in.folder_id,
-        title=document_in.title.strip(),
+        title=title,
         doc_type=clean_document_type(document_in.doc_type),
         content_html=html,
         content_text=text,
+        language=detect_document_language(title, text),
         version=1,
         created_by=auth.user.id,
         updated_by=auth.user.id,
     )
     session.add(document)
     session.flush()
+    record_version(session, document, created_by=auth.user.id)
     crud.enqueue_embedding_job(session=session, document=document)
     session.commit()
     session.refresh(document)
@@ -311,6 +346,16 @@ def update_document(
     new_title = (
         document.title if document_in.title is None else document_in.title.strip()
     )
+    if new_title != document.title and crud.document_title_taken(
+        session,
+        namespace_id=document.namespace_id,
+        folder_id=document.folder_id,
+        title=new_title,
+        exclude_id=document.id,
+    ):
+        raise HTTPException(
+            status_code=409, detail="There is already a page with this name here"
+        )
     new_html, new_text = document.content_html, document.content_text
     if document_in.content is not None:
         new_html, new_text = normalize_content(
@@ -332,6 +377,10 @@ def update_document(
     document.updated_at = datetime.now(UTC)
     if changed:
         document.version += 1
+        document.language = detect_document_language(new_title, new_text)
+        # The new version has no translations of its own yet, by design: the
+        # words changed, so last version's German no longer describes them.
+        record_version(session, document, created_by=auth.user.id)
         crud.enqueue_embedding_job(session=session, document=document)
     session.add(document)
     session.commit()
@@ -356,6 +405,17 @@ def move_document(
             raise HTTPException(
                 status_code=400, detail="Folder not in the target namespace"
             )
+    if crud.document_title_taken(
+        session,
+        namespace_id=target_ns.id,
+        folder_id=move_in.folder_id,
+        title=document.title,
+        exclude_id=document.id,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="There is already a page with this name in the destination",
+        )
     document.namespace_id = target_ns.id
     document.folder_id = move_in.folder_id
     document.updated_at = datetime.now(UTC)
@@ -423,14 +483,23 @@ def clone_document(
         reader=auth.user,
     )
     title = (body.title or f"{source.title} (copy)").strip()[:300]
+    # A copy is never refused over its name: "(copy)", then "(copy) (2)".
+    title = crud.available_document_title(
+        session,
+        namespace_id=target_ns.id,
+        folder_id=body.folder_id,
+        title=title,
+    )
 
+    clone_text = html_to_text(html)
     clone = Document(
         namespace_id=target_ns.id,
         folder_id=body.folder_id,
         title=title,
         doc_type=source.doc_type,
         content_html=html,
-        content_text=html_to_text(html),
+        content_text=clone_text,
+        language=source.language or detect_document_language(title, clone_text),
         version=1,
         created_by=auth.user.id,
         updated_by=auth.user.id,
@@ -440,6 +509,10 @@ def clone_document(
     for attachment in attachments:
         attachment.document_id = clone.id
         session.add(attachment)
+    # The copy starts its own history at version 1. The original's versions and
+    # translations stay with the original - they describe a page this one is no
+    # longer tied to.
+    record_version(session, clone, created_by=auth.user.id)
     crud.enqueue_embedding_job(session=session, document=clone)
     session.commit()
     session.refresh(clone)
@@ -918,3 +991,168 @@ def _summary_with_role(session: SessionDep, user: User, document: Document) -> A
     if role is None:
         role = get_document_role(session, user, document, namespace)
     return to_document_summary(document, role)
+
+
+# ---------------------------------------------------------------------------
+# Versions
+# ---------------------------------------------------------------------------
+
+
+def _version_summary(
+    version: DocumentVersion,
+    current: int,
+    originals: dict[int, list[str]],
+    refs: dict[uuid.UUID, UserRef],
+) -> DocumentVersionSummary:
+    return DocumentVersionSummary(
+        version=version.version,
+        title=version.title,
+        doc_type=version.doc_type,
+        language=version.language,
+        char_count=len(version.content_text or ""),
+        is_current=version.version == current,
+        source_filenames=originals.get(version.version, []),
+        created_by_user=refs.get(version.created_by) if version.created_by else None,
+        created_at=version.created_at,
+    )
+
+
+def _originals_by_version(
+    session: Session, document_id: uuid.UUID
+) -> dict[int, list[str]]:
+    """Which uploaded originals belong to which version of the page."""
+    rows = session.exec(
+        select(Attachment)
+        .where(
+            Attachment.document_id == document_id,
+            col(Attachment.source_order).is_not(None),
+        )
+        .order_by(col(Attachment.source_order))
+    ).all()
+    by_version: dict[int, list[str]] = {}
+    for attachment in rows:
+        by_version.setdefault(attachment.source_version or 1, []).append(
+            attachment.filename
+        )
+    return by_version
+
+
+@router.get("/{document_id}/versions", response_model=DocumentVersionsPublic)
+def read_document_versions(
+    session: SessionDep, auth: AuthDep, document_id: uuid.UUID
+) -> Any:
+    """Every version of a page, newest first.
+
+    Titles and sizes only: the content of a version is fetched when one is
+    chosen, so opening a page with a long history costs nothing extra.
+    """
+    document, _ = require_document(session, auth.user, document_id, "viewer")
+    versions = list_versions(session, document.id)
+    originals = _originals_by_version(session, document.id)
+    refs = user_refs_by_id(
+        session, [v.created_by for v in versions if v.created_by is not None]
+    )
+    return DocumentVersionsPublic(
+        data=[_version_summary(v, document.version, originals, refs) for v in versions],
+        count=len(versions),
+    )
+
+
+@router.get("/{document_id}/versions/{version}", response_model=DocumentVersionPublic)
+def read_document_version(
+    session: SessionDep, auth: AuthDep, document_id: uuid.UUID, version: int
+) -> Any:
+    document, _ = require_document(session, auth.user, document_id, "viewer")
+    stored = get_version(session, document.id, version)
+    if stored is None:
+        raise HTTPException(status_code=404, detail="Version not found")
+    originals = _originals_by_version(session, document.id)
+    refs = user_refs_by_id(session, [stored.created_by] if stored.created_by else [])
+    summary = _version_summary(stored, document.version, originals, refs)
+    return DocumentVersionPublic(
+        **summary.model_dump(),
+        content_html=stored.content_html,
+        content_text=stored.content_text,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Translations
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{document_id}/languages", response_model=DocumentLanguages)
+def read_document_languages(
+    session: SessionDep, auth: AuthDep, document_id: uuid.UUID
+) -> Any:
+    """What the language picker needs: this page's own language, and the rest.
+
+    `available` is the languages already translated for the version on screen,
+    which is what lets the picker show which choices are instant and which will
+    take a moment.
+    """
+    document, _ = require_document(session, auth.user, document_id, "viewer")
+    return DocumentLanguages(
+        document_id=document.id,
+        version=document.version,
+        source_language=document.language,
+        source_language_name=language_name(document.language),
+        available=translated_languages(session, document.id, document.version),
+        options=[
+            LanguageOption(code=code, name=name) for code, name in LANGUAGES.items()
+        ],
+    )
+
+
+@router.post("/{document_id}/translations", response_model=TranslationPublic)
+async def translate_document(
+    session: SessionDep,
+    auth: AuthDep,
+    document_id: uuid.UUID,
+    body: TranslationRequest,
+) -> Any:
+    """Read this page in another language.
+
+    The page is not sent from the browser: this takes a language and reads the
+    page here. A translation already stored for this exact version comes back
+    immediately; anything else is written now and kept for the next reader.
+
+    Reading is enough - translating is not an edit. It leaves the page alone
+    and writes a copy beside it.
+    """
+    document, _ = require_document(session, auth.user, document_id, "viewer")
+    code = body.language.strip().lower()
+    if not is_supported(code):
+        raise HTTPException(status_code=422, detail="That language is not offered")
+
+    version = get_version(session, document.id, document.version)
+    if version is None:
+        # A page from before the history existed, or one whose oldest versions
+        # have been pruned: record where it stands now and translate that.
+        version = record_version(session, document)
+        session.commit()
+        if version is None:  # pragma: no cover - record_version always returns one
+            raise HTTPException(status_code=409, detail="Nothing to translate")
+        session.refresh(version)
+
+    if not version.content_text.strip():
+        raise HTTPException(status_code=422, detail="This page has no text yet")
+
+    try:
+        translation = await translate_version(
+            session, version, code, requested_by=auth.user.id
+        )
+    except TranslationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return TranslationPublic(
+        document_id=translation.document_id,
+        doc_version=translation.doc_version,
+        language=translation.language,
+        language_name=language_name(translation.language) or translation.language,
+        title=translation.title,
+        content_html=translation.content_html,
+        content_text=translation.content_text,
+        model=translation.model,
+        created_at=translation.created_at,
+    )

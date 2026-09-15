@@ -96,7 +96,9 @@ CHANNEL_SPECS: dict[ChannelType, ChannelSpec] = {
 }
 
 
-def required_fields_for(config: ChannelConfig | None, channel: ChannelType) -> list[str]:
+def required_fields_for(
+    config: ChannelConfig | None, channel: ChannelType
+) -> list[str]:
     spec = CHANNEL_SPECS[channel]
     if spec.transport_fields is None:
         return list(spec.required_fields)
@@ -295,7 +297,9 @@ def find_connection(
 # ---------------------------------------------------------------------------
 
 
-def gateway_plan(session: Session) -> tuple[dict[str, dict[str, object]], dict[str, str]]:
+def gateway_plan(
+    session: Session,
+) -> tuple[dict[str, dict[str, object]], dict[str, str]]:
     """``(platforms, secrets)`` for a shard's default profile.
 
     Only channels an admin has configured *and* enabled make it out. A half-set
@@ -375,7 +379,9 @@ def apply_to_shards(session: Session) -> list[str]:
                 shard_id, channels=platforms, secrets=secrets
             )
         except OSError as exc:
-            logger.warning("Could not write gateway config for shard %s: %s", shard_id, exc)
+            logger.warning(
+                "Could not write gateway config for shard %s: %s", shard_id, exc
+            )
             continue
         written.append(str(home))
     return written

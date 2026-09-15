@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import AsyncIterator
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -16,6 +17,38 @@ from app.services.model_client import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class LLMTask(StrEnum):
+    """What the model is being asked to do, which decides which model answers."""
+
+    answer = "answer"  # Ask: reading pages and writing a reply for a person
+    translation = "translation"  # rewriting one page in another language
+    indexing = "indexing"  # chunking and summarising, in the worker
+
+
+def task_models(task: LLMTask | None) -> tuple[str, list[str]]:
+    """The model for a task, and the ones to try if it fails."""
+    if task is None:
+        return settings.LLM_MODEL, _split(settings.LLM_FALLBACK_MODELS)
+    match task:
+        case LLMTask.answer:
+            return settings.LLM_ANSWER_MODEL, _split(
+                settings.LLM_ANSWER_FALLBACK_MODELS
+            )
+        case LLMTask.translation:
+            return settings.LLM_TRANSLATION_MODEL, _split(
+                settings.LLM_TRANSLATION_FALLBACK_MODELS
+            )
+        case LLMTask.indexing:
+            return settings.LLM_INDEXING_MODEL, _split(
+                settings.LLM_INDEXING_FALLBACK_MODELS
+            )
+
+
+def _split(value: str) -> list[str]:
+    return [m.strip() for m in (value or "").split(",") if m.strip()]
+
 
 # How much room a second attempt gets when the first came back empty.
 THINKING_BUDGET_FACTOR = 8
@@ -30,17 +63,35 @@ class LLMError(ModelServerError):
 
 
 class LLMClient:
+    """A chat model, chosen by the task it is being used for.
+
+    ``LLMClient(task=LLMTask.translation)`` takes that task's model and its
+    fallbacks; passing ``model=`` explicitly overrides both, which is what the
+    tests and one-off callers do.
+    """
+
     def __init__(
         self,
         base_url: str = str(settings.LLM_BASE_URL),
-        model: str = settings.LLM_MODEL,
+        model: str | None = None,
         temperature: float = settings.LLM_TEMPERATURE,
         disable_thinking: bool = settings.LLM_DISABLE_THINKING,
         api_key: str | None = None,
         client: httpx.AsyncClient | None = None,
+        task: LLMTask | None = None,
+        fallback_models: list[str] | None = None,
     ) -> None:
+        chosen, fallbacks = task_models(task)
         self.base_url = base_url.rstrip("/")
-        self.model = model
+        self.task = task
+        # A model named outright is the whole instruction: falling back to
+        # something else would quietly answer as a model nobody asked for.
+        self.model = chosen if model is None else model
+        self.fallback_models = (
+            fallback_models
+            if fallback_models is not None
+            else (fallbacks if model is None else [])
+        )
         self.temperature = temperature
         self.disable_thinking = disable_thinking
         self.api_key = settings.LLM_API_KEY if api_key is None else api_key
@@ -65,13 +116,19 @@ class LLMClient:
         json_mode: bool,
         max_tokens: int,
         temperature: float | None = None,
+        model: str | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
-            "model": self.model,
+            "model": model or self.model,
             "messages": messages,
             "temperature": self.temperature if temperature is None else temperature,
             "max_tokens": max_tokens,
         }
+        if self.fallback_models and model is None:
+            # OpenRouter reads this and re-routes server-side, which is faster
+            # than a failed round trip and a second request. Providers that do
+            # not understand it drop it, and `_with_fallback` below covers them.
+            body["models"] = [self.model, *self.fallback_models]
         if self.disable_thinking:
             # Two switches, because no provider understands both. Local servers
             # (vMLX, vLLM, LM Studio) read the chat template argument; OpenRouter
@@ -93,6 +150,54 @@ class LLMClient:
         max_tokens: int = 1024,
         temperature: float | None = None,
     ) -> str:
+        """Ask the task's model, and the ones behind it if that one will not answer.
+
+        A model being unavailable is not the same as a question being
+        unanswerable: providers rate-limit, drop capacity and retire model ids,
+        and a translation that fails because one id was busy is a worse outcome
+        than the same translation from the second model on the list.
+        """
+        attempts = [self.model, *self.fallback_models]
+        last: Exception | None = None
+        for position, model in enumerate(attempts):
+            final = position + 1 == len(attempts)
+            try:
+                return await self._chat_once(
+                    messages,
+                    json_mode=json_mode,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    # The first attempt carries the `models` array, so a
+                    # provider that routes server-side has already tried the
+                    # whole list by the time it fails.
+                    model=None if position == 0 else model,
+                    # Waiting out a busy or unreachable server is what to do
+                    # when there is nothing else to ask - a local server really
+                    # is starting a model. With another model on the list,
+                    # spending two minutes first is the wrong trade.
+                    cold_start_wait=None if final else 0.0,
+                )
+            except (ModelServerError, httpx.HTTPError) as exc:
+                last = exc
+                if position + 1 < len(attempts):
+                    logger.warning(
+                        "llm: %s failed (%s); trying %s",
+                        model,
+                        str(exc)[:160],
+                        attempts[position + 1],
+                    )
+        raise last if last is not None else LLMError("llm: no model to call")
+
+    async def _chat_once(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        json_mode: bool = False,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        model: str | None = None,
+        cold_start_wait: float | None = None,
+    ) -> str:
         budget = max_tokens
         for attempt in (1, 2):
             body = self._body(
@@ -100,9 +205,14 @@ class LLMClient:
                 json_mode=json_mode,
                 max_tokens=budget,
                 temperature=temperature,
+                model=model,
             )
             data = await post_json_with_cold_start_retry(
-                self.client, f"{self.base_url}/chat/completions", body, what="llm"
+                self.client,
+                f"{self.base_url}/chat/completions",
+                body,
+                what="llm",
+                max_wait=cold_start_wait,
             )
             try:
                 choice = data["choices"][0]
@@ -148,9 +258,47 @@ class LLMClient:
         to the reader instead of showing a spinner. Reasoning models emit their
         thinking in a separate field, which is skipped - only the visible answer
         is yielded.
+
+        Falling back to another model is only possible before the first token:
+        once text is on its way to a reader, switching models would splice two
+        different answers together, so a failure after that point is raised.
         """
+        attempts = [self.model, *self.fallback_models]
+        for position, model in enumerate(attempts):
+            last = position + 1 == len(attempts)
+            try:
+                async for piece in self._stream_once(
+                    messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    model=None if position == 0 else model,
+                ):
+                    yield piece
+                return
+            except (ModelServerError, httpx.HTTPError) as exc:
+                if last:
+                    raise
+                logger.warning(
+                    "llm: %s failed before writing anything (%s); trying %s",
+                    model,
+                    str(exc)[:160],
+                    attempts[position + 1],
+                )
+
+    async def _stream_once(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        model: str | None = None,
+    ) -> AsyncIterator[str]:
         body = self._body(
-            messages, json_mode=False, max_tokens=max_tokens, temperature=temperature
+            messages,
+            json_mode=False,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            model=model,
         )
         body["stream"] = True
         headers = {"Accept": "text/event-stream"}

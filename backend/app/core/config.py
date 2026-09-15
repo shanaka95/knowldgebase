@@ -11,13 +11,43 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.models_config import model_setting
+from app.core.models_config import model_setting, names_one_model, task_setting
 
 
 def _parser_backend() -> Literal["auto", "mineru", "llm"]:
     """Default for IMPORT_PARSER, from ``[parser].backend`` in models.toml."""
     value = str(model_setting("parser", "backend", "auto")).lower()
     return value if value in ("auto", "mineru", "llm") else "auto"  # type: ignore[return-value]
+
+
+def _task_model(task: str, builtin: str) -> str:
+    """Which chat model a task uses, before any environment variable.
+
+    Order: the task's own entry in models.toml, then the single model that file
+    names (a local server serves one, and asking it for another would only
+    404), then the task's built-in default.
+    """
+    explicit = task_setting(task, "model")
+    if explicit:
+        return str(explicit)
+    if names_one_model():
+        return str(model_setting("llm", "model"))
+    return builtin
+
+
+def _task_fallbacks(task: str, builtin: str) -> str:
+    """Models to try when the first one fails, comma-separated.
+
+    A deployment pointed at one local server has nowhere to fall back to, so
+    naming one model there means no fallbacks rather than a second model the
+    server does not have.
+    """
+    explicit = task_setting(task, "fallback")
+    if explicit:
+        return ",".join(explicit) if isinstance(explicit, list) else str(explicit)
+    if task_setting(task, "model") or not names_one_model():
+        return builtin
+    return ""
 
 
 class Settings(BaseSettings):
@@ -192,6 +222,39 @@ class Settings(BaseSettings):
     # how long clients keep retrying "connection refused"/503 while vMLX loads a model
     MODEL_SERVER_COLD_START_SECONDS: float = 150.0
 
+    # Tried when a call fails and the task has no fallbacks of its own.
+    LLM_FALLBACK_MODELS: str = ""
+
+    # --- A model per task ----------------------------------------------------
+    # One model for everything is a compromise in both directions: answering a
+    # question about a dozen pages wants a stronger model than rewriting one
+    # page in another language, and paying answering rates to translate is
+    # money for nothing. Each task therefore names its own model and the model
+    # to try when that one fails.
+    #
+    # These defaults are what a hosted deployment gets. A `models.toml` that
+    # names a single model - which is what a local server is - overrides all of
+    # them, because that server has exactly one model loaded.
+    LLM_ANSWER_MODEL: str = Field(
+        default_factory=lambda: _task_model("answer", "qwen/qwen3.8-flash")
+    )
+    LLM_ANSWER_FALLBACK_MODELS: str = Field(
+        default_factory=lambda: _task_fallbacks("answer", "qwen/qwen3.7-flash")
+    )
+    LLM_TRANSLATION_MODEL: str = Field(
+        default_factory=lambda: _task_model("translation", "qwen/qwen3.7-flash")
+    )
+    LLM_TRANSLATION_FALLBACK_MODELS: str = Field(
+        default_factory=lambda: _task_fallbacks("translation", "qwen/qwen3.8-flash")
+    )
+    # Chunking and summarising, in the worker.
+    LLM_INDEXING_MODEL: str = Field(
+        default_factory=lambda: _task_model("indexing", "qwen/qwen3.8-flash")
+    )
+    LLM_INDEXING_FALLBACK_MODELS: str = Field(
+        default_factory=lambda: _task_fallbacks("indexing", "qwen/qwen3.7-flash")
+    )
+
     # --- Document import (PDF / image -> document) --------------------------
     # MinerU2.5 is a document-parsing VLM. vMLX cannot load it (its bundled
     # mlx-vlm predates the qwen2_vl vision stack), so it runs in its own small
@@ -251,6 +314,21 @@ class Settings(BaseSettings):
     ASK_DOCUMENTS_WITHOUT_RERANK: int = 3
     ASK_MAX_TOKENS: int = 900
     ASK_TEMPERATURE: float = 0.2
+
+    # --- Document versions and translations ---------------------------------
+    # How many versions of a page are kept. Version 1 is always among them: it
+    # is what an imported page's original file corresponds to. Editing a long
+    # page over a morning produces a handful of versions, not hundreds, because
+    # only a change to the words counts as one.
+    DOCUMENT_VERSION_HISTORY: int = 50
+    # A translation is written window by window for the same reason a summary
+    # is: a page can be longer than any single completion.
+    TRANSLATION_WINDOW_CHARS: int = 6000
+    TRANSLATION_MAX_TOKENS: int = 4096
+    TRANSLATION_TEMPERATURE: float = 0.1
+    # Example searches drawn from a person's own pages.
+    SEARCH_SUGGESTIONS_PER_USER: int = 50
+    SEARCH_SUGGESTIONS_SHOWN: int = 3
 
     # --- Ask conversations ---------------------------------------------------
     # How many earlier question/answer pairs travel with a follow-up. Three

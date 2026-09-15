@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 
 from app.core.config import settings
+from app.services.language import detect
 from app.services.llm import LLMClient
 
 SYSTEM_PROMPT = """You answer questions using only the knowledge-base excerpts you are given.
@@ -29,6 +30,15 @@ Rules:
 - Do not describe your sources in prose ("this comes from excerpt 2"). The bracketed number is the citation; nothing else is needed.
 - Use short paragraphs, or a bulleted list when the answer has several parts.
 - Answer in the language of the question."""
+
+# Appended when the question's language was actually recognised. The rule above
+# leaves it to the model, and a model reading twelve pages of German will drift
+# into German however the question was phrased; naming the language outright is
+# what stops that.
+LANGUAGE_RULE = (
+    "\n- IMPORTANT: you should answer in {language}, whatever language the "
+    "excerpts are written in."
+)
 
 NO_CONTEXT_ANSWER = (
     "I could not find anything in the knowledge base about that. "
@@ -218,6 +228,24 @@ def retrieval_query(question: str, history: Sequence[Turn]) -> str:
     return f"{previous}\n{q}"
 
 
+def answer_language(question: str, history: Sequence[Turn] = ()) -> str | None:
+    """The language to answer in, or None when the question does not say.
+
+    A follow-up is usually too short to identify on its own - "and in euros?"
+    is as good a match for Dutch as for English - so the thread's earlier
+    questions are read with it. It is the same person writing in the same
+    language, and together they are long enough to be sure.
+
+    None means the detector was not confident, and the prompt then falls back
+    to its standing "answer in the language of the question" rule rather than
+    naming the wrong one.
+    """
+    asked = [t.question for t in list(history)[-settings.ASK_HISTORY_TURNS :]]
+    asked.append(question)
+    detected = detect("\n".join(q.strip() for q in asked if q and q.strip()))
+    return detected.name if detected else None
+
+
 def conversation_title(question: str) -> str:
     """Name a thread from its first question - no model call, no cost."""
     text = " ".join((question or "").split())
@@ -232,6 +260,7 @@ def build_messages(
     question: str,
     context: AnswerContext,
     history: Sequence[Turn] = (),
+    language: str | None = None,
 ) -> list[dict[str, str]]:
     """Rules and excerpts first, then the thread, then the question.
 
@@ -243,8 +272,10 @@ def build_messages(
     turns the second question's prefill into a cache hit instead of a re-read.
     """
     system = SYSTEM_PROMPT
+    if language:
+        system += LANGUAGE_RULE.format(language=language)
     if context.prompt:
-        system = f"{SYSTEM_PROMPT}\n\nExcerpts:\n{context.prompt}"
+        system = f"{system}\n\nExcerpts:\n{context.prompt}"
 
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
     for turn in trim_history(history):
@@ -276,11 +307,12 @@ async def answer(
     *,
     max_tokens: int | None = None,
     history: Sequence[Turn] = (),
+    language: str | None = None,
 ) -> str:
     if not context:
         return NO_CONTEXT_ANSWER
     return await llm.chat(
-        build_messages(question, context, history),
+        build_messages(question, context, history, language),
         max_tokens=max_tokens or settings.ASK_MAX_TOKENS,
         temperature=settings.ASK_TEMPERATURE,
     )
@@ -293,12 +325,13 @@ async def stream_answer(
     *,
     max_tokens: int | None = None,
     history: Sequence[Turn] = (),
+    language: str | None = None,
 ) -> AsyncIterator[str]:
     if not context:
         yield NO_CONTEXT_ANSWER
         return
     async for piece in llm.stream_chat(
-        build_messages(question, context, history),
+        build_messages(question, context, history, language),
         max_tokens=max_tokens or settings.ASK_MAX_TOKENS,
         temperature=settings.ASK_TEMPERATURE,
     ):

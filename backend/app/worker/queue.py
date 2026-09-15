@@ -33,6 +33,8 @@ from app.models import (
     JobStatus,
     WorkerHeartbeat,
 )
+from app.services.suggestions import store_suggestion
+from app.services.versioning import detect_document_language, record_version
 from app.worker.errors import JobCancelled, JobSuperseded
 from app.worker.fallback_chunker import Chunk
 
@@ -773,20 +775,36 @@ def create_document_from_import(
                 content_type=part.content_type,
                 size=part.size,
                 object_key=part.object_key,
+                # Numbered as an original of version 1, which is the version
+                # this import is about to create. That is what lets the page
+                # offer all of them, in the order they were chosen, and say
+                # which version they correspond to.
+                source_order=position,
+                source_version=1,
             )
-            for part in uploads
+            for position, part in enumerate(uploads)
         ]
         session.add_all(attachments)
         session.flush()
         attachment = attachments[0]
 
-        document = Document(
+        # An import names a page after its own first heading, so a batch of
+        # identical forms arrives as several pages called the same thing.
+        # Nobody typed those names, so they step aside instead of failing.
+        unique_title = crud.available_document_title(
+            session,
             namespace_id=job.namespace_id,
             folder_id=job.folder_id,
             title=title[:300],
+        )
+        document = Document(
+            namespace_id=job.namespace_id,
+            folder_id=job.folder_id,
+            title=unique_title,
             doc_type=job.doc_type,
             content_html=content_html,
             content_text=content_text,
+            language=detect_document_language(unique_title, content_text),
             created_by=job.created_by,
             updated_by=job.created_by,
             source_attachment_id=attachment.id,
@@ -799,6 +817,35 @@ def create_document_from_import(
             a.document_id = document.id
         session.add_all(attachments)
 
+        record_version(session, document, created_by=job.created_by)
         crud.enqueue_embedding_job(session=session, document=document, force=True)
         session.commit()
         return document.id, attachment.id
+
+
+# ---------------------------------------------------------------------------
+# Example searches
+# ---------------------------------------------------------------------------
+
+
+def document_owner(document_id: uuid.UUID) -> uuid.UUID | None:
+    """Whose page this is - the person its example search belongs to."""
+    with Session(engine) as session:
+        document = session.get(Document, document_id)
+        return document.created_by if document is not None else None
+
+
+def save_search_suggestion(
+    user_id: uuid.UUID,
+    document_id: uuid.UUID,
+    namespace_id: uuid.UUID,
+    question: str,
+) -> None:
+    with Session(engine) as session:
+        store_suggestion(
+            session,
+            user_id=user_id,
+            document_id=document_id,
+            namespace_id=namespace_id,
+            question=question,
+        )

@@ -119,7 +119,9 @@ async def test_happy_path_writes_three_kinds_and_marks_ready(
     j = fresh(db_session, EmbeddingJob, job.id)
     assert j.status == JobStatus.succeeded and j.progress == 100 and j.chunk_count == 2
     assert j.stats and j.stats["points"] == 4 and "stage_ms" in j.stats
-    assert llm.calls == ["chunk", "summary"]
+    # The trailing "suggestion" is the one short call that writes an example
+    # search for the search box, from the summary this job just produced.
+    assert llm.calls == ["chunk", "summary", "suggestion"]
 
 
 @pytest.mark.anyio
@@ -145,7 +147,7 @@ async def test_short_document_skips_chunking(
     d = fresh(db_session, Document, doc.id)
     assert d.chunking_method == ChunkingMethod.none_short and d.chunk_count == 0
     assert kinds(vector_store, doc.id) == {"document": 1, "summary": 1}
-    assert llm.calls == ["summary"]
+    assert llm.calls == ["summary", "suggestion"]
 
 
 @pytest.mark.anyio
@@ -173,7 +175,7 @@ async def test_llm_garbage_twice_uses_fallback(
     ).one()
     db_session.refresh(j)
     assert j.stats and "fallback_reason" in j.stats
-    assert llm.calls == ["chunk", "chunk", "summary"]
+    assert llm.calls == ["chunk", "chunk", "summary", "suggestion"]
 
 
 # ------------------------------------------------------------------- failures

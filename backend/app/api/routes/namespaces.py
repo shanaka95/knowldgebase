@@ -17,9 +17,10 @@ from app.api.serializers import (
 )
 from app.core.config import settings
 from app.core.permissions import (
-    accessible_namespace_ids,
     get_document_role,
     get_namespace_role,
+    held_namespace_role,
+    joined_namespace_ids,
     require_namespace,
 )
 from app.models import (
@@ -87,8 +88,13 @@ def enqueue_namespace_cleanup(session: Session, namespace_id: uuid.UUID) -> None
 
 @router.get("/", response_model=NamespacesPublic)
 def read_namespaces(session: SessionDep, auth: AuthDep) -> Any:
-    """Namespaces the current user owns or is a member of (superusers: all)."""
-    ids = accessible_namespace_ids(session, auth.user)
+    """The spaces this person owns or has been made a member of.
+
+    Administrators included: being able to open every space is not the same as
+    working in it, and listing all of them here put other people's spaces in
+    somebody's own switcher. `/admin` is where every space is listed.
+    """
+    ids = joined_namespace_ids(session, auth.user)
     if not ids:
         return NamespacesPublic(data=[], count=0)
     namespaces = session.exec(
@@ -131,13 +137,17 @@ def _namespace_for_reader(
 ) -> tuple[Namespace, NamespaceRole | None, list[Document] | None]:
     """Resolve read access to a namespace.
 
-    Members (and owners/superusers) get their role and full visibility. A user who
-    only holds shares on individual documents gets ``role=None`` plus the list of
-    those documents, so the UI can render the space shell around a shared page.
+    Members (and owners/superusers) get full visibility. A user who only holds
+    shares on individual documents gets ``role=None`` plus the list of those
+    documents, so the UI can render the space shell around a shared page.
+
+    Two different questions are being asked here. *May this person read it* -
+    which an administrator may, of every space - decides visibility. *What are
+    they here* is what comes back, because that is what gets shown, and an
+    administrator is not a member of a space nobody shared with them.
     """
-    role = get_namespace_role(session, user, namespace)
-    if role is not None:
-        return namespace, role, None
+    if get_namespace_role(session, user, namespace) is not None:
+        return namespace, held_namespace_role(session, user, namespace), None
     shared_docs = session.exec(
         select(Document)
         .join(DocumentShare, col(DocumentShare.document_id) == col(Document.id))

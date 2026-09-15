@@ -1,9 +1,11 @@
 import re
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from slugify import slugify
+from sqlalchemy import func
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
@@ -12,6 +14,7 @@ from app.models import (
     Document,
     EmbeddingJob,
     EmbeddingStatus,
+    Folder,
     JobStatus,
     Namespace,
     User,
@@ -102,17 +105,127 @@ def authenticate(*, session: Session, email: str, password: str) -> User | None:
 def unique_namespace_slug(
     *, session: Session, name: str, exclude_id: uuid.UUID | None = None
 ) -> str:
+    """A URL for a space, unique across the installation.
+
+    Names are the user's own business - two people may both have a space
+    called "Visa appointment" - but the URL has to identify one of them. The
+    first to take a name gets the clean slug and everybody after gets a short
+    random suffix.
+
+    Random rather than counted: `visa-appointment-2` tells whoever lands on it
+    that somebody else already has `visa-appointment`, and lets anyone walk
+    `-2`, `-3`, `-4` to find out how many. A suffix carries no such meaning.
+    """
     base = slugify(name, max_length=100) or "space"
     slug = base
-    n = 2
-    while True:
+    for _ in range(50):
         stmt = select(Namespace.id).where(Namespace.slug == slug)
         if exclude_id is not None:
             stmt = stmt.where(Namespace.id != exclude_id)
         if session.exec(stmt).first() is None:
             return slug
-        slug = f"{base}-{n}"
-        n += 1
+        slug = f"{base}-{secrets.token_hex(2)}"
+    # Fifty collisions on a random four-character suffix is not a name clash.
+    return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
+# --- names within one space -------------------------------------------------
+#
+# A space, a folder and a page may all be called the same thing; what may not
+# happen is two of the same kind side by side, exactly as in a file manager.
+# "Invoices" inside "2025" and "Invoices" inside "2026" are two folders, and
+# both are fine.
+
+
+def _name_taken(
+    session: Session,
+    model: Any,
+    field: Any,
+    name: str,
+    where: list[Any],
+    exclude_id: uuid.UUID | None,
+) -> bool:
+    stmt = select(model.id).where(func.lower(field) == name.strip().lower(), *where)
+    if exclude_id is not None:
+        stmt = stmt.where(model.id != exclude_id)
+    return session.exec(stmt).first() is not None
+
+
+def folder_name_taken(
+    session: Session,
+    *,
+    namespace_id: uuid.UUID,
+    parent_id: uuid.UUID | None,
+    name: str,
+    exclude_id: uuid.UUID | None = None,
+) -> bool:
+    return _name_taken(
+        session,
+        Folder,
+        Folder.name,
+        name,
+        [
+            Folder.namespace_id == namespace_id,
+            col(Folder.parent_id).is_(None)
+            if parent_id is None
+            else Folder.parent_id == parent_id,
+        ],
+        exclude_id,
+    )
+
+
+def document_title_taken(
+    session: Session,
+    *,
+    namespace_id: uuid.UUID,
+    folder_id: uuid.UUID | None,
+    title: str,
+    exclude_id: uuid.UUID | None = None,
+) -> bool:
+    return _name_taken(
+        session,
+        Document,
+        Document.title,
+        title,
+        [
+            Document.namespace_id == namespace_id,
+            col(Document.folder_id).is_(None)
+            if folder_id is None
+            else Document.folder_id == folder_id,
+        ],
+        exclude_id,
+    )
+
+
+def available_document_title(
+    session: Session,
+    *,
+    namespace_id: uuid.UUID,
+    folder_id: uuid.UUID | None,
+    title: str,
+) -> str:
+    """A free title near the one asked for, by adding "(2)", "(3)"…
+
+    For titles nobody typed: an import names pages after their own headings and
+    eight scans of the same form are eight pages called "Invoice". Refusing the
+    import over that would be absurd, so they become "Invoice", "Invoice (2)"
+    and so on - which is what a file manager does with a duplicate name.
+
+    A title a person did type is refused instead, so they can decide.
+    """
+    base = title.strip()[:300] or "Untitled"
+    candidate = base
+    for n in range(2, 200):
+        if not document_title_taken(
+            session,
+            namespace_id=namespace_id,
+            folder_id=folder_id,
+            title=candidate,
+        ):
+            return candidate
+        suffix = f" ({n})"
+        candidate = f"{base[: 300 - len(suffix)]}{suffix}"
+    return f"{base[:290]} ({uuid.uuid4().hex[:6]})"
 
 
 # ---------------------------------------------------------------------------

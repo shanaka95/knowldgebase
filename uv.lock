@@ -87,6 +87,7 @@ dependencies = [
     { name = "nh3" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pwdlib", extra = ["argon2", "bcrypt"] },
+    { name = "py3langid" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
@@ -125,6 +126,7 @@ requires-dist = [
     { name = "nh3", specifier = ">=0.3.0,<1.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4,<4.0.0" },
     { name = "pwdlib", extras = ["argon2", "bcrypt"], specifier = ">=0.3.1" },
+    { name = "py3langid", specifier = ">=0.3" },
     { name = "pydantic", specifier = ">2.0" },
     { name = "pydantic-settings", specifier = ">=2.2.1,<3.0.0" },
     { name = "pyjwt", specifier = ">=2.13.0,<3.0.0" },
@@ -1356,6 +1358,18 @@ argon2 = [
 ]
 bcrypt = [
     { name = "bcrypt" },
+]
+
+[[package]]
+name = "py3langid"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/16/fc/51c88e5ef8346878ae6c09e1f7c86c6e6308c57794723bf423a72ddba4dd/py3langid-0.4.0.tar.gz", hash = "sha256:5924159039b5cc282c2edc10a7ea9363b2099834a0e99ed8d5bea3cc435d7871", size = 4604185, upload-time = "2026-09-02T09:10:53.983Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/2d/0eeff2727c970b1d553be70d15ba2d84e3830696c09a79d954c5ae3d5212/py3langid-0.4.0-py3-none-any.whl", hash = "sha256:c25bd038147951ba3a89efe9ec12cc7d2116cb6f311ff8af84ade398a8bc0616", size = 4600605, upload-time = "2026-09-02T09:10:49.54Z" },
 ]
 
 [[package]]

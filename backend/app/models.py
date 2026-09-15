@@ -501,6 +501,10 @@ class Document(SQLModel, table=True):
     content_html: str = Field(default="", sa_type=Text)
     content_text: str = Field(default="", sa_type=Text)
     summary: str | None = Field(default=None, sa_type=Text)
+    # What language the page is written in, detected when its text changes.
+    # Stored rather than detected on the way out: the translation picker needs
+    # it on every page load, and the answer never changes between edits.
+    language: str | None = Field(default=None, max_length=8)
     version: int = 1
     created_by: uuid.UUID | None = Field(
         default=None, foreign_key="user.id", ondelete="SET NULL"
@@ -591,9 +595,16 @@ class DocumentPublic(DocumentSummaryPublic):
     content_html: str
     content_text: str
     summary: str | None = None
+    # The language the page is written in, so the translation picker opens on
+    # the right entry without asking.
+    language: str | None = None
     updated_by_user: UserRef | None = None
     created_by_user: UserRef | None = None
+    # The first original, kept for callers written before a page could have
+    # several. New code should read `source_attachments`.
     source_attachment: AttachmentPublic | None = None
+    # Every file the page was imported from, in the order they were uploaded.
+    source_attachments: list[AttachmentPublic] = []
 
 
 class DocumentsPublic(SQLModel):
@@ -1030,6 +1041,15 @@ class Attachment(SQLModel, table=True):
     content_type: str = Field(max_length=127)
     size: int = Field(sa_type=BigInteger)
     object_key: str = Field(unique=True, max_length=512)
+    # Set on the files a page was imported from, numbered in the order they
+    # were uploaded - which is the order they read in. Null on everything else,
+    # above all the images pasted into the editor, which are not originals and
+    # must not be offered as them.
+    source_order: int | None = Field(default=None)
+    # The page version this file produced. An import creates version 1, and
+    # later edits move the page on without changing what was uploaded, so this
+    # is what lets the page say which version the original corresponds to.
+    source_version: int | None = Field(default=None)
     created_at: datetime | None = _tz_datetime(default_factory=get_datetime_utc)
 
     namespace: Namespace | None = Relationship(back_populates="attachments")
@@ -1044,6 +1064,8 @@ class AttachmentPublic(SQLModel):
     content_type: str
     size: int
     download_url: str
+    source_order: int | None = None
+    source_version: int | None = None
     created_at: datetime | None = None
 
 
@@ -1403,6 +1425,186 @@ class AskConversationDetail(AskConversationPublic):
 
 class AskConversationUpdate(SQLModel):
     title: str = Field(min_length=1, max_length=120)
+
+
+# ---------------------------------------------------------------------------
+# Document versions and translations
+# ---------------------------------------------------------------------------
+
+
+class DocumentVersion(SQLModel, table=True):
+    """A page as it stood at one version number.
+
+    The current version is stored here as well as on the document. The
+    duplication buys a history table that is complete on its own - "show me
+    version 4" is one row either way, and nothing has to special-case the
+    newest one.
+    """
+
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id", "version", name="uq_documentversion_doc_version"
+        ),
+        Index("ix_documentversion_document", "document_id", "version"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    document_id: uuid.UUID = Field(
+        foreign_key="document.id", nullable=False, ondelete="CASCADE"
+    )
+    version: int
+    title: str = Field(max_length=300)
+    content_html: str = Field(default="", sa_type=Text)
+    content_text: str = Field(default="", sa_type=Text)
+    doc_type: str | None = Field(default=None, max_length=DOCUMENT_TYPE_MAX)
+    language: str | None = Field(default=None, max_length=8)
+    created_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class DocumentVersionSummary(SQLModel):
+    """A row in the version picker: enough to choose one, not its content."""
+
+    version: int
+    title: str
+    doc_type: str | None = None
+    language: str | None = None
+    char_count: int = 0
+    is_current: bool = False
+    # The originals uploaded at this version, if this is the version an import
+    # produced. This is how a page says which version the file it came from is.
+    source_filenames: list[str] = []
+    created_by_user: UserRef | None = None
+    created_at: datetime
+
+
+class DocumentVersionPublic(DocumentVersionSummary):
+    content_html: str = ""
+    content_text: str = ""
+
+
+class DocumentVersionsPublic(SQLModel):
+    data: list[DocumentVersionSummary]
+    count: int
+
+
+class DocumentTranslation(SQLModel, table=True):
+    """One page, one version, one language.
+
+    Tied to the version rather than the page: an edited page is a different
+    text, and showing last week's German next to this week's English would be
+    worse than translating again. Editing therefore leaves the translations of
+    earlier versions in place and simply has none of its own yet.
+    """
+
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "doc_version",
+            "language",
+            name="uq_documenttranslation_doc_version_lang",
+        ),
+        Index("ix_documenttranslation_document", "document_id", "doc_version"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    document_id: uuid.UUID = Field(
+        foreign_key="document.id", nullable=False, ondelete="CASCADE"
+    )
+    doc_version: int
+    language: str = Field(max_length=8)
+    title: str = Field(max_length=300)
+    content_html: str = Field(default="", sa_type=Text)
+    content_text: str = Field(default="", sa_type=Text)
+    # Which model wrote it, so a bad translation can be traced to one.
+    model: str | None = Field(default=None, max_length=120)
+    created_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class TranslationRequest(SQLModel):
+    language: str = Field(min_length=2, max_length=8)
+
+
+class LanguageOption(SQLModel):
+    code: str
+    name: str
+
+
+class TranslationPublic(SQLModel):
+    document_id: uuid.UUID
+    doc_version: int
+    language: str
+    language_name: str
+    title: str
+    content_html: str
+    content_text: str
+    model: str | None = None
+    created_at: datetime
+
+
+class SearchSuggestion(SQLModel, table=True):
+    """An example search, written from one of this person's own pages.
+
+    Generic examples ("error 407 vpn token") teach the mechanics of search and
+    nothing about what is actually in here. A question drawn from a page the
+    reader has uploaded does both, and it is the difference between an empty
+    search box that explains itself and one that does not.
+
+    Private by construction: rows belong to a user, every read is scoped by
+    ``user_id``, and a suggestion is only ever written for the person who
+    created the page it came from.
+    """
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "document_id", name="uq_searchsuggestion_user_document"
+        ),
+        Index("ix_searchsuggestion_user_created", "user_id", "created_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    # Kept so the suggestion dies with the page it describes, and so one page
+    # never contributes two.
+    document_id: uuid.UUID | None = Field(
+        default=None, foreign_key="document.id", ondelete="CASCADE"
+    )
+    namespace_id: uuid.UUID | None = Field(
+        default=None, foreign_key="namespace.id", ondelete="CASCADE"
+    )
+    question: str = Field(max_length=200)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class SearchSuggestionPublic(SQLModel):
+    question: str
+    document_id: uuid.UUID | None = None
+
+
+class SearchSuggestionsPublic(SQLModel):
+    data: list[SearchSuggestionPublic]
+    count: int
+
+
+class DocumentLanguages(SQLModel):
+    """What the language picker on a page needs to draw itself."""
+
+    document_id: uuid.UUID
+    version: int
+    # The language the page itself is written in, as detected.
+    source_language: str | None = None
+    source_language_name: str | None = None
+    # Languages already translated for *this* version, so they open instantly.
+    available: list[str] = []
+    # Everything on offer.
+    options: list[LanguageOption] = []
 
 
 # ---------------------------------------------------------------------------

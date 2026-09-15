@@ -81,14 +81,20 @@ def make_document(
     owner: User,
     *,
     html: str = LONG_HTML,
-    title: str = "Employee handbook",
+    title: str | None = None,
 ) -> Document:
+    """A page with a title of its own.
+
+    Unique by default: pages are unique among their siblings now, and tests
+    that want two pages in one space were relying on being able to create two
+    called the same thing.
+    """
     from app.core.content import html_to_text, sanitize_html
 
     clean = sanitize_html(html)
     doc = Document(
         namespace_id=namespace.id,
-        title=title,
+        title=title or f"Employee handbook {random_lower_string()[:8]}",
         content_html=clean,
         content_text=html_to_text(clean),
         created_by=owner.id,
@@ -178,6 +184,12 @@ def is_chunking_request(request: httpx.Request) -> bool:
     return "split knowledge-base documents" in body["messages"][0]["content"]
 
 
+def is_suggestion_request(request: httpx.Request) -> bool:
+    """The one short call that writes an example search for the search box."""
+    body = json.loads(request.content)
+    return "example search query" in body["messages"][0]["content"]
+
+
 def good_chunking_json(n_blocks: int) -> str:
     mid = max(1, n_blocks // 2)
     return json.dumps(
@@ -191,15 +203,17 @@ def good_chunking_json(n_blocks: int) -> str:
 
 
 class ScriptedLLM:
-    """Router for respx: chunking requests → chunk_replies (in order), others → summary."""
+    """Router for respx: chunking → chunk_replies, suggestions → a query, rest → summary."""
 
     def __init__(
         self,
         chunk_replies: list[str],
         summary: str = "A short summary of the handbook. It covers onboarding and expenses.",
+        suggestion: str = "onboarding and expenses handbook",
     ) -> None:
         self.chunk_replies = list(chunk_replies)
         self.summary = summary
+        self.suggestion = suggestion
         self.calls: list[str] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -211,6 +225,9 @@ class ScriptedLLM:
                 else self.chunk_replies_default()
             )
             return chat_response(reply)
+        if is_suggestion_request(request):
+            self.calls.append("suggestion")
+            return chat_response(self.suggestion)
         self.calls.append("summary")
         return chat_response(self.summary)
 

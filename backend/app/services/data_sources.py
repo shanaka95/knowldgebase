@@ -200,9 +200,7 @@ class GrantedTokens:
     scope: str
 
 
-async def exchange_code(
-    session: Session, *, code: str, verifier: str
-) -> GrantedTokens:
+async def exchange_code(session: Session, *, code: str, verifier: str) -> GrantedTokens:
     creds = credentials_for(session, DataSourceType.google_drive)
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
         response = await client.post(

@@ -35,7 +35,29 @@ MinRole = Literal["viewer", "editor", "admin"]
 def get_namespace_role(
     session: Session, user: User, namespace: Namespace
 ) -> NamespaceRole | None:
-    if user.is_superuser or namespace.owner_id == user.id:
+    """What this user may do here - including by being an administrator.
+
+    This is the authorization question, so a superuser answers ``admin`` for
+    every space. It is *not* the question the interface asks when it labels a
+    space: see `held_namespace_role`.
+    """
+    if user.is_superuser:
+        return NamespaceRole.admin
+    return held_namespace_role(session, user, namespace)
+
+
+def held_namespace_role(
+    session: Session, user: User, namespace: Namespace
+) -> NamespaceRole | None:
+    """The role this user holds here by owning it or being a member of it.
+
+    Being an administrator is deliberately not counted. An administrator can
+    open every space in the installation, and calling that "admin on this
+    space" put an ADMIN badge on spaces belonging to other people that had
+    never been shared with anybody - which reads as a claim about the
+    relationship rather than about the account.
+    """
+    if namespace.owner_id == user.id:
         return NamespaceRole.admin
     member = session.exec(
         select(NamespaceMember).where(
@@ -148,8 +170,24 @@ def require_document(
 
 
 def accessible_namespace_ids(session: Session, user: User) -> Sequence[uuid.UUID]:
+    """Every space this user may read - an administrator may read all of them.
+
+    This is the authorization question. For the list a person thinks of as
+    "my spaces", see `joined_namespace_ids`.
+    """
     if user.is_superuser:
         return session.exec(select(Namespace.id)).all()
+    return joined_namespace_ids(session, user)
+
+
+def joined_namespace_ids(session: Session, user: User) -> list[uuid.UUID]:
+    """The spaces this user owns or has been made a member of.
+
+    Deliberately not "everything an administrator can open". The space
+    switcher is a list of the reader's own working spaces, and filling it with
+    every space in the installation buried their own among strangers' - and
+    made a space that had never been shared with anybody look shared.
+    """
     owned = select(Namespace.id).where(Namespace.owner_id == user.id)
     member = select(NamespaceMember.namespace_id).where(
         NamespaceMember.user_id == user.id

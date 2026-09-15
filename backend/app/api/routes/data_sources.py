@@ -38,9 +38,7 @@ router = APIRouter(prefix="/data-sources", tags=["data_sources"])
 SOURCE = DataSourceType.google_drive
 
 
-def _public(
-    session: Session, user: User, source: DataSourceType
-) -> DataSourcePublic:
+def _public(session: Session, user: User, source: DataSourceType) -> DataSourcePublic:
     connection = service.connection_for(session, user, source)
     return DataSourcePublic(
         source_type=source,
@@ -248,9 +246,7 @@ async def _describe(access_token: str, file_id: str) -> service.DriveFile:
 
 async def _download(access_token: str, file_id: str, *, max_bytes: int) -> bytes:
     try:
-        return await service.download_file(
-            access_token, file_id, max_bytes=max_bytes
-        )
+        return await service.download_file(access_token, file_id, max_bytes=max_bytes)
     except service.DataSourceError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

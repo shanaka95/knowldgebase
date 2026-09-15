@@ -77,7 +77,9 @@ def _check_destination(
             )
 
 
-def _import_key(namespace_id: uuid.UUID, job_id: uuid.UUID, part: int | None = None) -> str:
+def _import_key(
+    namespace_id: uuid.UUID, job_id: uuid.UUID, part: int | None = None
+) -> str:
     """Where an imported original is stored.
 
     Partitioned by space, matching direct uploads (``ns/<space>/<file>``). Not

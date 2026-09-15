@@ -27,6 +27,7 @@ dependencies = [
     "boto3>=1.40,<2.0",
     "cryptography>=43.0",
     "qrcode>=8.0",
+    "py3langid>=0.3",
 ]
 
 [dependency-groups]

@@ -203,18 +203,14 @@ def prune_conversations(session: Session, user: User) -> None:
     ).all()
     if not stale:
         return
-    session.exec(
-        delete(AskMessage).where(col(AskMessage.conversation_id).in_(stale))  # type: ignore[arg-type]
-    )
-    session.exec(
-        delete(AskConversation).where(col(AskConversation.id).in_(stale))  # type: ignore[arg-type]
-    )
+    session.exec(delete(AskMessage).where(col(AskMessage.conversation_id).in_(stale)))
+    session.exec(delete(AskConversation).where(col(AskConversation.id).in_(stale)))
     session.commit()
 
 
 def delete_conversation(session: Session, conversation: AskConversation) -> None:
     session.exec(
-        delete(AskMessage).where(AskMessage.conversation_id == conversation.id)  # type: ignore[arg-type]
+        delete(AskMessage).where(col(AskMessage.conversation_id) == conversation.id)
     )
     session.delete(conversation)
     session.commit()

@@ -49,7 +49,9 @@ def require_shard(request: Request) -> None:
         raise HTTPException(status_code=503, detail="Agent control is not configured")
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")
-    if scheme.lower() != "bearer" or not secrets.compare_digest(token.strip(), expected):
+    if scheme.lower() != "bearer" or not secrets.compare_digest(
+        token.strip(), expected
+    ):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
 
@@ -98,7 +100,9 @@ def resolve_route(session: SessionDep, body: dict[str, Any]) -> dict[str, Any]:
                 owner = session.get(User, agent.user_id) if agent else None
                 greeting = _link_confirmation(agent, owner)
                 session.commit()
-                logger.info("Linked a %s identity to agent %s", platform, connection.agent_id)
+                logger.info(
+                    "Linked a %s identity to agent %s", platform, connection.agent_id
+                )
                 return {
                     "profile": agent.profile_name if agent else None,
                     "agent_id": str(agent.id) if agent else None,

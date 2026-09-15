@@ -15,7 +15,7 @@ from typing import Any
 from app.core.config import settings
 from app.models import CleanupKind, CleanupTask
 from app.services.embeddings import EmbeddingClient
-from app.services.llm import LLMClient
+from app.services.llm import LLMClient, LLMTask
 from app.services.storage import MinioStorage, ObjectStorage
 from app.services.vectors import QdrantStore, VectorStore
 from app.worker import healthfile, queue
@@ -201,7 +201,7 @@ class Worker:
             "worker %s starting (concurrency=%s, llm=%s, embeddings=%s)",
             self.name,
             self.concurrency,
-            settings.LLM_MODEL,
+            settings.LLM_INDEXING_MODEL,
             settings.EMBEDDING_MODEL,
         )
         await asyncio.to_thread(
@@ -248,7 +248,7 @@ async def main() -> None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("object storage unavailable: %s", exc)
         storage = None
-    llm = LLMClient()
+    llm = LLMClient(task=LLMTask.indexing)
     embedder = EmbeddingClient()
     worker = Worker(vectors=vectors, storage=storage, llm=llm, embedder=embedder)
 

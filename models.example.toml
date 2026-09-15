@@ -25,6 +25,22 @@ timeout_seconds = 300
 disable_thinking = true
 temperature = 0.1
 
+# A model per task. Without these, every task uses [llm].model above - which is
+# what a local server wants, since it has one model loaded. A hosted deployment
+# usually wants a cheaper model for the mechanical work.
+#
+# [llm.tasks.answer]
+# model = "qwen/qwen3.8-flash"
+# fallback = "qwen/qwen3.7-flash"
+#
+# [llm.tasks.translation]
+# model = "qwen/qwen3.7-flash"
+# fallback = "qwen/qwen3.8-flash"
+#
+# [llm.tasks.indexing]     # chunking and summaries, in the worker
+# model = "qwen/qwen3.8-flash"
+# fallback = "qwen/qwen3.7-flash"
+
 # --- Embedding model: document, summary and chunk vectors --------------------
 [embeddings]
 model = "jinaai/jina-embeddings-v5-text-small-retrieval-mlx"
