@@ -73,6 +73,12 @@ export function LegalPage({
             >
               Terms
             </RouterLink>
+            <RouterLink
+              to="/imprint"
+              className="transition hover:text-foreground"
+            >
+              Imprint
+            </RouterLink>
           </span>
         </div>
       </footer>

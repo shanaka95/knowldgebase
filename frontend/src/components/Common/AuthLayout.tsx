@@ -92,6 +92,9 @@ export function LegalLinks({ className }: { className?: string }) {
       <RouterLink to="/terms" className="transition hover:text-foreground">
         Terms
       </RouterLink>
+      <RouterLink to="/imprint" className="transition hover:text-foreground">
+        Imprint
+      </RouterLink>
     </span>
   )
 }

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as ImprintRouteImport } from './routes/imprint'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -45,6 +46,11 @@ const LayoutRoute = LayoutRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImprintRoute = ImprintRouteImport.update({
+  id: '/imprint',
+  path: '/imprint',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteRoute = InviteRouteImport.update({
@@ -185,6 +191,7 @@ const LayoutSNamespaceSlugFFolderIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/imprint': typeof ImprintRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
@@ -213,6 +220,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
+  '/imprint': typeof ImprintRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
@@ -243,6 +251,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
+  '/imprint': typeof ImprintRoute
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
@@ -275,6 +284,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/forgot-password'
+    | '/imprint'
     | '/invite'
     | '/login'
     | '/privacy'
@@ -303,6 +313,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/forgot-password'
+    | '/imprint'
     | '/invite'
     | '/login'
     | '/privacy'
@@ -332,6 +343,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_layout'
     | '/forgot-password'
+    | '/imprint'
     | '/invite'
     | '/login'
     | '/privacy'
@@ -363,6 +375,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  ImprintRoute: typeof ImprintRoute
   InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -387,6 +400,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/imprint': {
+      id: '/imprint'
+      path: '/imprint'
+      fullPath: '/imprint'
+      preLoaderRoute: typeof ImprintRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite': {
@@ -631,6 +651,7 @@ const LayoutRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  ImprintRoute: ImprintRoute,
   InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,

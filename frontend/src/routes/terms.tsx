@@ -1,12 +1,7 @@
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router"
 
 import { APP_NAME } from "@/components/Common/Logo"
-import {
-  Bullets,
-  LegalPage,
-  Placeholder,
-  Section,
-} from "@/components/Legal/LegalPage"
+import { Bullets, LegalPage, Section } from "@/components/Legal/LegalPage"
 
 /**
  * The agreement between whoever runs this installation and whoever uses it.
@@ -42,9 +37,10 @@ function Terms() {
           ask questions that are answered from them using AI models.
         </p>
         <p>
-          It is provided by <Placeholder>[legal entity name]</Placeholder>{" "}
-          ("we", "us"). You can reach us at{" "}
-          <Placeholder>[support contact email]</Placeholder>.
+          It is provided by <strong>Shanaka Anuradha</strong>, Stuttgarter Str.
+          15, 74074 Heilbronn, Germany ("we", "us"). You can reach us at{" "}
+          <a href="mailto:admin@plusgpt.io">admin@plusgpt.io</a>; full provider
+          details are on the <RouterLink to="/imprint">Imprint</RouterLink>.
         </p>
       </Section>
 
@@ -154,18 +150,37 @@ function Terms() {
 
       <Section id="liability" title="Liability">
         <p>
-          To the fullest extent the law allows, we are not liable for indirect
-          or consequential loss, lost profits, or lost or corrupted data. Our
-          total liability arising from the service is limited to{" "}
-          <Placeholder>
-            [cap, e.g. fees paid in the preceding 12 months]
-          </Placeholder>
-          .
+          Our liability is limited as far as German law permits, and no further.
+          German law does not allow a blanket exclusion, so this clause says
+          exactly where the line falls rather than pretending it is elsewhere.
+        </p>
+        <p className="font-medium">We are fully liable</p>
+        <Bullets
+          items={[
+            "for damage caused intentionally or by gross negligence;",
+            "for injury to life, body or health;",
+            "under the German Product Liability Act (Produkthaftungsgesetz); and",
+            "where we have given a guarantee or fraudulently concealed a defect.",
+          ]}
+        />
+        <p className="font-medium">Otherwise</p>
+        <p>
+          For slight negligence we are liable only where we breach an obligation
+          that is essential to the contract — one you must be able to rely on
+          for the service to work at all — and then only for the loss typically
+          foreseeable for this kind of service. All other liability for slight
+          negligence is excluded, including for lost profits and for indirect or
+          consequential loss.
         </p>
         <p>
-          Nothing here excludes liability that cannot lawfully be excluded —
-          including for death or personal injury caused by negligence, or for
-          fraud.
+          <strong>Keep your own copies.</strong> Our liability for lost or
+          corrupted data is in any case limited to the effort of restoring it
+          from a backup you have kept properly.
+        </p>
+        <p>
+          These limits apply equally to our employees, agents and
+          subcontractors. Nothing here affects your statutory rights as a
+          consumer.
         </p>
       </Section>
 
@@ -190,11 +205,29 @@ function Terms() {
 
       <Section id="law" title="Governing law">
         <p>
-          These terms are governed by the law of{" "}
-          <Placeholder>[jurisdiction]</Placeholder>, and the courts of{" "}
-          <Placeholder>[jurisdiction]</Placeholder> have exclusive jurisdiction
-          — without affecting any right you have to bring a claim where you
-          live.
+          These terms are governed by the law of the{" "}
+          <strong>Federal Republic of Germany</strong>, excluding the UN
+          Convention on Contracts for the International Sale of Goods.
+        </p>
+        <p>
+          If you are a merchant, a legal person under public law or a special
+          fund under public law, the courts of{" "}
+          <strong>Heilbronn, Germany</strong> have exclusive jurisdiction. If
+          you are a consumer, you keep every protection the mandatory law of the
+          country you live in gives you, and you may bring a claim there.
+        </p>
+        <p>
+          The European Commission provides a platform for online dispute
+          resolution at{" "}
+          <a
+            href="https://ec.europa.eu/consumers/odr"
+            target="_blank"
+            rel="noreferrer"
+          >
+            ec.europa.eu/consumers/odr
+          </a>
+          . We are not obliged, and are not willing, to take part in dispute
+          resolution proceedings before a consumer arbitration board.
         </p>
         <p>
           How we handle your data is described in the{" "}

@@ -1,12 +1,7 @@
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router"
 
 import { APP_NAME } from "@/components/Common/Logo"
-import {
-  Bullets,
-  LegalPage,
-  Placeholder,
-  Section,
-} from "@/components/Legal/LegalPage"
+import { Bullets, LegalPage, Section } from "@/components/Legal/LegalPage"
 
 /**
  * What this installation does with what people put into it.
@@ -38,11 +33,11 @@ function Privacy() {
     >
       <Section id="who" title="Who we are">
         <p>
-          {APP_NAME} is operated by{" "}
-          <Placeholder>[legal entity name]</Placeholder>,{" "}
-          <Placeholder>[registered address]</Placeholder>. For anything in this
+          {APP_NAME} is operated by <strong>Shanaka Anuradha</strong>,
+          Stuttgarter Str. 15, 74074 Heilbronn, Germany. For anything in this
           policy, including a request to see or delete your data, write to{" "}
-          <Placeholder>[privacy contact email]</Placeholder>.
+          <a href="mailto:admin@plusgpt.io">admin@plusgpt.io</a>. Full provider
+          details are on the <RouterLink to="/imprint">Imprint</RouterLink>.
         </p>
         <p>
           Where data protection law gives you rights against a{" "}
@@ -109,14 +104,11 @@ function Privacy() {
           ]}
         />
         <p>
-          The provider for this installation is{" "}
-          <Placeholder>
-            [model provider, or "models we host ourselves"]
-          </Placeholder>
-          . We do not permit providers to train models on content sent from this
-          service. Providers keep their own logs under their own terms; where a
-          third-party provider is used, that provider's privacy policy also
-          applies to the request.
+          This installation uses <strong>OpenRouter</strong>, which routes each
+          request to the model vendor serving it. We do not permit providers to
+          train models on content sent from this service. OpenRouter and the
+          vendors behind it keep their own logs under their own terms, and their
+          privacy policies also apply to the request.
         </p>
       </Section>
 
@@ -172,23 +164,25 @@ function Privacy() {
         </p>
         <Bullets
           items={[
-            "A model provider, for the calls described above.",
-            "An email provider, to deliver sign-in codes, invitations and password resets.",
-            "Hosting and storage, which hold the database, the uploaded files and the search index.",
+            <>
+              <strong>OpenRouter</strong> — the model calls described above.
+            </>,
+            <>
+              <strong>Amazon Web Services (Amazon SES)</strong> — delivering
+              sign-in codes, invitations and password resets.
+            </>,
+            <>
+              <strong>Our server hosting provider</strong> — the virtual servers
+              holding the database, the uploaded files and the search index.
+            </>,
           ]}
         />
         <p>
-          The specific providers for this installation are{" "}
-          <Placeholder>
-            [list your hosting, email and model providers]
-          </Placeholder>
-          , located in{" "}
-          <Placeholder>[countries / regions where data is held]</Placeholder>.
-          Where data leaves your country, we rely on{" "}
-          <Placeholder>
-            [transfer mechanism, e.g. standard contractual clauses]
-          </Placeholder>
-          .
+          Data is held and processed in the{" "}
+          <strong>United States and Europe</strong>. Where personal data is
+          transferred outside the EEA, we rely on the European Commission's{" "}
+          <strong>standard contractual clauses</strong>, together with the
+          additional safeguards those clauses require.
         </p>
       </Section>
 
@@ -216,12 +210,17 @@ function Privacy() {
           for it to be corrected or deleted, object to how it is used, or ask
           for it in a portable form. Most of this you can do yourself from{" "}
           <strong>Settings</strong>; for the rest, write to the address at the
-          top of this policy and we will respond within{" "}
-          <Placeholder>[response window, e.g. 30 days]</Placeholder>.
+          top of this policy and we will respond <strong>within 30 days</strong>
+          .
         </p>
         <p>
           If you think we have got something wrong you can complain to your
-          local data protection authority.
+          local data protection authority. Ours is{" "}
+          <strong>
+            Der Landesbeauftragte für den Datenschutz und die
+            Informationsfreiheit Baden-Württemberg
+          </strong>
+          , Lautenschlagerstraße 20, 70173 Stuttgart.
         </p>
       </Section>
 
@@ -236,7 +235,8 @@ function Privacy() {
         />
         <p>
           No service is perfectly secure. If you find a vulnerability, please
-          tell us at <Placeholder>[security contact email]</Placeholder> before
+          tell us at{" "}
+          <a href="mailto:incident@plusgpt.io">incident@plusgpt.io</a> before
           telling anybody else.
         </p>
       </Section>
@@ -252,9 +252,11 @@ function Privacy() {
 
       <Section id="children" title="Children">
         <p>
-          {APP_NAME} is not intended for children under{" "}
-          <Placeholder>[age, e.g. 16]</Placeholder> and we do not knowingly
-          collect their data.
+          {APP_NAME} is not intended for anyone under <strong>16</strong>, and
+          we do not knowingly collect their data. If you believe a child has
+          given us personal data, write to{" "}
+          <a href="mailto:admin@plusgpt.io">admin@plusgpt.io</a> and we will
+          delete it.
         </p>
       </Section>
 

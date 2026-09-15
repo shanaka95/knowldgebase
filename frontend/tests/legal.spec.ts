@@ -38,6 +38,29 @@ test.describe("Signed out", () => {
     ).toBeVisible()
   })
 
+  test("the imprint names the provider, as German law requires", async ({
+    page,
+  }) => {
+    await page.goto("/imprint")
+    await expect(
+      page.getByRole("heading", { name: "Imprint", level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByText("Shanaka Anuradha").first()).toBeVisible()
+    await expect(page.getByText("74074 Heilbronn")).toBeVisible()
+    await expect(page.getByRole("link", { name: "admin@plusgpt.io" })).toBeVisible()
+  })
+
+  test("the policies carry the details rather than blanks", async ({ page }) => {
+    for (const path of ["/privacy", "/terms"]) {
+      await page.goto(path)
+      // A filled-in policy has no bracketed placeholders left in it.
+      await expect(page.locator("main")).not.toContainText(/\[[a-z][^\]]{6,}\]/i)
+      await expect(page.locator("main")).toContainText("Shanaka Anuradha")
+    }
+    await page.goto("/terms")
+    await expect(page.locator("main")).toContainText("Federal Republic of Germany")
+  })
+
   test("sign-in links to both, and each links back", async ({ page }) => {
     await page.goto("/login")
     await page.getByRole("link", { name: "Privacy Policy" }).click()
