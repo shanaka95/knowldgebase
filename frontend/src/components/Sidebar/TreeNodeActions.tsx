@@ -7,6 +7,7 @@ import {
   Pencil,
   Share2,
   Trash2,
+  Upload,
 } from "lucide-react"
 import type { ComponentType } from "react"
 
@@ -100,6 +101,15 @@ export function useTreeActions({
             namespaceSlug,
             parentId: folderId,
           }),
+      })
+      // Right where the folder is: the upload dialog opens with this space and
+      // folder already filled in.
+      items.push({
+        key: "upload-here",
+        label: "Upload a document",
+        icon: Upload,
+        onSelect: () =>
+          openDialog({ kind: "import", namespaceId, namespaceSlug, folderId }),
       })
     }
   }

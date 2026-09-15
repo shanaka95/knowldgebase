@@ -14,6 +14,10 @@ import { documentQuery } from "@/queries/documents"
 export const documentSearchSchema = z.object({
   mode: z.enum(["view", "edit"]).catch("view"),
   panel: z.enum(["ai", "toc"]).optional().catch(undefined),
+  /** An older version being read, instead of the current one. */
+  v: z.number().optional().catch(undefined),
+  /** A language being read, instead of the page as written. */
+  lang: z.string().optional().catch(undefined),
 })
 
 export const Route = createFileRoute("/_layout/s/$namespaceSlug/d/$documentId")(
@@ -64,7 +68,7 @@ function DocumentRouteError({
 
 function DocumentRoute() {
   const { documentId, namespaceSlug } = Route.useParams()
-  const { mode, panel } = Route.useSearch()
+  const { mode, panel, v, lang } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
 
   return (
@@ -74,6 +78,8 @@ function DocumentRoute() {
       namespaceSlug={namespaceSlug}
       mode={mode}
       panel={panel}
+      version={v ?? null}
+      language={lang ?? null}
       onChangeSearch={(patch) =>
         void navigate({
           search: (prev) => ({ ...prev, ...patch }),

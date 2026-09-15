@@ -129,6 +129,10 @@ function SearchPage() {
         requestedBm25={bm25}
         requestedVector={vector}
         onEnableBoth={() => patch({ bm25: true, vector: true })}
+        onExample={(example) => {
+          setValue(example)
+          patch({ q: example })
+        }}
       />
     </PageContainer>
   )

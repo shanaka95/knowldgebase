@@ -53,8 +53,11 @@ import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import { ConflictBanner } from "./ConflictBanner"
 import { DocumentHeader } from "./DocumentHeader"
+import { LanguagePicker } from "./LanguagePicker"
 import { NewVersionChip } from "./NewVersionChip"
-import { SourceFileCard, SourceFileChip } from "./SourceFileCard"
+import { ReadOnlyContent } from "./ReadOnlyContent"
+import { SourceFileCard, SourceFileChips } from "./SourceFileCard"
+import { VersionPicker } from "./VersionPicker"
 
 const AiIndexPanel = lazy(() => import("@/components/Embeddings/AiIndexPanel"))
 
@@ -66,9 +69,15 @@ interface DocumentPageProps {
   namespaceSlug: string
   mode: DocumentMode
   panel: DocumentPanel
+  /** An older version being read, instead of the current one. */
+  version: number | null
+  /** A language being read, instead of the page as written. */
+  language: string | null
   onChangeSearch: (patch: {
     mode?: DocumentMode
     panel?: DocumentPanel
+    v?: number | undefined
+    lang?: string | undefined
   }) => void
 }
 
@@ -106,14 +115,20 @@ export function DocumentPage({
   namespaceSlug,
   mode: requestedMode,
   panel,
+  version,
+  language,
   onChangeSearch,
 }: DocumentPageProps) {
   const queryClient = useQueryClient()
   const isMobile = useIsMobile()
   const { data: document } = useDocument(documentId)
   const canEdit = document.my_role === "editor"
+  // Reading an older version or a translation is reading, never editing: one
+  // would rewrite history, the other would leave the page and its translation
+  // disagreeing with nothing to say which is right.
+  const readingElsewhere = version !== null || language !== null
   const mode: DocumentMode =
-    requestedMode === "edit" && canEdit ? "edit" : "view"
+    requestedMode === "edit" && canEdit && !readingElsewhere ? "edit" : "view"
   const editing = mode === "edit"
 
   // ---- local editing state ---------------------------------------------------
@@ -325,8 +340,10 @@ export function DocumentPage({
     () => onChangeSearch({ panel: aiOpen ? undefined : "ai" }),
     [aiOpen, onChangeSearch],
   )
-  // the imported-from file gets a rail card even with no panel open
-  const hasRail = aiOpen || showToc || Boolean(document.source_attachment)
+  // Every file the page was imported from, in the order they were uploaded.
+  const originals = document.source_attachments ?? []
+  // the imported-from files get a rail card even with no panel open
+  const hasRail = aiOpen || showToc || originals.length > 0
 
   // ---- keyboard shortcuts ----------------------------------------------------
   useEffect(() => {
@@ -429,9 +446,8 @@ export function DocumentPage({
   ])
 
   // ---- render ----------------------------------------------------------------
-  const sourceCard = document.source_attachment ? (
-    <SourceFileCard attachment={document.source_attachment} />
-  ) : null
+  const sourceCard =
+    originals.length > 0 ? <SourceFileCard attachments={originals} /> : null
 
   const railPanel = aiOpen ? (
     <Suspense fallback={<Skeleton className="h-64 w-full" />}>
@@ -479,11 +495,33 @@ export function DocumentPage({
           embedding={embeddingInfo}
           aiPanelOpen={aiOpen}
           onToggleAiPanel={toggleAi}
+          readOnly={readingElsewhere}
           extra={
             <>
-              {document.source_attachment && (
-                <SourceFileChip attachment={document.source_attachment} />
-              )}
+              <SourceFileChips attachments={originals} />
+              <VersionPicker
+                documentId={documentId}
+                current={document.version}
+                viewing={version}
+                onSelect={(next) =>
+                  // Choosing a version always drops a translation: they belong
+                  // to one version, and carrying it across would show the
+                  // wrong text under the right heading.
+                  onChangeSearch({
+                    v: next ?? undefined,
+                    lang: undefined,
+                    mode: "view",
+                  })
+                }
+              />
+              <LanguagePicker
+                documentId={documentId}
+                reading={language}
+                disabled={version !== null}
+                onRead={(next) =>
+                  onChangeSearch({ lang: next ?? undefined, mode: "view" })
+                }
+              />
               {newerVersion && (
                 <NewVersionChip
                   version={newerVersion.version}
@@ -520,25 +558,35 @@ export function DocumentPage({
           />
         )}
 
-        <div
-          className={cn(
-            "min-h-[50vh]",
-            editing &&
-              "rounded-lg border border-dashed border-transparent transition-colors focus-within:border-border",
-          )}
-        >
-          <Editor editor={editor} withMenus={editing} />
-          {editing && (
-            // clicking the empty area below the content focuses the editor
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label="Continue writing"
-              className="block h-24 w-full cursor-text"
-              onClick={() => editor?.commands.focus("end")}
-            />
-          )}
-        </div>
+        {readingElsewhere ? (
+          <ReadOnlyContent
+            documentId={documentId}
+            version={version}
+            language={language}
+            currentVersion={document.version}
+            onBack={() => onChangeSearch({ v: undefined, lang: undefined })}
+          />
+        ) : (
+          <div
+            className={cn(
+              "min-h-[50vh]",
+              editing &&
+                "rounded-lg border border-dashed border-transparent transition-colors focus-within:border-border",
+            )}
+          >
+            <Editor editor={editor} withMenus={editing} />
+            {editing && (
+              // clicking the empty area below the content focuses the editor
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label="Continue writing"
+                className="block h-24 w-full cursor-text"
+                onClick={() => editor?.commands.focus("end")}
+              />
+            )}
+          </div>
+        )}
       </article>
 
       {hasRail && !isMobile && (

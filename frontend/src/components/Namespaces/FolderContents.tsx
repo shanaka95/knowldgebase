@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   List,
   MoreHorizontal,
+  Upload,
 } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -180,6 +181,11 @@ export function FolderContents({
       namespaceSlug,
       parentId: folderId,
     })
+  // The same upload dialog as everywhere else, opened with this space and
+  // folder already chosen - which is the whole point of having it here rather
+  // than making somebody pick the folder they are already standing in.
+  const upload = () =>
+    openDialog({ kind: "import", namespaceId, namespaceSlug, folderId })
 
   return (
     <section className="flex flex-col gap-4" data-testid="folder-contents">
@@ -230,6 +236,15 @@ export function FolderContents({
             <Button
               variant="outline"
               size="sm"
+              onClick={upload}
+              data-testid="upload-here"
+            >
+              <Upload />
+              Upload here
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={newFolder}
               data-testid="new-folder"
             >
@@ -260,10 +275,14 @@ export function FolderContents({
           }
           action={
             canEdit ? (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-center gap-2">
                 <Button onClick={newPage}>
                   <FilePlus2 />
                   New page
+                </Button>
+                <Button variant="outline" onClick={upload}>
+                  <Upload />
+                  Upload a document
                 </Button>
                 <Button variant="outline" onClick={newFolder}>
                   <FolderPlus />

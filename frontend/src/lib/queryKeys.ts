@@ -22,6 +22,12 @@ export const queryKeys = {
     attachments: (id: string) => ["documents", id, "attachments"] as const,
     recent: () => ["documents", "recent"] as const,
     types: () => ["documents", "types"] as const,
+    versions: (id: string) => ["documents", id, "versions"] as const,
+    version: (id: string, version: number) =>
+      ["documents", id, "versions", version] as const,
+    languages: (id: string) => ["documents", id, "languages"] as const,
+    translation: (id: string, version: number, language: string) =>
+      ["documents", id, "translations", version, language] as const,
     list: (params: Record<string, unknown>) =>
       ["documents", "list", params] as const,
   },
@@ -38,6 +44,7 @@ export const queryKeys = {
     list: () => ["ask", "conversations", "list"] as const,
     detail: (id: string) => ["ask", "conversations", id] as const,
   },
+  searchSuggestions: () => ["search", "suggestions"] as const,
   apiKeys: ["api-keys"] as const,
   health: ["health"] as const,
   workers: ["workers"] as const,

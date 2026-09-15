@@ -89,3 +89,19 @@ export function retrieveQuery({
     retry: false,
   })
 }
+
+/**
+ * Example searches written from this person's own pages.
+ *
+ * Private to them, and different ones each time, so an empty search box does
+ * not become wallpaper. `staleTime: 0` for that reason - the point is that it
+ * changes.
+ */
+export function searchSuggestionsQuery() {
+  return queryOptions({
+    queryKey: queryKeys.searchSuggestions(),
+    queryFn: async () => (await SearchService.readSearchSuggestions()).data,
+    staleTime: 0,
+    gcTime: 0,
+  })
+}

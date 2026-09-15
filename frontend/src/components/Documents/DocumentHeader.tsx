@@ -48,6 +48,13 @@ interface DocumentHeaderProps {
   }
   aiPanelOpen: boolean
   onToggleAiPanel: () => void
+  /**
+   * An older version or a translation is on screen. Everything else on the
+   * page still works - sharing, moving, the menu - but there is nothing to
+   * edit, and an Edit button that quietly does nothing is worse than no
+   * button at all.
+   */
+  readOnly?: boolean
   extra?: React.ReactNode
 }
 
@@ -68,6 +75,7 @@ export function DocumentHeader({
   embedding,
   aiPanelOpen,
   onToggleAiPanel,
+  readOnly = false,
   extra,
 }: DocumentHeaderProps) {
   const updatedBy =
@@ -119,6 +127,7 @@ export function DocumentHeader({
             </TooltipContent>
           </Tooltip>
           {canEdit &&
+            !readOnly &&
             (mode === "view" ? (
               <Tooltip>
                 <TooltipTrigger asChild>

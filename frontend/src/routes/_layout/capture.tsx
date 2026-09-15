@@ -12,11 +12,11 @@ import { openDialog } from "@/stores/dialogs"
 
 export const Route = createFileRoute("/_layout/capture")({
   component: CapturePage,
-  staticData: { crumb: "Capture" },
+  staticData: { crumb: "Upload documents" },
   loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery(importsQuery())
   },
-  head: () => ({ meta: [{ title: "Capture - PlusGPT" }] }),
+  head: () => ({ meta: [{ title: "Upload documents - PlusGPT" }] }),
 })
 
 function CapturePage() {
@@ -25,15 +25,15 @@ function CapturePage() {
   return (
     <PageContainer className="flex flex-col gap-6">
       <PageHeader
-        title="Capture"
-        description="Photograph a document or choose a file, and it becomes a page you can search. The original stays attached to it."
+        title="Upload documents"
+        description="Choose a file or photograph a document, and it becomes a page you can search. The original stays attached to it."
         actions={
           <Button
             onClick={() => openDialog({ kind: "import" })}
             data-testid="import-new"
           >
             <FileUp />
-            Add a document
+            Upload a document
           </Button>
         }
       />

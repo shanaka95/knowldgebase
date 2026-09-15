@@ -107,9 +107,9 @@ export function ImportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" data-testid="import-dialog">
         <DialogHeader>
-          <DialogTitle>Add a document</DialogTitle>
+          <DialogTitle>Upload a document</DialogTitle>
           <DialogDescription>
-            Photograph it or choose a file. Each one is read by a document model
+            Choose a file or photograph one. Each is read by a document model
             and becomes an editable page, with the original attached.
           </DialogDescription>
         </DialogHeader>

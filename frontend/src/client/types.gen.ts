@@ -579,6 +579,14 @@ export type AttachmentPublic = {
      */
     download_url: string;
     /**
+     * Source Order
+     */
+    source_order?: number | null;
+    /**
+     * Source Version
+     */
+    source_version?: number | null;
+    /**
      * Created At
      */
     created_at?: string | null;
@@ -1114,6 +1122,38 @@ export type DocumentEmbeddingsPublic = {
 };
 
 /**
+ * DocumentLanguages
+ *
+ * What the language picker on a page needs to draw itself.
+ */
+export type DocumentLanguages = {
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Source Language
+     */
+    source_language?: string | null;
+    /**
+     * Source Language Name
+     */
+    source_language_name?: string | null;
+    /**
+     * Available
+     */
+    available?: Array<string>;
+    /**
+     * Options
+     */
+    options?: Array<LanguageOption>;
+};
+
+/**
  * DocumentMove
  */
 export type DocumentMove = {
@@ -1229,9 +1269,17 @@ export type DocumentPublic = {
      * Summary
      */
     summary?: string | null;
+    /**
+     * Language
+     */
+    language?: string | null;
     updated_by_user?: UserRef | null;
     created_by_user?: UserRef | null;
     source_attachment?: AttachmentPublic | null;
+    /**
+     * Source Attachments
+     */
+    source_attachments?: Array<AttachmentPublic>;
 };
 
 /**
@@ -1429,6 +1477,108 @@ export type DocumentUpdate = {
      * Expected Version
      */
     expected_version?: number | null;
+};
+
+/**
+ * DocumentVersionPublic
+ */
+export type DocumentVersionPublic = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
+     * Language
+     */
+    language?: string | null;
+    /**
+     * Char Count
+     */
+    char_count?: number;
+    /**
+     * Is Current
+     */
+    is_current?: boolean;
+    /**
+     * Source Filenames
+     */
+    source_filenames?: Array<string>;
+    created_by_user?: UserRef | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Content Html
+     */
+    content_html?: string;
+    /**
+     * Content Text
+     */
+    content_text?: string;
+};
+
+/**
+ * DocumentVersionSummary
+ *
+ * A row in the version picker: enough to choose one, not its content.
+ */
+export type DocumentVersionSummary = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Doc Type
+     */
+    doc_type?: string | null;
+    /**
+     * Language
+     */
+    language?: string | null;
+    /**
+     * Char Count
+     */
+    char_count?: number;
+    /**
+     * Is Current
+     */
+    is_current?: boolean;
+    /**
+     * Source Filenames
+     */
+    source_filenames?: Array<string>;
+    created_by_user?: UserRef | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * DocumentVersionsPublic
+ */
+export type DocumentVersionsPublic = {
+    /**
+     * Data
+     */
+    data: Array<DocumentVersionSummary>;
+    /**
+     * Count
+     */
+    count: number;
 };
 
 /**
@@ -1984,6 +2134,20 @@ export type JobStage = 'claimed' | 'loading' | 'chunking' | 'summarizing' | 'emb
  * JobStatus
  */
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'superseded';
+
+/**
+ * LanguageOption
+ */
+export type LanguageOption = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+};
 
 /**
  * LoginChallenge
@@ -2558,6 +2722,34 @@ export type SearchResults = {
 };
 
 /**
+ * SearchSuggestionPublic
+ */
+export type SearchSuggestionPublic = {
+    /**
+     * Question
+     */
+    question: string;
+    /**
+     * Document Id
+     */
+    document_id?: string | null;
+};
+
+/**
+ * SearchSuggestionsPublic
+ */
+export type SearchSuggestionsPublic = {
+    /**
+     * Data
+     */
+    data: Array<SearchSuggestionPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * ServiceHealth
  */
 export type ServiceHealth = {
@@ -2771,6 +2963,58 @@ export type TokenMessage = {
      * Token Type
      */
     token_type?: string;
+};
+
+/**
+ * TranslationPublic
+ */
+export type TranslationPublic = {
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Doc Version
+     */
+    doc_version: number;
+    /**
+     * Language
+     */
+    language: string;
+    /**
+     * Language Name
+     */
+    language_name: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Content Html
+     */
+    content_html: string;
+    /**
+     * Content Text
+     */
+    content_text: string;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * TranslationRequest
+ */
+export type TranslationRequest = {
+    /**
+     * Language
+     */
+    language: string;
 };
 
 /**
@@ -4850,6 +5094,130 @@ export type documentsRegenerateDocumentEmbeddingsResponses = {
 
 export type documentsRegenerateDocumentEmbeddingsResponse = documentsRegenerateDocumentEmbeddingsResponses[keyof documentsRegenerateDocumentEmbeddingsResponses];
 
+export type documentsReadDocumentVersionsData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/versions';
+};
+
+export type documentsReadDocumentVersionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsReadDocumentVersionsError = documentsReadDocumentVersionsErrors[keyof documentsReadDocumentVersionsErrors];
+
+export type documentsReadDocumentVersionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentVersionsPublic;
+};
+
+export type documentsReadDocumentVersionsResponse = documentsReadDocumentVersionsResponses[keyof documentsReadDocumentVersionsResponses];
+
+export type documentsReadDocumentVersionData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+        /**
+         * Version
+         */
+        version: number;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/versions/{version}';
+};
+
+export type documentsReadDocumentVersionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsReadDocumentVersionError = documentsReadDocumentVersionErrors[keyof documentsReadDocumentVersionErrors];
+
+export type documentsReadDocumentVersionResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentVersionPublic;
+};
+
+export type documentsReadDocumentVersionResponse = documentsReadDocumentVersionResponses[keyof documentsReadDocumentVersionResponses];
+
+export type documentsReadDocumentLanguagesData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/languages';
+};
+
+export type documentsReadDocumentLanguagesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsReadDocumentLanguagesError = documentsReadDocumentLanguagesErrors[keyof documentsReadDocumentLanguagesErrors];
+
+export type documentsReadDocumentLanguagesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentLanguages;
+};
+
+export type documentsReadDocumentLanguagesResponse = documentsReadDocumentLanguagesResponses[keyof documentsReadDocumentLanguagesResponses];
+
+export type documentsTranslateDocumentData = {
+    body: TranslationRequest;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/translations';
+};
+
+export type documentsTranslateDocumentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type documentsTranslateDocumentError = documentsTranslateDocumentErrors[keyof documentsTranslateDocumentErrors];
+
+export type documentsTranslateDocumentResponses = {
+    /**
+     * Successful Response
+     */
+    200: TranslationPublic;
+};
+
+export type documentsTranslateDocumentResponse = documentsTranslateDocumentResponses[keyof documentsTranslateDocumentResponses];
+
 export type attachmentsReadAttachmentsData = {
     body?: never;
     path?: never;
@@ -5413,6 +5781,36 @@ export type searchRetrieveDocumentsResponses = {
 };
 
 export type searchRetrieveDocumentsResponse = searchRetrieveDocumentsResponses[keyof searchRetrieveDocumentsResponses];
+
+export type searchReadSearchSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/search/suggestions';
+};
+
+export type searchReadSearchSuggestionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type searchReadSearchSuggestionsError = searchReadSearchSuggestionsErrors[keyof searchReadSearchSuggestionsErrors];
+
+export type searchReadSearchSuggestionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: SearchSuggestionsPublic;
+};
+
+export type searchReadSearchSuggestionsResponse = searchReadSearchSuggestionsResponses[keyof searchReadSearchSuggestionsResponses];
 
 export type askAskQuestionData = {
     body: AskRequest;

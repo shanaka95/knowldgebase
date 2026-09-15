@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { AlertCircle, FileText, Loader2, Puzzle, Search } from "lucide-react"
 
@@ -13,6 +14,7 @@ import { deriveEmbeddingState } from "@/lib/embeddingState"
 import { relativeTime } from "@/lib/format"
 import { METHOD_META } from "@/lib/searchPrefs"
 import { Snippet } from "@/lib/snippet"
+import { searchSuggestionsQuery } from "@/queries/search"
 import { SearchExplain } from "./SearchExplain"
 import { FusedScore, SourceBadges } from "./SourceBadges"
 
@@ -26,6 +28,8 @@ interface HybridSearchResultsProps {
   requestedBm25: boolean
   requestedVector: boolean
   onEnableBoth: () => void
+  /** Puts an example into the search box. */
+  onExample?: (query: string) => void
 }
 
 export function HybridSearchResults({
@@ -33,6 +37,7 @@ export function HybridSearchResults({
   data,
   isPending,
   isFetching,
+  onExample,
   error,
   onRetry,
   requestedBm25,
@@ -42,7 +47,7 @@ export function HybridSearchResults({
   const { data: namespaces } = useNamespaces()
   const nsById = new Map((namespaces?.data ?? []).map((n) => [n.id, n]))
 
-  if (!query) return <SearchIntro />
+  if (!query) return <SearchIntro onExample={onExample} />
 
   if (error) {
     return (
@@ -161,7 +166,10 @@ export function HybridSearchResults({
   )
 }
 
-function SearchIntro() {
+function SearchIntro({ onExample }: { onExample?: (q: string) => void }) {
+  const { data } = useQuery(searchSuggestionsQuery())
+  const suggestions = data?.data ?? []
+
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-dashed px-6 py-8">
       <div>
@@ -193,6 +201,35 @@ function SearchIntro() {
           )
         })}
       </dl>
+
+      {suggestions.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">
+            Try one of yours
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {suggestions.map((suggestion) => (
+              <Button
+                key={suggestion.question}
+                variant="outline"
+                size="sm"
+                // A generated question can be long, and a button is
+                // `whitespace-nowrap` by default - which pushed the page
+                // sideways on a phone rather than wrapping.
+                className="h-auto max-w-full whitespace-normal py-1.5 text-left"
+                onClick={() => onExample?.(suggestion.question)}
+                data-testid="search-suggestion"
+              >
+                {suggestion.question}
+              </Button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Written from your own pages as they were added, and only ever shown
+            to you.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

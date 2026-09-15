@@ -1,11 +1,11 @@
 import {
   Bot,
-  Camera,
   Database,
   LayoutDashboard,
   Search,
   Share2,
   Sparkles,
+  Upload,
   Users,
 } from "lucide-react"
 
@@ -33,7 +33,7 @@ const baseItems: Item[] = [
   { icon: Share2, title: "Shared with me", path: "/shared" },
   { icon: Sparkles, title: "Ask", path: "/ask" },
   { icon: Search, title: "Search", path: "/search" },
-  { icon: Camera, title: "Capture", path: "/capture" },
+  { icon: Upload, title: "Upload documents", path: "/capture" },
   // Integrations, in the two directions they run: an agent is how you
   // reach the knowledge base, a data source is how documents reach it.
   { icon: Bot, title: "Agents", path: "/agents" },

@@ -41,8 +41,17 @@ export function EmptyState({
             <Icon />
           </EmptyMedia>
         )}
-        <EmptyTitle>{title}</EmptyTitle>
-        {description && <EmptyDescription>{description}</EmptyDescription>}
+        {/*
+          A title can carry text somebody typed - "No results for …" - and one
+          long unbroken word in a search box pushed the whole page sideways on
+          a phone. Breaking inside the word is the only thing that can give.
+        */}
+        <EmptyTitle className="max-w-full break-words">{title}</EmptyTitle>
+        {description && (
+          <EmptyDescription className="max-w-full break-words">
+            {description}
+          </EmptyDescription>
+        )}
       </EmptyHeader>
       {action && <EmptyContent>{action}</EmptyContent>}
     </Empty>
