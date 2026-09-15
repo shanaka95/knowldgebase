@@ -2491,3 +2491,85 @@ class UsageDaily(SQLModel, table=True):
 
     created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
     updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+# --- Usage as it is reported ------------------------------------------------
+#
+# Two families, and the split is the point. `UsageTotals` has no cost field at
+# all, so no later edit can leak spend into a reply somebody reads about their
+# own account - the same discipline groups get, where privacy is enforced by
+# the shape of the response model rather than by remembering.
+
+
+class UsageTotals(SQLModel):
+    """What was done and what it took, with no mention of money."""
+
+    requests: int = 0
+    failures: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    reasoning_tokens: int = 0
+    cached_tokens: int = 0
+    cache_write_tokens: int = 0
+    search_units: int = 0
+
+
+class AdminUsageTotals(UsageTotals):
+    """The same, for somebody entitled to see the bill.
+
+    Nanos rather than dollars, matching storage exactly: one call can cost
+    5.12e-06, and rounding that to whole micros loses two per cent of it.
+    """
+
+    cost_nanos: int = 0
+
+
+class UsagePoint(SQLModel):
+    """One row of a breakdown: a day, a feature, a model, or an account."""
+
+    key: str
+    label: str | None = None
+    totals: UsageTotals
+
+
+class AdminUsagePoint(SQLModel):
+    key: str
+    label: str | None = None
+    # Set on by-user rows, so a spend table can be read by group without a
+    # second request.
+    group: GroupRef | None = None
+    totals: AdminUsageTotals
+
+
+class UsageRange(SQLModel):
+    """The days a reply covers. UTC, and the interface says so."""
+
+    frm: date
+    to: date
+    days: int
+
+
+class MyUsage(SQLModel):
+    """One account's own usage. Cost is unrepresentable here."""
+
+    range: UsageRange
+    totals: UsageTotals
+    by_feature: list[UsagePoint] = []
+    by_day: list[UsagePoint] = []
+    by_model: list[UsagePoint] = []
+
+
+class AdminUsageSummary(SQLModel):
+    range: UsageRange
+    totals: AdminUsageTotals
+    by_feature: list[AdminUsagePoint] = []
+    by_day: list[AdminUsagePoint] = []
+
+
+class AdminUsageBreakdown(SQLModel):
+    range: UsageRange
+    # "user", "model", "group" or "feature"
+    by: str
+    totals: AdminUsageTotals
+    data: list[AdminUsagePoint] = []
+    count: int = 0

@@ -253,3 +253,83 @@ async def test_a_broken_meter_does_not_break_the_answer(
     assert r.status_code == 200, r.text
     assert r.json()["answer"].startswith("Ask IT")
     assert _rows(owner.id) == []
+
+
+# ---------------------------------------------------------------- agent proxy
+
+
+def _agent_with_token(db: Session) -> tuple[Any, str]:
+    """An agent and the bearer token its shard authenticates with."""
+    from app.models import Agent
+    from app.services.agents import generate_llm_token
+
+    owner, _ = create_user_with_password(db)
+    token, token_hash = generate_llm_token()
+    agent = Agent(
+        user_id=owner.id,
+        name=f"Meter {uuid.uuid4().hex[:6]}",
+        profile_name=f"a-{uuid.uuid4().hex[:6]}",
+        shard_id=0,
+        llm_token_hash=token_hash,
+    )
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+    return agent, token
+
+
+def test_an_agents_spend_lands_on_its_owners_bill(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The proxy authenticates an Agent, never a User - but it has one."""
+    monkeypatch.setattr(settings, "LLM_API_KEY", "sk-test")
+    agent, token = _agent_with_token(db)
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(
+                200, json=_completion("hello", model="qwen/qwen3.8-flash")
+            )
+        )
+        r = client.post(
+            f"{API}/agent-llm/v1/chat/completions",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"messages": [{"role": "user", "content": "hi"}]},
+        )
+    assert r.status_code == 200, r.text
+
+    rows = [row for row in _rows(agent.user_id) if row.feature == UsageFeature.agent]
+    chat = _one(rows, UsageKind.chat)
+    assert chat.input_tokens == 1200
+    assert chat.cost_nanos == 15_000
+
+
+def test_a_streamed_agent_turn_is_billed_from_the_tail(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The proxy still passes bytes through untouched; it only keeps the end."""
+    monkeypatch.setattr(settings, "LLM_API_KEY", "sk-test")
+    agent, token = _agent_with_token(db)
+    stream = _sse(["one ", "two"], model="qwen/qwen3.8-flash")
+
+    with respx.mock:
+        respx.post(LLM_URL).mock(
+            return_value=httpx.Response(
+                200, content=stream, headers={"Content-Type": "text/event-stream"}
+            )
+        )
+        with client.stream(
+            "POST",
+            f"{API}/agent-llm/v1/chat/completions",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"messages": [{"role": "user", "content": "hi"}], "stream": True},
+        ) as r:
+            assert r.status_code == 200
+            passed_through = b"".join(r.iter_bytes())
+
+    assert passed_through == stream, "the proxy must not alter the stream"
+    chat = _one(
+        [row for row in _rows(agent.user_id) if row.feature == UsageFeature.agent],
+        UsageKind.chat,
+    )
+    assert (chat.input_tokens, chat.output_tokens) == (800, 25)

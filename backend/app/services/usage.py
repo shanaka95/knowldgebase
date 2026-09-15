@@ -45,7 +45,17 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, func, select
 
 from app.core.db import engine
-from app.models import UsageDaily, UsageFeature, UsageKind, User
+from app.models import (
+    AdminUsagePoint,
+    AdminUsageTotals,
+    UsageDaily,
+    UsageFeature,
+    UsageKind,
+    UsagePoint,
+    UsageRange,
+    UsageTotals,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +80,10 @@ MODEL_KINDS: tuple[UsageKind, ...] = (
     UsageKind.embedding,
     UsageKind.rerank,
 )
+
+# Counters nobody sees about their own account: what it cost us, rather than
+# what they did. Absent from `UsageTotals` entirely, so no edit can leak it.
+COST = frozenset({"cost_nanos"})
 
 # US dollars are stored multiplied by this, as an integer. A year of summing
 # floats drifts; this does not.
@@ -453,3 +467,65 @@ def by_group(session: Session, q: Query) -> list[tuple[uuid.UUID | None, Counts]
     ).group_by(col(User.group_id))
     rows = [tuple(row) for row in session.exec(statement).all()]
     return _by_spend(rows, 1)
+
+
+# ---------------------------------------------------------------------------
+# Turning counts into replies
+# ---------------------------------------------------------------------------
+
+
+def public_totals(counts: Counts) -> UsageTotals:
+    """For somebody looking at their own account. There is no cost here."""
+    return UsageTotals(
+        **{name: getattr(counts, name) for name in COUNTERS if name not in COST}
+    )
+
+
+def admin_totals(counts: Counts) -> AdminUsageTotals:
+    return AdminUsageTotals(**{name: getattr(counts, name) for name in COUNTERS})
+
+
+def public_range(rng: Range) -> UsageRange:
+    return UsageRange(frm=rng.frm, to=rng.to, days=rng.days)
+
+
+def public_points(
+    rows: Sequence[tuple[Any, Counts]], *, label: Any = None
+) -> list[UsagePoint]:
+    return [
+        UsagePoint(
+            key=str(key),
+            label=label(key) if label is not None else None,
+            totals=public_totals(counts),
+        )
+        for key, counts in rows
+    ]
+
+
+def admin_points(
+    rows: Sequence[tuple[Any, Counts]], *, label: Any = None, group: Any = None
+) -> list[AdminUsagePoint]:
+    return [
+        AdminUsagePoint(
+            key=str(key),
+            label=label(key) if label is not None else None,
+            group=group(key) if group is not None else None,
+            totals=admin_totals(counts),
+        )
+        for key, counts in rows
+    ]
+
+
+def model_rows(
+    rows: Sequence[tuple[str, str, Counts]],
+) -> list[tuple[str, Counts]]:
+    """Model rows keyed by model, labelled by what it was used for.
+
+    An embedding model and a reranker have no tokens to show, and a reader
+    should be able to see why rather than assume the number is missing.
+    """
+    return [(model, counts) for model, _kind, counts in rows]
+
+
+def model_labels(rows: Sequence[tuple[str, str, Counts]]) -> dict[str, str]:
+    return {model: kind for model, kind, _counts in rows}

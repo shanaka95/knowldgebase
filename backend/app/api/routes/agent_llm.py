@@ -15,7 +15,10 @@ Only the two endpoints an agent actually uses are proxied. A general passthrough
 would let a compromised agent reach whatever else the provider exposes.
 """
 
+import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -24,8 +27,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.api.deps import SessionDep
 from app.core.config import settings
-from app.models import Agent, AgentStatus
+from app.models import Agent, AgentStatus, UsageFeature, UsageKind
 from app.services import agents as agent_service
+from app.services import usage
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,31 @@ router = APIRouter(prefix="/agent-llm", tags=["agent_llm"])
 
 # Bounded so one runaway agent cannot pin a connection indefinitely.
 _TIMEOUT = httpx.Timeout(connect=15.0, read=300.0, write=60.0, pool=15.0)
+
+# Enough of the stream's end to hold the final frame, which is where the usage
+# block is. Generous: a long tool-call chunk before it must not push it out.
+_USAGE_TAIL_BYTES = 16_384
+
+
+def _record_stream(meter: usage.UsageMeter, tail: bytes, model: str) -> None:
+    """Read what a streamed turn cost out of the last frame that carries it."""
+    text = tail.decode("utf-8", errors="ignore")
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[len("data:") :].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            chunk = json.loads(payload)
+        except json.JSONDecodeError:
+            continue  # a frame cut in half by the tail window
+        if isinstance(chunk, dict) and chunk.get("usage"):
+            meter.record(UsageKind.chat, chunk, model=model)
+            return
+    # Nothing said what it cost, but a call was still made and paid for.
+    meter.record_counts(UsageKind.chat, model, usage.Counts(requests=1))
 
 
 def _authenticate(request: Request, session: SessionDep) -> Agent:
@@ -102,6 +131,11 @@ async def _proxy(path: str, request: Request, session: SessionDep) -> Any:
     payload = _sanitise(body, agent)
     url = f"{str(settings.LLM_BASE_URL).rstrip('/')}{path}"
     streaming = bool(payload.get("stream"))
+    # An agent is not an account, but it belongs to one, and its spend is on
+    # the same bill as everything else that account does.
+    meter = usage.UsageMeter(user_id=agent.user_id, feature=UsageFeature.agent)
+    meter.operation()
+    model = str(payload.get("model") or settings.AGENT_LLM_MODEL)
 
     client = httpx.AsyncClient(timeout=_TIMEOUT)
     try:
@@ -109,9 +143,15 @@ async def _proxy(path: str, request: Request, session: SessionDep) -> Any:
             response = await client.post(url, json=payload, headers=_upstream_headers())
             content = response.content
             await client.aclose()
+            parsed = _safe_json(content)
+            if response.status_code >= 400:
+                meter.failure(UsageKind.chat, model)
+            else:
+                meter.record(UsageKind.chat, parsed, model=model)
+            await asyncio.to_thread(meter.flush)
             return JSONResponse(
                 status_code=response.status_code,
-                content=_safe_json(content),
+                content=parsed,
             )
 
         # Streamed: hand the bytes straight through, closing the client only
@@ -119,13 +159,21 @@ async def _proxy(path: str, request: Request, session: SessionDep) -> Any:
         upstream = client.stream("POST", url, json=payload, headers=_upstream_headers())
         context = await upstream.__aenter__()
 
-        async def _iterate():
+        async def _iterate() -> AsyncIterator[bytes]:
+            # The bytes are still passed through untouched; only the tail is
+            # kept, because the usage block rides on the last data: frame and
+            # parsing the whole stream to find it would cost more than it is
+            # worth on a path whose job is to be transparent.
+            tail = b""
             try:
                 async for chunk in context.aiter_raw():
+                    tail = (tail + chunk)[-_USAGE_TAIL_BYTES:]
                     yield chunk
             finally:
+                _record_stream(meter, tail, model)
                 await upstream.__aexit__(None, None, None)
                 await client.aclose()
+                await asyncio.to_thread(meter.flush)
 
         return StreamingResponse(
             _iterate(),
@@ -134,6 +182,8 @@ async def _proxy(path: str, request: Request, session: SessionDep) -> Any:
         )
     except httpx.HTTPError as exc:
         await client.aclose()
+        meter.failure(UsageKind.chat, model)
+        await asyncio.to_thread(meter.flush)
         logger.warning("Agent LLM proxy upstream error: %s", exc)
         raise HTTPException(
             status_code=502, detail="The model provider is unreachable"
@@ -141,8 +191,6 @@ async def _proxy(path: str, request: Request, session: SessionDep) -> Any:
 
 
 def _safe_json(content: bytes) -> Any:
-    import json
-
     try:
         return json.loads(content or b"{}")
     except ValueError:
