@@ -36,7 +36,7 @@ from app.models import (
     UserPublic,
     UserRef,
 )
-from app.services import quota
+from app.services import notes, quota
 
 
 def to_user_public(
@@ -245,7 +245,7 @@ def role_for_documents(
 
 
 def to_document_summary(
-    document: Document, my_role: ShareRole | None
+    document: Document, my_role: ShareRole | None, note_count: int = 0
 ) -> DocumentSummaryPublic:
     return DocumentSummaryPublic(
         id=document.id,
@@ -274,6 +274,7 @@ def to_document_summary(
         is_stale=document.embedding_version != document.version,
         my_role=my_role,
         source_attachment_id=document.source_attachment_id,
+        note_count=note_count,
     )
 
 
@@ -283,7 +284,9 @@ def to_document_public(
     if my_role is None:
         my_role = get_document_role(session, user, document)
     refs = user_refs_by_id(session, [document.created_by, document.updated_by])
-    summary = to_document_summary(document, my_role)
+    summary = to_document_summary(
+        document, my_role, note_count=notes.note_count(session, document.id)
+    )
     # Every file the page was imported from, in the order they were uploaded.
     # A page combined from eight scans used to offer the first one and keep the
     # other seven to itself.

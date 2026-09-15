@@ -12,6 +12,8 @@ export interface CreateImportInput {
   folderId: string | null
   title?: string | null
   prompt?: string | null
+  /** Something to say about the page, kept as its first note. */
+  note?: string | null
   /**
    * Make one page out of every file instead of one page each. For a document
    * that arrived as a set of scans this is the difference between a report and
@@ -35,6 +37,7 @@ export function useCreateImport() {
           folder_id: input.folderId,
           title: input.title?.trim() || null,
           prompt: input.prompt?.trim() || null,
+          note: input.note?.trim() || null,
           combine: input.combine ?? false,
         },
       })

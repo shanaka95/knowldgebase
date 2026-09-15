@@ -91,6 +91,21 @@ from app.services.vectors import ScoredPoint
 router = APIRouter(prefix="/ask", tags=["ask"])
 
 
+def _readable_text(document: Document) -> str:
+    """The page as the answering model should read it, notes included.
+
+    A note is the part somebody added because the document does not say it -
+    that this invoice was disputed, that this policy was superseded. Leaving it
+    out of the excerpt would mean the one thing a person wrote down to be found
+    later is the one thing an answer cannot use.
+    """
+    body = document.content_text or document.summary or ""
+    notes = (document.notes_text or "").strip()
+    if not notes:
+        return body
+    return f"{body}\n\n{notes}".strip()
+
+
 async def _matching_chunks(
     vectors: VectorsDep,
     embeddings: EmbeddingsDep,
@@ -235,7 +250,7 @@ def _passages_for(
                 # The page itself, not its summary: a summary is written for
                 # matching and drops the specifics an answer needs - a figure
                 # in a table survives here and does not survive there.
-                text=doc.content_text or doc.summary or "",
+                text=_readable_text(doc),
                 chunk_index=first.chunk_index if first else None,
                 chunk_title=first.title if first else None,
                 score=hit.score,
@@ -300,7 +315,7 @@ def _pinned_passages(
     """
     document, _ = require_document(session, user, document_id, "viewer")
     namespace = session.get(Namespace, document.namespace_id)
-    text = document.content_text or document.summary or ""
+    text = _readable_text(document)
     if not text.strip():
         return []
     return [

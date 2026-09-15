@@ -33,7 +33,7 @@ from app.models import (
     JobStatus,
     WorkerHeartbeat,
 )
-from app.services import quota
+from app.services import notes, quota
 from app.services.suggestions import store_suggestion
 from app.services.versioning import detect_document_language, record_version
 from app.worker.errors import JobCancelled, JobSuperseded
@@ -212,6 +212,9 @@ class DocumentSnapshot:
     title: str
     content_html: str
     version: int
+    # What people added about the page. Indexed with it, so a note can be found
+    # and answered from - see `app/services/notes.py`.
+    notes_text: str = ""
 
 
 def load_document(document_id: uuid.UUID) -> DocumentSnapshot | None:
@@ -225,6 +228,7 @@ def load_document(document_id: uuid.UUID) -> DocumentSnapshot | None:
             title=doc.title,
             content_html=doc.content_html,
             version=doc.version,
+            notes_text=doc.notes_text,
         )
 
 
@@ -522,6 +526,7 @@ class ImportSnapshot:
     title: str | None
     doc_type: str | None
     prompt: str | None
+    note: str | None
     filename: str
     content_type: str
     size: int
@@ -594,6 +599,7 @@ def claim_import_jobs(worker_name: str, limit: int) -> list[ImportSnapshot]:
                 title=j.title,
                 doc_type=j.doc_type,
                 prompt=j.prompt,
+                note=j.note,
                 filename=j.filename,
                 content_type=j.content_type,
                 size=j.size,
@@ -827,6 +833,19 @@ def create_document_from_import(
         for a in attachments:
             a.document_id = document.id
         session.add_all(attachments)
+
+        if (job.note or "").strip():
+            # What the person uploading wanted to say about the file, kept as
+            # the page's first note. Written before the enqueue below so the
+            # very first index already has it - the note is often the only
+            # thing that says why a scan was worth keeping.
+            notes.add(
+                session,
+                document,
+                body=job.note or "",
+                author_id=job.created_by,
+                reindex=False,
+            )
 
         record_version(session, document, created_by=job.created_by)
         crud.enqueue_embedding_job(session=session, document=document, force=True)

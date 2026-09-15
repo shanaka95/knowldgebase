@@ -58,6 +58,10 @@ export const queryKeys = {
     usageModels: (params: Record<string, unknown> = {}) =>
       ["admin", "usage", "models", params] as const,
   },
+  notes: {
+    all: ["notes"] as const,
+    list: (documentId: string) => ["documents", documentId, "notes"] as const,
+  },
   usage: {
     all: ["usage"] as const,
     mine: (params: Record<string, unknown> = {}) =>

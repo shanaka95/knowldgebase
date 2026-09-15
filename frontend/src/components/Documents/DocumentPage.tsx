@@ -53,6 +53,7 @@ import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import { ConflictBanner } from "./ConflictBanner"
 import { DocumentHeader } from "./DocumentHeader"
+import { DocumentNotes } from "./DocumentNotes"
 import { LanguagePicker } from "./LanguagePicker"
 import { NewVersionChip } from "./NewVersionChip"
 import { ReadOnlyContent } from "./ReadOnlyContent"
@@ -586,6 +587,16 @@ export function DocumentPage({
               />
             )}
           </div>
+        )}
+
+        {/* Below the content, because a note is read after the thing it is
+            about. Hidden while an older version or a translation is on screen:
+            notes belong to the page, not to a snapshot of it. */}
+        {!readingElsewhere && (
+          <DocumentNotes
+            documentId={documentId}
+            className="mt-10 border-t pt-6"
+          />
         )}
       </article>
 

@@ -85,6 +85,7 @@ from app.models import (
     UserRef,
     clean_document_type,
 )
+from app.services import notes as notes_service
 from app.services import quota, sharing
 from app.services.cloning import copy_embedded_attachments
 from app.services.email import (
@@ -284,6 +285,16 @@ def create_document(
     session.add(document)
     session.flush()
     record_version(session, document, created_by=auth.user.id)
+    if (document_in.note or "").strip():
+        # Before the enqueue below, so the first index already has it rather
+        # than the page being embedded twice for one creation.
+        notes_service.add(
+            session,
+            document,
+            body=document_in.note or "",
+            author_id=auth.user.id,
+            reindex=False,
+        )
     crud.enqueue_embedding_job(session=session, document=document)
     session.commit()
     session.refresh(document)
@@ -533,6 +544,9 @@ def clone_document(
     # translations stay with the original - they describe a page this one is no
     # longer tied to.
     record_version(session, clone, created_by=auth.user.id)
+    # A copy without the notes would lose the part explaining why the page was
+    # worth copying.
+    notes_service.copy_to(session, source.id, clone, author_id=auth.user.id)
     crud.enqueue_embedding_job(session=session, document=clone)
     session.commit()
     session.refresh(clone)

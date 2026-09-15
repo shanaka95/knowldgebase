@@ -56,6 +56,7 @@ export function ImportDialog({
   const [autoTitle, setAutoTitle] = useState(true)
   const [combine, setCombine] = useState(false)
   const [prompt, setPrompt] = useState("")
+  const [note, setNote] = useState("")
   const [rejection, setRejection] = useState<string | null>(null)
 
   const many = files.length > 1
@@ -92,6 +93,7 @@ export function ImportDialog({
         // sent only when it is both wanted and possible.
         title: autoTitle || !titleAvailable ? null : title,
         prompt,
+        note,
         combine: many && combine,
       },
       {
@@ -206,6 +208,29 @@ export function ImportDialog({
             disabled={createImport.isPending}
             idPrefix="import"
           />
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="import-note">
+              Notes{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
+            </Label>
+            <Textarea
+              id="import-note"
+              rows={3}
+              value={note}
+              disabled={createImport.isPending}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Anything you want to add to this document — why you are keeping it, what it replaces, what to watch out for. Saved with the page and searchable alongside it."
+              data-testid="import-note"
+            />
+            <p className="text-muted-foreground text-xs">
+              {many && !combine
+                ? "Added to every page this upload creates."
+                : "Added to the page as its first note."}
+            </p>
+          </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="import-prompt">

@@ -636,6 +636,10 @@ COMMON_DOCUMENT_TYPES: tuple[str, ...] = (
 
 DOCUMENT_TYPE_MAX = 60
 
+# Long enough for a paragraph of context, short enough that a note stays a
+# note: anything longer belongs in the page itself.
+NOTE_MAX = 4000
+
 
 def clean_document_type(value: str | None) -> str | None:
     """Normalise a type so the same thing is not stored three ways.
@@ -658,6 +662,9 @@ class DocumentCreate(SQLModel):
     content: str = ""
     content_format: ContentFormat = ContentFormat.html
     doc_type: str | None = Field(default=None, max_length=DOCUMENT_TYPE_MAX)
+    # Something to say about the page that is not the page. Accepted here so an
+    # agent writing through the API can leave it in one call rather than two.
+    note: str | None = Field(default=None, max_length=NOTE_MAX)
 
 
 class DocumentUpdate(SQLModel):
@@ -707,6 +714,11 @@ class Document(SQLModel, table=True):
     )
     content_html: str = Field(default="", sa_type=Text)
     content_text: str = Field(default="", sa_type=Text)
+    # Every note anybody has added to this page, run together. Denormalised
+    # from `documentnote` so the generated search vector can read it: a
+    # generated column may only reference its own row, and a note nobody can
+    # find by searching for it is a note nobody will read again.
+    notes_text: str = Field(default="", sa_type=Text)
     summary: str | None = Field(default=None, sa_type=Text)
     # What language the page is written in, detected when its text changes.
     # Stored rather than detected on the way out: the translation picker needs
@@ -746,7 +758,8 @@ class Document(SQLModel, table=True):
             TSVECTOR,
             Computed(
                 "setweight(to_tsvector('english', coalesce(title, '')), 'A') || "
-                "setweight(to_tsvector('english', left(coalesce(content_text, ''), 500000)), 'B')",
+                "setweight(to_tsvector('english', left(coalesce(content_text, ''), 500000)), 'B') || "
+                "setweight(to_tsvector('english', left(coalesce(notes_text, ''), 100000)), 'B')",
                 persisted=True,
             ),
             nullable=True,
@@ -796,6 +809,7 @@ class DocumentSummaryPublic(SQLModel):
     is_stale: bool = False
     my_role: ShareRole | None = None
     source_attachment_id: uuid.UUID | None = None
+    note_count: int = 0
 
 
 class DocumentPublic(DocumentSummaryPublic):
@@ -1293,6 +1307,7 @@ class ImportJobCreate(SQLModel):
     folder_id: uuid.UUID | None = None
     title: str | None = Field(default=None, max_length=300)
     prompt: str | None = Field(default=None, max_length=2000)
+    note: str | None = Field(default=None, max_length=NOTE_MAX)
 
 
 class ImportFile(SQLModel, table=True):
@@ -1346,6 +1361,9 @@ class ImportJob(SQLModel, table=True):
     # filing one kind of thing.
     doc_type: str | None = Field(default=None, max_length=DOCUMENT_TYPE_MAX)
     prompt: str | None = Field(default=None, sa_type=Text)
+    # What the person uploading wanted to say about the file. Becomes the
+    # page's first note once the page exists.
+    note: str | None = Field(default=None, sa_type=Text)
     filename: str = Field(max_length=255)
     content_type: str = Field(max_length=127)
     size: int = Field(sa_type=BigInteger)
@@ -2577,4 +2595,68 @@ class AdminUsageBreakdown(SQLModel):
     by: str
     totals: AdminUsageTotals
     data: list[AdminUsagePoint]
+    count: int
+
+
+# ---------------------------------------------------------------------------
+# Notes on a page
+#
+# What somebody wanted to say about a document that is not in the document: why
+# it was uploaded, what to watch out for, what it supersedes. A scan of an
+# invoice cannot tell you it was already disputed.
+#
+# Notes are their own rows rather than text appended to the page, because they
+# have an author and a time and they are somebody's addition rather than the
+# document's content - a scan should still read as the scan. But they are
+# indexed with the page and read with it, because a note nobody can find by
+# searching for it is a note nobody will read again.
+# ---------------------------------------------------------------------------
+
+
+class DocumentNote(SQLModel, table=True):
+    """One thing a person added to a page."""
+
+    __table_args__ = (
+        # "the notes on this page, oldest first" - the only question asked.
+        Index("ix_documentnote_document_created", "document_id", "created_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    document_id: uuid.UUID = Field(
+        foreign_key="document.id", nullable=False, ondelete="CASCADE"
+    )
+    body: str = Field(sa_type=Text)
+    # Kept when the account goes: the note is part of the page's history, and
+    # deleting somebody should not silently edit what a page says.
+    created_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class DocumentNoteCreate(SQLModel):
+    body: str = Field(min_length=1, max_length=NOTE_MAX)
+
+
+class DocumentNoteUpdate(SQLModel):
+    body: str = Field(min_length=1, max_length=NOTE_MAX)
+
+
+class DocumentNotePublic(SQLModel):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    body: str
+    created_by: uuid.UUID | None = None
+    author: UserRef | None = None
+    created_at: datetime
+    updated_at: datetime
+    # Whether the reader may change this one. Editing is the author's, deleting
+    # is the author's or anybody who could edit the page.
+    can_edit: bool = False
+    can_delete: bool = False
+
+
+class DocumentNotesPublic(SQLModel):
+    data: list[DocumentNotePublic]
     count: int

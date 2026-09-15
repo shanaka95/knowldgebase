@@ -852,6 +852,10 @@ export type Body_imports_create_import = {
      * Prompt
      */
     prompt?: string | null;
+    /**
+     * Note
+     */
+    note?: string | null;
 };
 
 /**
@@ -882,6 +886,10 @@ export type Body_imports_create_imports = {
      * Prompt
      */
     prompt?: string | null;
+    /**
+     * Note
+     */
+    note?: string | null;
     /**
      * Combine
      */
@@ -1232,6 +1240,10 @@ export type DocumentCreate = {
      * Doc Type
      */
     doc_type?: string | null;
+    /**
+     * Note
+     */
+    note?: string | null;
 };
 
 /**
@@ -1341,6 +1353,79 @@ export type DocumentMove = {
 };
 
 /**
+ * DocumentNoteCreate
+ */
+export type DocumentNoteCreate = {
+    /**
+     * Body
+     */
+    body: string;
+};
+
+/**
+ * DocumentNotePublic
+ */
+export type DocumentNotePublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Document Id
+     */
+    document_id: string;
+    /**
+     * Body
+     */
+    body: string;
+    /**
+     * Created By
+     */
+    created_by?: string | null;
+    author?: UserRef | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Can Edit
+     */
+    can_edit?: boolean;
+    /**
+     * Can Delete
+     */
+    can_delete?: boolean;
+};
+
+/**
+ * DocumentNoteUpdate
+ */
+export type DocumentNoteUpdate = {
+    /**
+     * Body
+     */
+    body: string;
+};
+
+/**
+ * DocumentNotesPublic
+ */
+export type DocumentNotesPublic = {
+    /**
+     * Data
+     */
+    data: Array<DocumentNotePublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * DocumentPublic
  */
 export type DocumentPublic = {
@@ -1430,6 +1515,10 @@ export type DocumentPublic = {
      * Source Attachment Id
      */
     source_attachment_id?: string | null;
+    /**
+     * Note Count
+     */
+    note_count?: number;
     /**
      * Content Html
      */
@@ -1599,6 +1688,10 @@ export type DocumentSummaryPublic = {
      * Source Attachment Id
      */
     source_attachment_id?: string | null;
+    /**
+     * Note Count
+     */
+    note_count?: number;
 };
 
 /**
@@ -5797,6 +5890,134 @@ export type documentsTranslateDocumentResponses = {
 };
 
 export type documentsTranslateDocumentResponse = documentsTranslateDocumentResponses[keyof documentsTranslateDocumentResponses];
+
+export type notesReadNotesData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/notes/';
+};
+
+export type notesReadNotesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type notesReadNotesError = notesReadNotesErrors[keyof notesReadNotesErrors];
+
+export type notesReadNotesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentNotesPublic;
+};
+
+export type notesReadNotesResponse = notesReadNotesResponses[keyof notesReadNotesResponses];
+
+export type notesCreateNoteData = {
+    body: DocumentNoteCreate;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/notes/';
+};
+
+export type notesCreateNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type notesCreateNoteError = notesCreateNoteErrors[keyof notesCreateNoteErrors];
+
+export type notesCreateNoteResponses = {
+    /**
+     * Successful Response
+     */
+    201: DocumentNotePublic;
+};
+
+export type notesCreateNoteResponse = notesCreateNoteResponses[keyof notesCreateNoteResponses];
+
+export type notesDeleteNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/notes/{note_id}';
+};
+
+export type notesDeleteNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type notesDeleteNoteError = notesDeleteNoteErrors[keyof notesDeleteNoteErrors];
+
+export type notesDeleteNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type notesDeleteNoteResponse = notesDeleteNoteResponses[keyof notesDeleteNoteResponses];
+
+export type notesUpdateNoteData = {
+    body: DocumentNoteUpdate;
+    path: {
+        /**
+         * Document Id
+         */
+        document_id: string;
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/documents/{document_id}/notes/{note_id}';
+};
+
+export type notesUpdateNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type notesUpdateNoteError = notesUpdateNoteErrors[keyof notesUpdateNoteErrors];
+
+export type notesUpdateNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: DocumentNotePublic;
+};
+
+export type notesUpdateNoteResponse = notesUpdateNoteResponses[keyof notesUpdateNoteResponses];
 
 export type attachmentsReadAttachmentsData = {
     body?: never;

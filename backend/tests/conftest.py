@@ -57,6 +57,7 @@ settings.AUTH_CODE_MAX_SENDS = 10_000
 
 TABLES_TO_TRUNCATE = [
     "usagedaily",
+    "documentnote",
     "askmessage",
     "askconversation",
     "cleanuptask",

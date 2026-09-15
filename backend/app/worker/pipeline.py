@@ -42,6 +42,9 @@ from app.worker.errors import FatalError, JobCancelled, JobSuperseded
 from app.worker.fallback_chunker import Chunk
 from app.worker.summarize import summarize
 
+# What a note's chunk is called, so a citation says where it came from.
+NOTES_CHUNK_TITLE = "Notes added by readers"
+
 logger = logging.getLogger(__name__)
 
 
@@ -193,7 +196,13 @@ async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
 
         blocks = html_to_blocks(doc.content_html)
         body_text = blocks_to_text(blocks)
-        full_text = f"{doc.title}\n\n{body_text}".strip()
+        # Notes join the page's own text for the document-level vector, and get
+        # a chunk of their own further down. Somebody searching for what they
+        # wrote about a scan is searching for the note, not the scan.
+        notes = (doc.notes_text or "").strip()
+        full_text = "\n\n".join(
+            part for part in (doc.title, body_text, notes) if part
+        ).strip()
         ctx.stats["chars"] = len(body_text)
         ctx.stats["blocks"] = len(blocks)
 
@@ -229,6 +238,16 @@ async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
         inputs = [full_text]
         if summary:
             inputs.append(summary)
+        if notes:
+            # Its own chunk, so a note can be retrieved and cited on its own
+            # rather than only raising the whole page's score.
+            # start/end are block offsets into the page and a note is not one;
+            # nothing reads them back - `DocumentChunk` stores index, title and
+            # text only - so zero is honest enough.
+            chunks = [
+                *chunks,
+                Chunk(title=NOTES_CHUNK_TITLE, text=notes, start=0, end=0),
+            ]
         inputs.extend(f"{c.title}\n\n{c.text}" for c in chunks)
         vectors = await _embed_all(deps.embedder, inputs, ctx)  # [CK6] per batch
 

@@ -22,6 +22,7 @@ from app.api.serializers import to_import_job_public
 from app.core.config import settings
 from app.core.permissions import require_folder, require_namespace
 from app.models import (
+    NOTE_MAX,
     CleanupKind,
     CleanupTask,
     ImportFile,
@@ -170,6 +171,7 @@ async def create_import(
     title: Annotated[str | None, Form()] = None,
     doc_type: Annotated[str | None, Form()] = None,
     prompt: Annotated[str | None, Form()] = None,
+    note: Annotated[str | None, Form()] = None,
 ) -> Any:
     """Upload one PDF or image and queue it to be turned into a page.
 
@@ -194,6 +196,7 @@ async def create_import(
         title=((title or "").strip()[:300] or None),
         doc_type=clean_document_type(doc_type),
         prompt=(prompt or "").strip() or None,
+        note=(note or "").strip()[:NOTE_MAX] or None,
         filename=stored.filename,
         content_type=stored.content_type,
         size=stored.size,
@@ -217,6 +220,7 @@ async def create_imports(
     title: Annotated[str | None, Form()] = None,
     doc_type: Annotated[str | None, Form()] = None,
     prompt: Annotated[str | None, Form()] = None,
+    note: Annotated[str | None, Form()] = None,
     combine: Annotated[bool, Form()] = False,
 ) -> Any:
     """Upload several files at once, into the same space and folder.
@@ -248,6 +252,7 @@ async def create_imports(
 
     clean_title = (title or "").strip()[:300] or None
     clean_prompt = (prompt or "").strip() or None
+    clean_note = (note or "").strip()[:NOTE_MAX] or None
     # Unlike the title, the type applies to every page in the batch: a set of
     # scans chosen together is a set of the same kind of thing.
     kind = clean_document_type(doc_type)
@@ -267,6 +272,7 @@ async def create_imports(
             title=clean_title,
             doc_type=kind,
             prompt=clean_prompt,
+            note=clean_note,
             # A label for the list, since there is no single filename any more.
             filename=f"{stored[0].filename} +{len(stored) - 1} more"[:255],
             content_type=stored[0].content_type,
@@ -306,6 +312,7 @@ async def create_imports(
                 title=clean_title if len(files) == 1 else None,
                 doc_type=kind,
                 prompt=clean_prompt,
+                note=clean_note,
                 filename=stored_one.filename,
                 content_type=stored_one.content_type,
                 size=stored_one.size,
