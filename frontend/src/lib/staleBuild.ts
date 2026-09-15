@@ -29,6 +29,45 @@ const ATTEMPTED = "stale-build-reload"
  */
 const COOLDOWN_MS = 60_000
 
+/**
+ * Which build this tab is running, taken from the entry chunk's own URL.
+ *
+ * Set once at start-up by `watchForStaleBuild`. In development there are no
+ * hashed chunks and this stays null, which turns the freshness check into a
+ * no-op rather than something that guesses.
+ */
+let runningBuild: string | null = null
+
+const ENTRY = /assets\/index-[A-Za-z0-9_-]+\.js/
+
+/**
+ * Whether the server is now serving a different build than this tab loaded.
+ *
+ * Asked rather than inferred. A replaced chunk does not always surface as a
+ * failed import: a route can load enough to leave the router holding a match
+ * whose route is undefined, and "Cannot read properties of undefined (reading
+ * 'component')" is what that looks like from the outside. Matching on error
+ * text would mean guessing at every future phrasing of the same thing, so the
+ * question asked here is the one that actually decides it - is this tab out of
+ * date? - and the answer comes from the shell.
+ */
+export async function isStaleBuild(): Promise<boolean> {
+  if (!runningBuild) return false
+  try {
+    const response = await fetch("/", {
+      cache: "no-store",
+      headers: { Accept: "text/html" },
+    })
+    if (!response.ok) return false
+    const current = ENTRY.exec(await response.text())?.[0]
+    return Boolean(current) && current !== runningBuild
+  } catch {
+    // Offline, or the server is down. Neither is a stale build, and reloading
+    // into a network failure helps nobody.
+    return false
+  }
+}
+
 /** Whether this error is a chunk that is no longer on the server. */
 export function isStaleChunkError(error: unknown): boolean {
   const message =
@@ -73,7 +112,9 @@ export function reloadForNewBuild(): boolean {
  * rejection covers the rest. Both happen outside the render tree, which is why
  * a route-level error component alone is not enough.
  */
-export function watchForStaleBuild(): void {
+export function watchForStaleBuild(entryUrl?: string): void {
+  runningBuild = entryUrl ? (ENTRY.exec(entryUrl)?.[0] ?? null) : null
+
   window.addEventListener("vite:preloadError", (event) => {
     event.preventDefault()
     reloadForNewBuild()
@@ -84,4 +125,15 @@ export function watchForStaleBuild(): void {
       reloadForNewBuild()
     }
   })
+}
+
+/**
+ * Reload if - and only if - this tab is running a build the server has replaced.
+ *
+ * The caller keeps showing its error until this resolves, because most errors
+ * are not this and a page that reloads itself on every failure hides real ones.
+ */
+export async function reloadIfStale(): Promise<boolean> {
+  if (!(await isStaleBuild())) return false
+  return reloadForNewBuild()
 }

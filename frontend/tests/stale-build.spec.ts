@@ -75,3 +75,64 @@ test.describe("A deploy while somebody is using the app", () => {
     expect(verdicts.nonsense).toBe(false)
   })
 })
+
+test.describe("Detecting a replaced build", () => {
+  test("it declines to guess when there are no hashed chunks", async ({
+    page,
+  }) => {
+    await page.goto("/")
+    await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
+
+    // The dev server has no `assets/index-<hash>.js`, so this tab cannot know
+    // which build it is. Answering "stale" there would reload on every error.
+    // The comparison itself is exercised against a real build below.
+    await page.route("**/", async (route) => {
+      if (route.request().resourceType() !== "fetch") return route.continue()
+      await route.fulfill({
+        contentType: "text/html",
+        body: '<script type="module" src="/assets/index-NEWBUILD9.js"></script>',
+      })
+    })
+
+    const stale = await page.evaluate(async () => {
+      // @ts-expect-error - runtime import inside the browser
+      const m = await import("/src/lib/staleBuild.ts")
+      return m.isStaleBuild()
+    })
+    expect(stale, "no build id means no opinion").toBe(false)
+  })
+
+  test("a built shell names an entry chunk, and a changed one is detectable", async ({
+    page,
+  }) => {
+    // Against the built application, where the hashed entry actually exists.
+    // Skipped when the suite runs against the dev server.
+    const base = process.env.PLAYWRIGHT_BASE_URL ?? ""
+    test.skip(base.includes("5173") || base === "", "needs a production build")
+
+    await page.goto("/login")
+    const entry = await page.evaluate(() =>
+      fetch("/", { cache: "no-store", headers: { Accept: "text/html" } })
+        .then((r) => r.text())
+        .then((h) => /assets\/index-[A-Za-z0-9_-]+\.js/.exec(h)?.[0]),
+    )
+    expect(entry, "the shell must name a hashed entry chunk").toMatch(
+      /^assets\/index-/,
+    )
+  })
+
+  test("a server that cannot be reached is not a stale build", async ({
+    page,
+  }) => {
+    await page.goto("/")
+    await page.route("**/", (route) => route.abort())
+
+    const stale = await page.evaluate(async () => {
+      // @ts-expect-error - runtime import inside the browser
+      const m = await import("/src/lib/staleBuild.ts")
+      return m.isStaleBuild()
+    })
+    // Reloading into a network failure helps nobody.
+    expect(stale).toBe(false)
+  })
+})

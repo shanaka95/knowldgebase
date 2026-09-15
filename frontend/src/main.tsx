@@ -64,7 +64,10 @@ const queryClient = new QueryClient({
 // A deploy can land while somebody is mid-session; the first navigation after
 // one asks for a chunk that has been replaced. Registered before the router so
 // the very first failed import is caught.
-watchForStaleBuild()
+// `import.meta.url` here is the entry chunk's own hashed URL, which is what
+// identifies this build. Passed in rather than read inside the helper, where
+// it would name that helper's chunk instead.
+watchForStaleBuild(import.meta.url)
 
 const router = createRouter({
   routeTree,
