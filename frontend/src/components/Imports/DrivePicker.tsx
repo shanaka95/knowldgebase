@@ -145,8 +145,14 @@ export function DrivePicker({
   )
 }
 
-/** Shown in place of the picker when there is nothing to pick from yet. */
-export function DriveNotConnected() {
+/**
+ * Shown in place of the picker when there is nothing to pick from yet.
+ *
+ * `onLeave` closes whatever is hosting this. Connecting a Drive happens on
+ * another page, and a dialog left open over the page it sent you to is a
+ * dialog covering the button you were sent there to press.
+ */
+export function DriveNotConnected({ onLeave }: { onLeave?: () => void }) {
   return (
     <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed px-4 py-6 text-sm">
       <p className="text-muted-foreground">
@@ -156,6 +162,8 @@ export function DriveNotConnected() {
         <RouterLink
           to="/data-sources"
           search={{ connected: undefined, reason: undefined }}
+          onClick={() => onLeave?.()}
+          data-testid="drive-connect"
         >
           Connect Google Drive
           <ExternalLink />

@@ -54,9 +54,24 @@ test.describe("Uploading from Google Drive", () => {
     await page.getByTestId("source-drive").click()
 
     await expect(page.getByTestId("drive-pick")).toHaveCount(0)
-    await expect(
-      page.getByRole("link", { name: /Connect Google Drive/ }),
-    ).toBeVisible()
+    await expect(page.getByTestId("drive-connect")).toBeVisible()
+  })
+
+  test("going off to connect closes the dialog behind it", async ({ page }) => {
+    // It used to navigate and leave itself open, so the upload dialog sat on
+    // top of the page it had just sent you to - covering the button you were
+    // sent there to press.
+    await page.route(SOURCES, (route) =>
+      route.fulfill({ json: driveState(false) }),
+    )
+    await openDialog(page)
+    await page.getByTestId("source-drive").click()
+    await page.getByTestId("drive-connect").click()
+
+    await expect(page).toHaveURL(/\/data-sources/)
+    await expect(page.getByTestId("import-dialog")).toHaveCount(0)
+    // And the page underneath is usable, not behind an overlay.
+    await expect(page.locator("[data-slot=dialog-overlay]")).toHaveCount(0)
   })
 
   test("a connected Drive offers the picker, and says the limits", async ({

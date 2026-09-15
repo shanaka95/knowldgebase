@@ -193,7 +193,7 @@ export function ImportDialog({
                 disabled={busy}
               />
             ) : (
-              <DriveNotConnected />
+              <DriveNotConnected onLeave={() => onOpenChange(false)} />
             )
           ) : (
             <FileDropzone
