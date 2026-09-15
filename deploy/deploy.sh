@@ -101,16 +101,35 @@ fi
 #
 # Validated in the container before it is reloaded, and rolled back if it does
 # not adapt: a bad Caddyfile does not degrade the site, it takes it down.
+#
+# Written in place with `cat >`, never `mv`. The file is bind-mounted into the
+# container, and a bind mount of a single file is bound to the *inode* it found
+# at start-up: replacing the file gives it a new inode, the container goes on
+# reading the old one, and `caddy reload` dutifully reloads the config nobody
+# changed. That is not hypothetical - it is why the asset caching fix appeared
+# to ship and then did nothing, with the deploy reporting success throughout.
+# Truncating and rewriting keeps the inode, so the container sees the change.
 say "syncing the edge config"
 scp -q deploy/Caddyfile "$HOST:$REMOTE_DIR/Caddyfile.new"
-if ssh "$HOST" "cd $REMOTE_DIR && cp Caddyfile Caddyfile.prev && mv Caddyfile.new Caddyfile && \
+if ssh "$HOST" "cd $REMOTE_DIR && cp Caddyfile Caddyfile.prev && cat Caddyfile.new > Caddyfile && \
+    rm -f Caddyfile.new && \
     docker compose exec -T caddy caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1"; then
   ssh "$HOST" "cd $REMOTE_DIR && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1" \
     || echo "warning: caddy would not reload the new config" >&2
 else
   echo "the new Caddyfile is not valid; keeping the one that is running" >&2
-  ssh "$HOST" "cd $REMOTE_DIR && mv Caddyfile.prev Caddyfile"
+  ssh "$HOST" "cd $REMOTE_DIR && cat Caddyfile.prev > Caddyfile"
   exit 1
+fi
+
+# And check, rather than assume. An earlier `mv` can have orphaned the mount
+# long before this run, in which case writing in place still reaches a file the
+# container cannot see; recreating it is the only way to re-resolve the mount.
+if ! ssh "$HOST" "cd $REMOTE_DIR && \
+    [ \"\$(docker compose exec -T caddy md5sum /etc/caddy/Caddyfile | cut -d' ' -f1)\" = \
+      \"\$(md5sum Caddyfile | cut -d' ' -f1)\" ]"; then
+  echo "  the caddy container is not reading the file we just wrote; recreating it"
+  ssh "$HOST" "cd $REMOTE_DIR && docker compose up -d --force-recreate caddy" >/dev/null 2>&1
 fi
 
 say "deploying: ${SERVICES[*]}"
