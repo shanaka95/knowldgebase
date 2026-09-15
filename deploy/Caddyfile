@@ -56,7 +56,14 @@
 
 	# The shell is the opposite: it names this deploy's asset hashes, so a cached
 	# copy after a deploy points at files that no longer exist.
-	@shell path / /index.html
+	#
+	# Matched by exclusion, not by listing paths. The application is a single
+	# page: the same shell is served for /search, /ask, /usage and every other
+	# client route, and naming only "/" left all of them with no Cache-Control
+	# at all - which means heuristic caching, which means a browser holding a
+	# shell that points at chunks the next deploy deletes. That is exactly the
+	# "Failed to fetch dynamically imported module" people were seeing.
+	@shell not path /assets/* /api/*
 	header @shell Cache-Control "no-cache"
 
 	handle {

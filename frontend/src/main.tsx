@@ -14,6 +14,7 @@ import { client } from "./client/client.gen"
 import { ThemeProvider } from "./components/theme-provider"
 import { Toaster } from "./components/ui/sonner"
 import "./index.css"
+import { watchForStaleBuild } from "./lib/staleBuild"
 import { routeTree } from "./routeTree.gen"
 
 client.setConfig({
@@ -59,6 +60,11 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+// A deploy can land while somebody is mid-session; the first navigation after
+// one asks for a chunk that has been replaced. Registered before the router so
+// the very first failed import is caught.
+watchForStaleBuild()
 
 const router = createRouter({
   routeTree,
