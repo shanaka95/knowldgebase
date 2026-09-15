@@ -29,9 +29,7 @@ def _spend(
     day=None,
 ) -> None:
     """Write usage the way the meter does, so the balance reads real rows."""
-    meter = usage.UsageMeter(
-        user_id=user_id, feature=feature, day=day or usage.today()
-    )
+    meter = usage.UsageMeter(user_id=user_id, feature=feature, day=day or usage.today())
     if input_tokens or output_tokens:
         meter.record_counts(
             UsageKind.chat,
@@ -41,9 +39,7 @@ def _spend(
             ),
         )
     for _ in range(embeddings):
-        meter.record_counts(
-            UsageKind.embedding, "embed-1", usage.Counts(requests=1)
-        )
+        meter.record_counts(UsageKind.embedding, "embed-1", usage.Counts(requests=1))
     for _ in range(reranks):
         meter.record_counts(UsageKind.rerank, "rerank-1", usage.Counts(requests=1))
     meter.flush()
@@ -81,9 +77,7 @@ def test_a_month_knows_when_it_ends() -> None:
 # ------------------------------------------------------------------- the balance
 
 
-def test_the_balance_is_read_from_the_usage_rows(
-    db: Session, account: User
-) -> None:
+def test_the_balance_is_read_from_the_usage_rows(db: Session, account: User) -> None:
     before = credits.balance_for(db, account)
     assert before.used_milli == 0
     assert before.allowance_milli == settings.MONTHLY_CREDITS * credits.MILLI
