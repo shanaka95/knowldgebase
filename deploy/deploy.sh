@@ -94,6 +94,25 @@ if printf '%s\n' "${SERVICES[@]}" | grep -qx hermes-gw-0; then
   scp -qr hermes-skills/. "$HOST:$REMOTE_DIR/hermes-skills/"
 fi
 
+# The edge config is the same kind of thing: a bind mount the images do not
+# carry, so editing it in the repository did nothing at all. It drifted for
+# exactly as long as it took somebody to hit a route whose shell had been
+# cached across a deploy.
+#
+# Validated in the container before it is reloaded, and rolled back if it does
+# not adapt: a bad Caddyfile does not degrade the site, it takes it down.
+say "syncing the edge config"
+scp -q deploy/Caddyfile "$HOST:$REMOTE_DIR/Caddyfile.new"
+if ssh "$HOST" "cd $REMOTE_DIR && cp Caddyfile Caddyfile.prev && mv Caddyfile.new Caddyfile && \
+    docker compose exec -T caddy caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1"; then
+  ssh "$HOST" "cd $REMOTE_DIR && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1" \
+    || echo "warning: caddy would not reload the new config" >&2
+else
+  echo "the new Caddyfile is not valid; keeping the one that is running" >&2
+  ssh "$HOST" "cd $REMOTE_DIR && mv Caddyfile.prev Caddyfile"
+  exit 1
+fi
+
 say "deploying: ${SERVICES[*]}"
 # --force-recreate because an unchanged tag leaves the old container running,
 # and --pull always because a moved :latest is otherwise invisible to compose.
