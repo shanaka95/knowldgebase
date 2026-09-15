@@ -6,8 +6,8 @@ import {
   Outlet,
 } from "@tanstack/react-router"
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools"
-import ErrorComponent from "@/components/Common/ErrorComponent"
 import NotFound from "@/components/Common/NotFound"
+import { RouteErrorComponent } from "@/components/Layout/RouteErrorComponent"
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -23,5 +23,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     </>
   ),
   notFoundComponent: () => <NotFound />,
-  errorComponent: () => <ErrorComponent />,
+  // The same component the layout uses, rather than a friendlier dead end:
+  // an error that reaches the root is the one most in need of saying what it
+  // was, and "Oops!" with a Go Home button said nothing anybody could act on.
+  errorComponent: RouteErrorComponent,
 })
