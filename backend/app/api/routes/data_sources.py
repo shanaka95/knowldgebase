@@ -30,7 +30,7 @@ from app.models import (
     User,
 )
 from app.services import data_sources as service
-from app.services import parsing
+from app.services import parsing, quota
 from app.services.storage import ObjectStorage
 
 router = APIRouter(prefix="/data-sources", tags=["data_sources"])
@@ -171,6 +171,13 @@ async def import_from_google_drive(
     from app.api.routes.imports import _check_destination, _import_key
 
     _check_destination(session, auth.user, body.namespace_id, body.folder_id)
+    # Before a byte is fetched from Google. Each picked file becomes one page,
+    # and downloading twenty of them only to refuse them would waste the
+    # transfer and leave objects in storage behind.
+    try:
+        quota.ensure_page_capacity(session, auth.user.id, wanted=len(body.files))
+    except quota.QuotaExceeded as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     connection = session.exec(
         select(DataSourceConnection).where(

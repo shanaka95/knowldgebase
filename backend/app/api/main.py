@@ -3,6 +3,8 @@ from fastapi import APIRouter
 from app.api.routes import (
     admin_channels,
     admin_data_sources,
+    admin_user_groups,
+    admin_users,
     agent_control,
     agent_llm,
     agents,
@@ -43,6 +45,8 @@ api_router.include_router(agents.router)
 api_router.include_router(data_sources.router)
 api_router.include_router(admin_channels.router)
 api_router.include_router(admin_data_sources.router)
+api_router.include_router(admin_user_groups.router)
+api_router.include_router(admin_users.router)
 # Machine-to-machine, both of them. The gateway shards authenticate with a
 # shared secret; agents authenticate with their own per-agent token.
 api_router.include_router(agent_control.router)

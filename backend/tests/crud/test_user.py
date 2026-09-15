@@ -1,5 +1,6 @@
 from fastapi.encoders import jsonable_encoder
 from pwdlib.hashers.bcrypt import BcryptHasher
+from sqlalchemy import text
 from sqlmodel import Session
 
 from app import crud
@@ -128,3 +129,27 @@ def test_authenticate_user_with_bcrypt_upgrades_to_argon2(db: Session) -> None:
     assert verified
     # Should not need another update since it's already argon2
     assert updated_hash is None
+
+
+def test_an_account_created_without_limits_stores_nothing_rather_than_fifty(
+    db: Session,
+) -> None:
+    """The `server_default` trap, asserted in the database rather than in Python.
+
+    Both limit columns were created `NOT NULL DEFAULT 50`. Dropping NOT NULL
+    without dropping the default would leave every new row getting a
+    database-side 50 and therefore never inheriting - a bug invisible to any
+    test that inspects a SQLModel object, because the object says None while
+    the row says 50.
+    """
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(email=random_email(), password=random_lower_string()),
+    )
+    row = db.exec(
+        text(  # noqa: S608 - a literal query with a bound parameter
+            "SELECT max_pages, max_shares_per_document, max_members_per_space "
+            'FROM "user" WHERE id = :id'
+        ).bindparams(id=user.id)
+    ).one()
+    assert row == (None, None, None), "a new account inherits, it does not carry 50"

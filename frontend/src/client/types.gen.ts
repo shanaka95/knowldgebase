@@ -5,6 +5,80 @@ export type ClientOptions = {
 };
 
 /**
+ * AdminUserPublic
+ *
+ * An account as an administrator sees it.
+ *
+ * Field-compatible with `UserPublic` on purpose, so the components typed
+ * against that keep working when the table is fed from here.
+ */
+export type AdminUserPublic = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Is Active
+     */
+    is_active?: boolean;
+    /**
+     * Is Superuser
+     */
+    is_superuser?: boolean;
+    /**
+     * Full Name
+     */
+    full_name?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Email Verified At
+     */
+    email_verified_at?: string | null;
+    /**
+     * Max Pages
+     */
+    max_pages?: number;
+    /**
+     * Pages Used
+     */
+    pages_used?: number;
+    /**
+     * Max Shares Per Document
+     */
+    max_shares_per_document?: number;
+    /**
+     * Max Members Per Space
+     */
+    max_members_per_space?: number;
+    group?: GroupRef | null;
+    /**
+     * Limits
+     */
+    limits?: Array<ResolvedLimit>;
+};
+
+/**
+ * AdminUsersPublic
+ */
+export type AdminUsersPublic = {
+    /**
+     * Data
+     */
+    data: Array<AdminUserPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * AgentCreate
  */
 export type AgentCreate = {
@@ -1929,6 +2003,36 @@ export type GoogleDrivePickerConfig = {
 };
 
 /**
+ * GroupMembers
+ *
+ * Accounts to move into a group. Assignment is exclusive - one group each.
+ */
+export type GroupMembers = {
+    /**
+     * User Ids
+     */
+    user_ids?: Array<string>;
+};
+
+/**
+ * GroupRef
+ */
+export type GroupRef = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Is Default
+     */
+    is_default?: boolean;
+};
+
+/**
  * HTTPValidationError
  */
 export type HTTPValidationError = {
@@ -2147,6 +2251,52 @@ export type LanguageOption = {
      * Name
      */
     name: string;
+};
+
+/**
+ * LimitDefinition
+ *
+ * One administrable setting, described well enough to draw a form from.
+ */
+export type LimitDefinition = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Default
+     */
+    default: number;
+    /**
+     * Minimum
+     */
+    minimum?: number;
+    /**
+     * Maximum
+     */
+    maximum?: number;
+    /**
+     * Unit
+     */
+    unit?: string;
+};
+
+/**
+ * LimitDefinitionsPublic
+ */
+export type LimitDefinitionsPublic = {
+    /**
+     * Data
+     */
+    data: Array<LimitDefinition>;
 };
 
 /**
@@ -2483,6 +2633,49 @@ export type PublicLink = {
      * Shared At
      */
     shared_at?: string | null;
+};
+
+/**
+ * ResolvedLimit
+ *
+ * One limit, and the whole chain that produced it.
+ *
+ * The admin screen has to be able to answer "why is this 250?" without a
+ * second request, so the tier in force and the values it beat travel together.
+ */
+export type ResolvedLimit = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Source Label
+     */
+    source_label?: string | null;
+    /**
+     * Override
+     */
+    override?: number | null;
+    /**
+     * Group Value
+     */
+    group_value?: number | null;
+    /**
+     * Default Value
+     */
+    default_value?: number;
 };
 
 /**
@@ -3056,6 +3249,29 @@ export type UpdatePassword = {
 };
 
 /**
+ * UserAssignment
+ *
+ * Where an account sits, and what it overrides.
+ *
+ * `overrides` is a complete map, not a patch: a key that is absent is an
+ * override that is not set. That turns "blank means inherit" into what an
+ * empty form field naturally produces, instead of a three-way distinction
+ * between absent, null and a number.
+ */
+export type UserAssignment = {
+    /**
+     * Group Id
+     */
+    group_id?: string | null;
+    /**
+     * Overrides
+     */
+    overrides?: {
+        [key: string]: number;
+    };
+};
+
+/**
  * UserCreate
  */
 export type UserCreate = {
@@ -3082,6 +3298,138 @@ export type UserCreate = {
 };
 
 /**
+ * UserGroupCreate
+ */
+export type UserGroupCreate = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Max Pages
+     */
+    max_pages?: number | null;
+    /**
+     * Max Shares Per Document
+     */
+    max_shares_per_document?: number | null;
+    /**
+     * Max Members Per Space
+     */
+    max_members_per_space?: number | null;
+};
+
+/**
+ * UserGroupPublic
+ */
+export type UserGroupPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Is Default
+     */
+    is_default?: boolean;
+    /**
+     * Is System
+     */
+    is_system?: boolean;
+    /**
+     * Member Count
+     */
+    member_count?: number;
+    /**
+     * Max Pages
+     */
+    max_pages?: number | null;
+    /**
+     * Max Shares Per Document
+     */
+    max_shares_per_document?: number | null;
+    /**
+     * Max Members Per Space
+     */
+    max_members_per_space?: number | null;
+    /**
+     * Effective Max Pages
+     */
+    effective_max_pages?: number;
+    /**
+     * Effective Max Shares Per Document
+     */
+    effective_max_shares_per_document?: number;
+    /**
+     * Effective Max Members Per Space
+     */
+    effective_max_members_per_space?: number;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
+};
+
+/**
+ * UserGroupUpdate
+ */
+export type UserGroupUpdate = {
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Max Pages
+     */
+    max_pages?: number | null;
+    /**
+     * Max Shares Per Document
+     */
+    max_shares_per_document?: number | null;
+    /**
+     * Max Members Per Space
+     */
+    max_members_per_space?: number | null;
+};
+
+/**
+ * UserGroupsPublic
+ */
+export type UserGroupsPublic = {
+    /**
+     * Data
+     */
+    data: Array<UserGroupPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * UserLookup
  *
  * Whether one exact address has an account here.
@@ -3104,6 +3452,13 @@ export type UserLookup = {
 
 /**
  * UserPublic
+ *
+ * An account as its owner sees it.
+ *
+ * The limits here are **resolved** values, not the columns: whether a number
+ * came from this account, its group or the defaults is not representable in
+ * this shape, which is what keeps groups invisible to the people in them.
+ * Build it with `serializers.to_user_public`, never `model_validate`.
  */
 export type UserPublic = {
     /**
@@ -3134,6 +3489,14 @@ export type UserPublic = {
      * Email Verified At
      */
     email_verified_at?: string | null;
+    /**
+     * Max Pages
+     */
+    max_pages?: number;
+    /**
+     * Pages Used
+     */
+    pages_used?: number;
     /**
      * Max Shares Per Document
      */
@@ -3207,6 +3570,10 @@ export type UserUpdate = {
      */
     password?: string | null;
     /**
+     * Max Pages
+     */
+    max_pages?: number | null;
+    /**
      * Max Shares Per Document
      */
     max_shares_per_document?: number | null;
@@ -3214,6 +3581,10 @@ export type UserUpdate = {
      * Max Members Per Space
      */
     max_members_per_space?: number | null;
+    /**
+     * Group Id
+     */
+    group_id?: string | null;
 };
 
 /**
@@ -6513,6 +6884,259 @@ export type adminDataSourcesUpdateDataSourceResponses = {
 };
 
 export type adminDataSourcesUpdateDataSourceResponse = adminDataSourcesUpdateDataSourceResponses[keyof adminDataSourcesUpdateDataSourceResponses];
+
+export type adminUserGroupsReadUserGroupsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/user-groups/';
+};
+
+export type adminUserGroupsReadUserGroupsResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserGroupsPublic;
+};
+
+export type adminUserGroupsReadUserGroupsResponse = adminUserGroupsReadUserGroupsResponses[keyof adminUserGroupsReadUserGroupsResponses];
+
+export type adminUserGroupsCreateUserGroupData = {
+    body: UserGroupCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/user-groups/';
+};
+
+export type adminUserGroupsCreateUserGroupErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUserGroupsCreateUserGroupError = adminUserGroupsCreateUserGroupErrors[keyof adminUserGroupsCreateUserGroupErrors];
+
+export type adminUserGroupsCreateUserGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserGroupPublic;
+};
+
+export type adminUserGroupsCreateUserGroupResponse = adminUserGroupsCreateUserGroupResponses[keyof adminUserGroupsCreateUserGroupResponses];
+
+export type adminUserGroupsReadLimitDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/user-groups/limits';
+};
+
+export type adminUserGroupsReadLimitDefinitionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: LimitDefinitionsPublic;
+};
+
+export type adminUserGroupsReadLimitDefinitionsResponse = adminUserGroupsReadLimitDefinitionsResponses[keyof adminUserGroupsReadLimitDefinitionsResponses];
+
+export type adminUserGroupsDeleteUserGroupData = {
+    body?: never;
+    path: {
+        /**
+         * Group Id
+         */
+        group_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/user-groups/{group_id}';
+};
+
+export type adminUserGroupsDeleteUserGroupErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUserGroupsDeleteUserGroupError = adminUserGroupsDeleteUserGroupErrors[keyof adminUserGroupsDeleteUserGroupErrors];
+
+export type adminUserGroupsDeleteUserGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type adminUserGroupsDeleteUserGroupResponse = adminUserGroupsDeleteUserGroupResponses[keyof adminUserGroupsDeleteUserGroupResponses];
+
+export type adminUserGroupsUpdateUserGroupData = {
+    body: UserGroupUpdate;
+    path: {
+        /**
+         * Group Id
+         */
+        group_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/user-groups/{group_id}';
+};
+
+export type adminUserGroupsUpdateUserGroupErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUserGroupsUpdateUserGroupError = adminUserGroupsUpdateUserGroupErrors[keyof adminUserGroupsUpdateUserGroupErrors];
+
+export type adminUserGroupsUpdateUserGroupResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserGroupPublic;
+};
+
+export type adminUserGroupsUpdateUserGroupResponse = adminUserGroupsUpdateUserGroupResponses[keyof adminUserGroupsUpdateUserGroupResponses];
+
+export type adminUserGroupsAddGroupMembersData = {
+    body: GroupMembers;
+    path: {
+        /**
+         * Group Id
+         */
+        group_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/user-groups/{group_id}/members';
+};
+
+export type adminUserGroupsAddGroupMembersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUserGroupsAddGroupMembersError = adminUserGroupsAddGroupMembersErrors[keyof adminUserGroupsAddGroupMembersErrors];
+
+export type adminUserGroupsAddGroupMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserGroupPublic;
+};
+
+export type adminUserGroupsAddGroupMembersResponse = adminUserGroupsAddGroupMembersResponses[keyof adminUserGroupsAddGroupMembersResponses];
+
+export type adminUserGroupsRemoveGroupMemberData = {
+    body?: never;
+    path: {
+        /**
+         * Group Id
+         */
+        group_id: string;
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/user-groups/{group_id}/members/{user_id}';
+};
+
+export type adminUserGroupsRemoveGroupMemberErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUserGroupsRemoveGroupMemberError = adminUserGroupsRemoveGroupMemberErrors[keyof adminUserGroupsRemoveGroupMemberErrors];
+
+export type adminUserGroupsRemoveGroupMemberResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserGroupPublic;
+};
+
+export type adminUserGroupsRemoveGroupMemberResponse = adminUserGroupsRemoveGroupMemberResponses[keyof adminUserGroupsRemoveGroupMemberResponses];
+
+export type adminUsersReadAdminUsersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Group Id
+         */
+        group_id?: string | null;
+    };
+    url: '/api/v1/admin/users/';
+};
+
+export type adminUsersReadAdminUsersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUsersReadAdminUsersError = adminUsersReadAdminUsersErrors[keyof adminUsersReadAdminUsersErrors];
+
+export type adminUsersReadAdminUsersResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUsersPublic;
+};
+
+export type adminUsersReadAdminUsersResponse = adminUsersReadAdminUsersResponses[keyof adminUsersReadAdminUsersResponses];
+
+export type adminUsersSetUserAssignmentData = {
+    body: UserAssignment;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/users/{user_id}/assignment';
+};
+
+export type adminUsersSetUserAssignmentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUsersSetUserAssignmentError = adminUsersSetUserAssignmentErrors[keyof adminUsersSetUserAssignmentErrors];
+
+export type adminUsersSetUserAssignmentResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUserPublic;
+};
+
+export type adminUsersSetUserAssignmentResponse = adminUsersSetUserAssignmentResponses[keyof adminUsersSetUserAssignmentResponses];
 
 export type agentControlResolveRouteData = {
     /**

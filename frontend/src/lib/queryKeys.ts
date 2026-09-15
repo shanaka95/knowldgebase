@@ -45,6 +45,15 @@ export const queryKeys = {
     detail: (id: string) => ["ask", "conversations", id] as const,
   },
   searchSuggestions: () => ["search", "suggestions"] as const,
+  // The administration area hand-typed its keys in three different places; new
+  // work joins the factory so invalidation cannot drift.
+  admin: {
+    all: ["admin"] as const,
+    groups: () => ["admin", "user-groups"] as const,
+    limits: () => ["admin", "limits"] as const,
+    users: (params: Record<string, unknown> = {}) =>
+      ["admin", "users", params] as const,
+  },
   apiKeys: ["api-keys"] as const,
   health: ["health"] as const,
   workers: ["workers"] as const,

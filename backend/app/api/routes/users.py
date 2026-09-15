@@ -16,7 +16,7 @@ from app.api.deps import (
     get_current_active_superuser,
 )
 from app.api.routes.login import send_verification_email
-from app.api.serializers import user_ref
+from app.api.serializers import to_user_public, user_ref
 from app.core import authcodes
 from app.core.config import settings
 from app.core.security import (
@@ -38,6 +38,7 @@ from app.models import (
     UserUpdate,
     UserUpdateMe,
 )
+from app.services import quota
 from app.services.email import (
     Email,
     EmailError,
@@ -86,7 +87,13 @@ def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     )
     users = session.exec(statement).all()
 
-    users_public = [UserPublic.model_validate(user) for user in users]
+    # Resolved through the group chain in one pass: `load_groups` means this
+    # is three queries for a page of users rather than three per user.
+    groups = quota.load_groups(session)
+    used = quota.pages_used_for(session, [u.id for u in users])
+    users_public = [
+        to_user_public(session, u, groups=groups, used=used) for u in users
+    ]
     return UsersPublic(data=users_public, count=count)
 
 
@@ -105,7 +112,7 @@ def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
         )
 
     user = crud.create_user(session=session, user_create=user_in)
-    return user
+    return to_user_public(session, user)
 
 
 @router.patch("/me", response_model=UserPublic)
@@ -145,7 +152,7 @@ async def update_user_me(
         # typed, so without this, changing it in a loop points the product's own
         # mail at somebody else's inbox.
         await send_verification_email(session, current_user)
-    return current_user
+    return to_user_public(session, current_user)
 
 
 @router.patch("/me/password", response_model=TokenMessage)
@@ -213,11 +220,11 @@ def lookup_user(
 
 
 @router.get("/me", response_model=UserPublic)
-def read_user_me(current_user: CurrentUser) -> Any:
+def read_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     """
     Get current user.
     """
-    return current_user
+    return to_user_public(session, current_user)
 
 
 @router.delete("/me", response_model=Message)
@@ -269,7 +276,7 @@ def read_user_by_id(
     """
     user = session.get(User, user_id)
     if user == current_user:
-        return user
+        return to_user_public(session, user)
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=403,
@@ -277,7 +284,7 @@ def read_user_by_id(
         )
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return to_user_public(session, user)
 
 
 @router.patch(
@@ -309,7 +316,7 @@ def update_user(
             )
 
     db_user = crud.update_user(session=session, db_user=db_user, user_in=user_in)
-    return db_user
+    return to_user_public(session, db_user)
 
 
 @router.delete("/{user_id}", dependencies=[Depends(get_current_active_superuser)])

@@ -24,6 +24,7 @@ from sqlmodel import Session
 
 from app import crud
 from app.api.deps import SessionDep, SessionUser
+from app.api.serializers import to_user_public
 from app.core import authcodes, security
 from app.core.config import settings
 from app.models import (
@@ -461,9 +462,9 @@ async def reset_password(session: SessionDep, body: NewPassword) -> Any:
 
 
 @router.post("/login/test-token", response_model=UserPublic)
-def test_token(current_user: SessionUser) -> Any:
+def test_token(session: SessionDep, current_user: SessionUser) -> Any:
     """Confirm an access token is still good, and say whose it is."""
-    return current_user
+    return to_user_public(session, current_user)
 
 
 @router.post("/login/sign-out-everywhere", response_model=Message)

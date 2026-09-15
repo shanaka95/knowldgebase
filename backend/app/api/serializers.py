@@ -32,8 +32,51 @@ from app.models import (
     NamespaceRole,
     ShareRole,
     User,
+    UserGroup,
+    UserPublic,
     UserRef,
 )
+from app.services import quota
+
+
+def to_user_public(
+    session: Session,
+    user: User,
+    *,
+    groups: dict[uuid.UUID, UserGroup] | None = None,
+    used: dict[uuid.UUID, int] | None = None,
+) -> UserPublic:
+    """An account as its owner sees it: resolved numbers, no provenance.
+
+    The limit columns are nullable now, and a nullable column must never reach
+    the wire - `UserPublic` declares them as plain ints, so serialising the raw
+    row would raise for every account that inherits. Resolving here is also what
+    keeps groups invisible: the reader is told their number and cannot tell
+    whether it came from their account, their group or the defaults.
+
+    Every place that builds a `UserPublic` goes through this. `model_validate`
+    on a `User` is now a bug.
+    """
+    limits = quota.resolve_limits(session, user, groups=groups)
+    return UserPublic(
+        **user.model_dump(
+            include={
+                "email",
+                "is_active",
+                "is_superuser",
+                "full_name",
+                "id",
+                "created_at",
+                "email_verified_at",
+            }
+        ),
+        max_pages=limits.max_pages,
+        pages_used=(
+            used[user.id] if used is not None else quota.pages_used(session, user.id)
+        ),
+        max_shares_per_document=limits.max_shares_per_document,
+        max_members_per_space=limits.max_members_per_space,
+    )
 
 
 def user_ref(user: User | None) -> UserRef | None:

@@ -33,7 +33,7 @@ from app.models import (
     User,
     clean_document_type,
 )
-from app.services import parsing
+from app.services import parsing, quota
 from app.services.storage import ObjectStorage
 
 router = APIRouter(prefix="/imports", tags=["imports"])
@@ -75,6 +75,25 @@ def _check_destination(
             raise HTTPException(
                 status_code=400, detail="Folder is not in this namespace"
             )
+
+
+def _require_page_capacity(session: Session, user_id: uuid.UUID, wanted: int) -> None:
+    """Refuse an upload that would take the account past its page limit.
+
+    Called *before* anything is written to object storage. A check next to the
+    job insert would be correct and still wrong: `_store` runs first, so twenty
+    files would be pushed into MinIO and then refused, leaving objects nothing
+    will ever collect.
+
+    A queued job counts as the page it is about to become - the same reasoning
+    as an unaccepted invitation counting against a share limit. Otherwise a
+    limit of a hundred is no limit at all: you queue five hundred files and
+    collect them later.
+    """
+    try:
+        quota.ensure_page_capacity(session, user_id, wanted=wanted)
+    except quota.QuotaExceeded as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _import_key(
@@ -159,6 +178,7 @@ async def create_import(
     several files at once.
     """
     _check_destination(session, auth.user, namespace_id, folder_id)
+    _require_page_capacity(session, auth.user.id, 1)
 
     job_id = uuid.uuid4()
     stored = await _store(storage, file, _import_key(namespace_id, job_id))
@@ -218,6 +238,13 @@ async def create_imports(
             detail=f"Up to {MAX_BATCH_FILES} files at a time",
         )
     _check_destination(session, auth.user, namespace_id, folder_id)
+    # Combining is several files becoming a single page; otherwise it is one
+    # page each. The whole request is refused rather than partly queued - an
+    # import has no "skipped" channel the way a share does, and half a set of
+    # scans is worse than none.
+    _require_page_capacity(
+        session, auth.user.id, 1 if (combine and len(files) > 1) else len(files)
+    )
 
     clean_title = (title or "").strip()[:300] or None
     clean_prompt = (prompt or "").strip() or None
@@ -341,6 +368,11 @@ def retry_import(session: SessionDep, auth: WriteAuth, import_id: uuid.UUID) -> 
             status_code=409,
             detail=f"Only failed or cancelled imports can be retried (this one is {job.status})",
         )
+    # A retry is a page arriving that was not going to. The job already exists,
+    # so nothing is inserted here and an insert-time check would miss it - but
+    # a failed job is terminal and therefore not in the pending count, so it
+    # has to be asked for again like any other page.
+    _require_page_capacity(session, job.created_by or auth.user.id, 1)
     job.status = ImportStatus.queued
     job.attempts = 0
     job.pages_done = 0

@@ -25,6 +25,7 @@ from app.services.parsing import (
     parse_document,
     split_leading_heading,
 )
+from app.services.quota import QuotaExceeded
 from app.services.storage import ObjectStorage
 from app.worker import queue
 from app.worker.errors import JobCancelled
@@ -205,6 +206,17 @@ async def run_import(
             error="cancelled",
         )
         return ImportStatus.cancelled
+
+    except QuotaExceeded as exc:
+        # Not retryable: a limit does not become untrue on a second attempt, and
+        # three goes at it would only spend the parsing budget again. The
+        # message lands in `ImportJob.error`, which is shown to the person who
+        # queued it - so it reads as a sentence and names no group.
+        await asyncio.to_thread(
+            queue.finish_import, job.id, ImportStatus.failed, error=str(exc)
+        )
+        log.warning("import %s refused: %s", job.filename, exc)
+        return ImportStatus.failed
 
     except UnsupportedFileType as exc:
         # Not retryable: the file will not become parseable on a second attempt.

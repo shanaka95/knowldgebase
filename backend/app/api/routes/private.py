@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import SessionDep
+from app.api.serializers import to_user_public
 from app.core.security import get_password_hash
 from app.models import (
     User,
@@ -56,7 +57,7 @@ def create_user(user_in: PrivateUserCreate, session: SessionDep) -> Any:
     session.add(user)
     session.commit()
 
-    return user
+    return to_user_public(session, user)
 
 
 @router.get("/emails/", response_model=list[CapturedEmail])

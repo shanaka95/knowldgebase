@@ -1,12 +1,17 @@
 import type { ColumnDef } from "@tanstack/react-table"
 
-import type { UserPublic } from "@/client"
+import type { AdminUserPublic } from "@/client"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { UserActionsMenu } from "./UserActionsMenu"
 
-export type UserTableData = UserPublic & {
+export type UserTableData = AdminUserPublic & {
   isCurrentUser: boolean
+}
+
+/** Which tier a limit came from, when it is worth saying. */
+function limitSource(user: AdminUserPublic, key: string) {
+  return (user.limits ?? []).find((limit) => limit.key === key)?.source
 }
 
 export const columns: ColumnDef<UserTableData>[] = [
@@ -63,6 +68,41 @@ export const columns: ColumnDef<UserTableData>[] = [
         </span>
       </div>
     ),
+  },
+  {
+    id: "group",
+    header: "Group",
+    cell: ({ row }) => {
+      const group = row.original.group
+      return (
+        <span
+          className={cn("text-sm", !group && "text-muted-foreground")}
+          data-testid="user-group"
+        >
+          {group ? group.name : "Default"}
+        </span>
+      )
+    },
+  },
+  {
+    id: "pages",
+    header: "Pages",
+    cell: ({ row }) => {
+      const user = row.original
+      const overridden = limitSource(user, "max_pages") === "user"
+      return (
+        <span className="flex items-center gap-1.5" data-testid="user-pages">
+          <span className="text-sm tabular-nums">
+            {user.pages_used ?? 0} / {user.max_pages ?? 0}
+          </span>
+          {overridden && (
+            <Badge variant="outline" className="text-xs">
+              Override
+            </Badge>
+          )}
+        </span>
+      )
+    },
   },
   {
     id: "actions",

@@ -125,6 +125,16 @@ class Settings(BaseSettings):
     # Addresses one share request may name at once.
     SHARE_MAX_RECIPIENTS: int = 50
 
+    # --- Account limits -------------------------------------------------------
+    # The floor under every limit: what an account gets when neither it, nor its
+    # group, nor the default group says otherwise. These exist so that a missing
+    # or deleted configuration row can never be read as "no pages allowed" - the
+    # resolver falls through to a working number rather than to zero.
+    #
+    # The values themselves are administered at runtime (see
+    # app/services/quota.py); these are the last resort, not the product default.
+    MAX_PAGES_PER_USER: int = 100
+
     # --- API keys -----------------------------------------------------------
     API_KEY_PREFIX: str = "kb_"
 

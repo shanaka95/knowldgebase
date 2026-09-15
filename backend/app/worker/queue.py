@@ -33,6 +33,7 @@ from app.models import (
     JobStatus,
     WorkerHeartbeat,
 )
+from app.services import quota
 from app.services.suggestions import store_suggestion
 from app.services.versioning import detect_document_language, record_version
 from app.worker.errors import JobCancelled, JobSuperseded
@@ -757,6 +758,11 @@ def create_document_from_import(
     """
     # One attachment per uploaded file, so a page combined from several scans
     # can still produce each original. The first is the page's source.
+    # The backstop. A job can outlive the limit it was queued under - lowered by
+    # an administrator, or filled by pages made while this one was parsing - so
+    # the check runs again here, inside the transaction that does the insert.
+    # The lock is taken now rather than before parsing: it is held across the
+    # insert, never across minutes of model work.
     uploads = job.parts or [
         ImportPart(
             position=0,
@@ -767,6 +773,11 @@ def create_document_from_import(
         )
     ]
     with Session(engine) as session:
+        if job.created_by is not None:
+            quota.lock_user_quota(session, job.created_by)
+        # A no-op when the owner was deleted mid-import: the page is attributed
+        # to nobody, and refusing it would punish nobody either.
+        quota.ensure_page_capacity(session, job.created_by)
         attachments = [
             Attachment(
                 namespace_id=job.namespace_id,

@@ -85,7 +85,7 @@ from app.models import (
     UserRef,
     clean_document_type,
 )
-from app.services import sharing
+from app.services import quota, sharing
 from app.services.cloning import copy_embedded_attachments
 from app.services.email import (
     Email,
@@ -230,6 +230,21 @@ def read_embedding_summary(session: SessionDep, auth: AuthDep) -> Any:
     return summary
 
 
+def _require_page_capacity(
+    session: Session, user_id: uuid.UUID, wanted: int = 1
+) -> None:
+    """Refuse the request if the account has no room for another page.
+
+    409, the same code this API already uses for "the state of things is in
+    the way" - a duplicate title, a retry in the wrong state. The message names
+    the number and never the group it came from.
+    """
+    try:
+        quota.ensure_page_capacity(session, user_id, wanted=wanted)
+    except quota.QuotaExceeded as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.post("/", response_model=DocumentPublic)
 def create_document(
     session: SessionDep, auth: WriteAuth, document_in: DocumentCreate
@@ -242,6 +257,7 @@ def create_document(
         folder = session.get(Folder, document_in.folder_id)
         if folder is None or folder.namespace_id != namespace.id:
             raise HTTPException(status_code=400, detail="Folder not in this namespace")
+    _require_page_capacity(session, auth.user.id)
     html, text = normalize_content(document_in.content, document_in.content_format)
     title = document_in.title.strip()
     if crud.document_title_taken(
@@ -468,6 +484,10 @@ def clone_document(
     """
     source, _ = require_document(session, auth.user, document_id, "viewer")
     target_ns, _ = require_namespace(session, auth.user, body.namespace_id, "editor")
+    # A copy is a page like any other, and it is charged to whoever made the
+    # copy. Without this, cloning pages shared with you is an unmetered way to
+    # fill the knowledge base - it only needs *viewer* on the original.
+    _require_page_capacity(session, auth.user.id)
     if body.folder_id is not None:
         folder = session.get(Folder, body.folder_id)
         if folder is None or folder.namespace_id != target_ns.id:
@@ -643,7 +663,9 @@ async def share_document_with_many(
     # The ceiling belongs to whoever owns the space this page lives in: it is
     # their content being distributed, whoever pressed the button.
     owner = session.get(User, namespace.owner_id) if namespace else None
-    limit = owner.max_shares_per_document if owner else settings.SHARE_MAX_RECIPIENTS
+    # Through the resolver now that the column is nullable: reading it raw
+    # would compare an int against None the moment an owner inherits.
+    limit = quota.limits_for_owner(session, owner).max_shares_per_document
     used = sharing.recipient_count(session, document.id)
 
     result = ShareResult(recipients=used, max_recipients=limit)

@@ -51,7 +51,7 @@ from app.models import (
     SpaceShareResult,
     User,
 )
-from app.services import sharing
+from app.services import quota, sharing
 from app.services.email import (
     Email,
     EmailError,
@@ -378,7 +378,7 @@ async def add_namespace_members(
     link = sharing.space_url(namespace.slug)
 
     owner = session.get(User, namespace.owner_id)
-    limit = owner.max_members_per_space if owner else settings.SHARE_MAX_RECIPIENTS
+    limit = quota.limits_for_owner(session, owner).max_members_per_space
     used = sharing.member_count(session, namespace.id)
 
     result = SpaceShareResult(members=used, max_members=limit)

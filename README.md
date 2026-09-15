@@ -63,6 +63,9 @@ shadcn/ui + Tiptap on the frontend; Postgres, Qdrant and MinIO as services.
   answer is written from that page alone, with no search at all.
 * **Imports** (see [docs/IMPORTS.md](docs/IMPORTS.md)): upload a PDF or image, MinerU2.5 parses it
   into headings, text and tables, and the original file stays attached to the page.
+* **Limits** (see [docs/LIMITS.md](docs/LIMITS.md)): an account may create 100 pages by default.
+  Administrators raise or lower that per person, or for a whole class of people by putting them in
+  a group — groups are an administrative device, and the people in one are never told.
 * **Sharing** (see [docs/SHARING.md](docs/SHARING.md)): share a page with named people,
   invite addresses that have no account yet, publish a read-only link, or take a private copy
   of something somebody shared with you.

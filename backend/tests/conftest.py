@@ -71,6 +71,9 @@ TABLES_TO_TRUNCATE = [
     "namespace",
     "apikey",
     "user",
+    # Emptied with the rest; `init_db` puts the default group back at the start
+    # of every session, which is what makes limit resolution work on run two.
+    "usergroup",
 ]
 
 

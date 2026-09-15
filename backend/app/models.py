@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlmodel import Field, Relationship, SQLModel
@@ -159,8 +160,13 @@ class UserUpdate(SQLModel):
     is_superuser: bool | None = None
     full_name: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    # Sent as null to clear an override and go back to inheriting. `crud
+    # .update_user` uses `exclude_unset=True`, so "absent" and "null" stay
+    # different things: leave alone, versus reset to inherit.
+    max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
     max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
+    group_id: uuid.UUID | None = Field(default=None)
 
 
 class UserUpdateMe(SQLModel):
@@ -188,13 +194,28 @@ class User(UserBase, table=True):
     locked_until: datetime | None = _tz_datetime(default=None)
     failed_logins: int = Field(default=0)
     last_failed_login_at: datetime | None = _tz_datetime(default=None)
+    # Which group's settings apply to this account. NULL means the default
+    # group - deliberately, because users are created in four places and one of
+    # them builds ``User(...)`` by hand. Making "no group" mean "the defaults"
+    # is what stops any of those paths producing an account outside the system.
+    group_id: uuid.UUID | None = Field(
+        default=None, foreign_key="usergroup.id", ondelete="SET NULL", index=True
+    )
+
+    # Per-account overrides. NULL on any of these means "inherit" - from the
+    # group, then from the default group, then from the built-in constant. They
+    # are never served raw: `serializers.to_user_public` emits the *resolved*
+    # number, so a reader sees a figure and never where it came from.
+    #
+    # Zero is a real answer here ("this account may not create pages"), so every
+    # test is `is not None`, never truthiness.
+    max_pages: int | None = Field(default=None)
     # How many people one of this account's pages may be shared with, counting
-    # invitations that have not been accepted yet. Per account rather than
-    # global so it can follow a plan later without another migration.
-    max_shares_per_document: int = Field(default=50)
+    # invitations that have not been accepted yet.
+    max_shares_per_document: int | None = Field(default=None)
     # The same idea for a whole space. Separate from the per-page limit because
     # they are different decisions: a space is a bigger thing to hand over.
-    max_members_per_space: int = Field(default=50)
+    max_members_per_space: int | None = Field(default=None)
 
     namespaces: list[Namespace] = Relationship(
         back_populates="owner", cascade_delete=True
@@ -203,11 +224,196 @@ class User(UserBase, table=True):
 
 
 class UserPublic(UserBase):
+    """An account as its owner sees it.
+
+    The limits here are **resolved** values, not the columns: whether a number
+    came from this account, its group or the defaults is not representable in
+    this shape, which is what keeps groups invisible to the people in them.
+    Build it with `serializers.to_user_public`, never `model_validate`.
+    """
+
     id: uuid.UUID
     created_at: datetime | None = None
     email_verified_at: datetime | None = None
+    max_pages: int = 100
+    pages_used: int = 0
     max_shares_per_document: int = 50
     max_members_per_space: int = 50
+
+
+# ---------------------------------------------------------------------------
+# Account groups and limits (administrators only)
+# ---------------------------------------------------------------------------
+#
+# A group is an administrative device for giving a class of people the same
+# settings. People in one are never told so: nothing below appears on any
+# schema a non-administrator can fetch, and `UserPublic` above carries resolved
+# numbers with no trace of where they came from. Keep it that way - the failure
+# mode to guard against is somebody making `UserPublic` inherit from a shape
+# that grows a group field later.
+
+
+class UserGroup(SQLModel, table=True):
+    """Settings shared by a class of accounts.
+
+    Every limit is nullable, and NULL means "inherit". A group that sets
+    nothing falls through to the default group, which is the floor for
+    everyone rather than only for the unassigned - so raising a number on the
+    default group lifts exactly the people who were never given one.
+    """
+
+    __table_args__ = (
+        # At most one row may claim to be the default. This cannot enforce *at
+        # least* one, which is why `quota.ensure_default_group` re-seeds it at
+        # every boot rather than trusting the row to still be there.
+        Index(
+            "uq_usergroup_one_default",
+            "is_default",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    # A stable handle the code can name. The default group's is reserved, so
+    # resolution never has to scan for a boolean.
+    slug: str = Field(unique=True, index=True, max_length=120)
+    name: str = Field(max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    is_default: bool = Field(default=False)
+    # Refuses deletion. The default group is part of how limits resolve, not
+    # content somebody happens to have made.
+    is_system: bool = Field(default=False)
+
+    max_pages: int | None = Field(default=None)
+    max_shares_per_document: int | None = Field(default=None)
+    max_members_per_space: int | None = Field(default=None)
+
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class UserGroupCreate(SQLModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
+    max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
+    max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
+
+
+class UserGroupUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
+    max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
+    max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
+
+
+class UserGroupPublic(SQLModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    description: str | None = None
+    is_default: bool = False
+    is_system: bool = False
+    member_count: int = 0
+    # What this group sets. None means it inherits from the defaults; the
+    # resolved figure a member would actually get is `effective_*`.
+    max_pages: int | None = None
+    max_shares_per_document: int | None = None
+    max_members_per_space: int | None = None
+    effective_max_pages: int = 0
+    effective_max_shares_per_document: int = 0
+    effective_max_members_per_space: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class UserGroupsPublic(SQLModel):
+    data: list[UserGroupPublic]
+    count: int
+
+
+class GroupRef(SQLModel):
+    id: uuid.UUID
+    name: str
+    is_default: bool = False
+
+
+class ResolvedLimit(SQLModel):
+    """One limit, and the whole chain that produced it.
+
+    The admin screen has to be able to answer "why is this 250?" without a
+    second request, so the tier in force and the values it beat travel together.
+    """
+
+    key: str
+    label: str
+    value: int
+    # "user", "group", "default_group" or "system"
+    source: str
+    source_label: str | None = None
+    override: int | None = None
+    group_value: int | None = None
+    default_value: int = 0
+
+
+class AdminUserPublic(UserBase):
+    """An account as an administrator sees it.
+
+    Field-compatible with `UserPublic` on purpose, so the components typed
+    against that keep working when the table is fed from here.
+    """
+
+    id: uuid.UUID
+    created_at: datetime | None = None
+    email_verified_at: datetime | None = None
+    max_pages: int = 100
+    pages_used: int = 0
+    max_shares_per_document: int = 50
+    max_members_per_space: int = 50
+    group: GroupRef | None = None
+    limits: list[ResolvedLimit] = []
+
+
+class AdminUsersPublic(SQLModel):
+    data: list[AdminUserPublic]
+    count: int
+
+
+class UserAssignment(SQLModel):
+    """Where an account sits, and what it overrides.
+
+    `overrides` is a complete map, not a patch: a key that is absent is an
+    override that is not set. That turns "blank means inherit" into what an
+    empty form field naturally produces, instead of a three-way distinction
+    between absent, null and a number.
+    """
+
+    group_id: uuid.UUID | None = None
+    overrides: dict[str, int] = {}
+
+
+class GroupMembers(SQLModel):
+    """Accounts to move into a group. Assignment is exclusive - one group each."""
+
+    user_ids: list[uuid.UUID] = []
+
+
+class LimitDefinition(SQLModel):
+    """One administrable setting, described well enough to draw a form from."""
+
+    key: str
+    label: str
+    description: str
+    default: int
+    minimum: int = 0
+    maximum: int = 1_000_000
+    unit: str = ""
+
+
+class LimitDefinitionsPublic(SQLModel):
+    data: list[LimitDefinition]
 
 
 class UsersPublic(SQLModel):
