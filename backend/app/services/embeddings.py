@@ -6,11 +6,13 @@ from collections import OrderedDict
 import httpx
 
 from app.core.config import settings
+from app.models import UsageKind
 from app.services.model_client import (
     ModelServerError,
     make_http_client,
     post_json_with_cold_start_retry,
 )
+from app.services.usage import UsageMeter
 
 # A search query is embedded and re-embedded far more often than it changes.
 # Small and short-lived on purpose: this is a latency cache, not a store.
@@ -60,14 +62,23 @@ class EmbeddingClient:
             await self._client.aclose()
             self._client = None
 
-    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+    async def embed_batch(
+        self, texts: list[str], *, meter: UsageMeter | None = None
+    ) -> list[list[float]]:
         inputs = [(t or " ")[: self.max_chars] for t in texts]
-        data = await post_json_with_cold_start_retry(
-            self.client,
-            f"{self.base_url}/embeddings",
-            {"model": self.model, "input": inputs},
-            what="embeddings",
-        )
+        try:
+            data = await post_json_with_cold_start_retry(
+                self.client,
+                f"{self.base_url}/embeddings",
+                {"model": self.model, "input": inputs},
+                what="embeddings",
+            )
+        except Exception:
+            if meter is not None:
+                meter.failure(UsageKind.embedding, self.model)
+            raise
+        if meter is not None:
+            meter.record(UsageKind.embedding, data, model=self.model)
         items = sorted(data.get("data", []), key=lambda d: d.get("index", 0))
         if len(items) != len(inputs):
             raise ModelServerError(
@@ -84,14 +95,22 @@ class EmbeddingClient:
             vectors.append([float(x) for x in vec])
         return vectors
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(
+        self, texts: list[str], *, meter: UsageMeter | None = None
+    ) -> list[list[float]]:
         """Embed ``texts`` in batches, preserving order."""
         out: list[list[float]] = []
         for start in range(0, len(texts), self.batch_size):
-            out.extend(await self.embed_batch(texts[start : start + self.batch_size]))
+            out.extend(
+                await self.embed_batch(
+                    texts[start : start + self.batch_size], meter=meter
+                )
+            )
         return out
 
-    async def embed_query(self, text: str) -> list[float]:
+    async def embed_query(
+        self, text: str, *, meter: UsageMeter | None = None
+    ) -> list[float]:
         """Embed one search query, reusing a recent answer for the same text.
 
         This is the slowest single step in a search: measured against the hosted
@@ -115,7 +134,7 @@ class EmbeddingClient:
                 return vector
             del self._query_cache[key]
 
-        vector = (await self.embed([text]))[0]
+        vector = (await self.embed([text], meter=meter))[0]
         self._query_cache[key] = (now, vector)
         while len(self._query_cache) > QUERY_CACHE_MAX:
             self._query_cache.popitem(last=False)

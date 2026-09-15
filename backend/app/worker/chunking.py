@@ -27,6 +27,7 @@ from app.core.content import Block
 from app.models import ChunkingMethod
 from app.services.llm import LLMClient, LLMError
 from app.services.model_client import ModelServerError
+from app.services.usage import UsageMeter
 from app.worker.fallback_chunker import (
     Chunk,
     fallback_chunk,
@@ -273,7 +274,11 @@ def make_windows(blocks: list[Block], max_chars: int) -> list[tuple[int, int]]:
 
 
 async def _ask_llm_for_ranges(
-    llm: LLMClient, title: str, blocks: list[Block], stats: dict[str, Any]
+    llm: LLMClient,
+    title: str,
+    blocks: list[Block],
+    stats: dict[str, Any],
+    meter: UsageMeter | None = None,
 ) -> list[Range]:
     """One LLM call plus at most one corrective re-ask. Raises ChunkValidationError."""
     messages = [
@@ -284,7 +289,9 @@ async def _ask_llm_for_ranges(
     for attempt in range(2):
         stats["llm_calls"] = stats.get("llm_calls", 0) + 1
         try:
-            answer = await llm.chat(messages, json_mode=True, max_tokens=1500)
+            answer = await llm.chat(
+                messages, json_mode=True, max_tokens=1500, meter=meter
+            )
         except (
             LLMError
         ) as exc:  # empty/malformed completion → treat like invalid output
@@ -321,6 +328,7 @@ async def semantic_chunk(
     checkpoint: Checkpoint | None = None,
     window_chars: int | None = None,
     min_chars: int | None = None,
+    meter: UsageMeter | None = None,
 ) -> ChunkingResult:
     """Chunk ``blocks`` by topic using the LLM, falling back deterministically.
 
@@ -346,7 +354,7 @@ async def semantic_chunk(
         for w_start, w_end in windows:
             await checkpoint()
             sub_blocks = blocks[w_start - 1 : w_end]
-            ranges = await _ask_llm_for_ranges(llm, title, sub_blocks, stats)
+            ranges = await _ask_llm_for_ranges(llm, title, sub_blocks, stats, meter)
             ranges = repair_ranges(ranges, sub_blocks)
             for r in ranges:
                 r.start += w_start - 1

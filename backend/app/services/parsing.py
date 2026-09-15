@@ -27,11 +27,13 @@ import httpx
 
 from app.core.config import settings
 from app.core.content import markdown_to_html, sanitize_html
+from app.models import UsageKind
 from app.services.model_client import (
     ModelServerError,
     auth_headers,
     make_http_client,
 )
+from app.services.usage import UsageMeter
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +312,11 @@ class LLMPageParser:
         self.timeout = timeout
 
     async def parse_page(
-        self, image: Any, prompt: str | None = None
+        self,
+        image: Any,
+        prompt: str | None = None,
+        *,
+        meter: UsageMeter | None = None,
     ) -> tuple[str, int]:
         body: dict[str, Any] = {
             "model": self.model,
@@ -335,10 +341,17 @@ class LLMPageParser:
         async with make_http_client(self.timeout, settings.LLM_API_KEY) as client:
             response = await client.post(f"{self.base_url}/chat/completions", json=body)
         if response.status_code >= 400:
+            if meter is not None:
+                meter.failure(UsageKind.chat, self.model)
             raise ModelServerError(
                 f"llm page parse: HTTP {response.status_code}: {response.text[:300]}"
             )
         data = response.json()
+        # One of these per page of a PDF, each carrying a page image. On a
+        # deployment with IMPORT_PARSER=llm this is the largest thing the
+        # product spends money on, so it is the one that most needs counting.
+        if meter is not None:
+            meter.record(UsageKind.chat, data, model=self.model)
         try:
             content = data["choices"][0]["message"].get("content") or ""
         except (KeyError, IndexError, TypeError) as exc:
@@ -363,6 +376,7 @@ async def parse_document(
     mineru: MinerUParser | None = None,
     llm: LLMPageParser | None = None,
     on_page: Any = None,
+    meter: UsageMeter | None = None,
 ) -> ParsedDocument:
     """Render the upload and parse every page, preferring MinerU.
 
@@ -404,7 +418,7 @@ async def parse_document(
         if use_mineru:
             page_html, blocks = await asyncio.to_thread(mineru.parse_page, image)
         else:
-            page_html, blocks = await llm.parse_page(image, prompt)
+            page_html, blocks = await llm.parse_page(image, prompt, meter=meter)
         pages.append(
             ParsedPage(index=index, html=page_html, blocks=blocks, parser=parser)
         )

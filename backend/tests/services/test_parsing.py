@@ -199,7 +199,7 @@ async def test_parser_backend_llm_never_calls_mineru(
             self.pages = 0
 
         async def parse_page(
-            self, image: object, prompt: str | None = None
+            self, image: object, prompt: str | None = None, **_: object
         ) -> tuple[str, int]:
             self.pages += 1
             return "<p>transcribed by the chat model</p>", 1

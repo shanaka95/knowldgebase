@@ -45,7 +45,12 @@ class StubReranker:
         self.calls: list[tuple[str, list[str]]] = []
 
     async def rerank(
-        self, query: str, documents: list[str], *, top_n: int | None = None
+        self,
+        query: str,
+        documents: list[str],
+        *,
+        top_n: int | None = None,
+        **_: object,
     ) -> list[RerankedDocument]:
         self.calls.append((query, documents))
         if self.fail:

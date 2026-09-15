@@ -514,10 +514,10 @@ async def test_an_unchunked_page_sends_its_text_not_its_summary(
 class ExplodingEmbeddings:
     """Proves a code path never embeds anything - the call would fail loudly."""
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(self, texts: list[str], **_: object) -> list[list[float]]:
         raise AssertionError("a pinned page must not embed the question")
 
-    async def embed_query(self, text: str) -> list[float]:
+    async def embed_query(self, text: str, **_: object) -> list[float]:
         raise AssertionError("a pinned page must not embed the question")
 
 

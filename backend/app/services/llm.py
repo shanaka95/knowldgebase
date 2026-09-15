@@ -10,11 +10,13 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.models import UsageKind
 from app.services.model_client import (
     ModelServerError,
     make_http_client,
     post_json_with_cold_start_retry,
 )
+from app.services.usage import Counts, UsageMeter, read_usage, response_model
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,7 @@ class LLMClient:
         client: httpx.AsyncClient | None = None,
         task: LLMTask | None = None,
         fallback_models: list[str] | None = None,
+        meter: UsageMeter | None = None,
     ) -> None:
         chosen, fallbacks = task_models(task)
         self.base_url = base_url.rstrip("/")
@@ -95,6 +98,9 @@ class LLMClient:
         self.temperature = temperature
         self.disable_thinking = disable_thinking
         self.api_key = settings.LLM_API_KEY if api_key is None else api_key
+        # Who to bill this to. A client built without one still works; it is
+        # simply not counted, which is what tests and one-off scripts want.
+        self.meter = meter
         self._client = client
         self._owns_client = client is None
 
@@ -149,6 +155,7 @@ class LLMClient:
         json_mode: bool = False,
         max_tokens: int = 1024,
         temperature: float | None = None,
+        meter: UsageMeter | None = None,
     ) -> str:
         """Ask the task's model, and the ones behind it if that one will not answer.
 
@@ -159,6 +166,7 @@ class LLMClient:
         """
         attempts = [self.model, *self.fallback_models]
         last: Exception | None = None
+        meter = meter or self.meter
         for position, model in enumerate(attempts):
             final = position + 1 == len(attempts)
             try:
@@ -167,6 +175,7 @@ class LLMClient:
                     json_mode=json_mode,
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    meter=meter,
                     # The first attempt carries the `models` array, so a
                     # provider that routes server-side has already tried the
                     # whole list by the time it fails.
@@ -179,6 +188,8 @@ class LLMClient:
                 )
             except (ModelServerError, httpx.HTTPError) as exc:
                 last = exc
+                if meter is not None:
+                    meter.failure(UsageKind.chat, model)
                 if position + 1 < len(attempts):
                     logger.warning(
                         "llm: %s failed (%s); trying %s",
@@ -197,6 +208,7 @@ class LLMClient:
         temperature: float | None = None,
         model: str | None = None,
         cold_start_wait: float | None = None,
+        meter: UsageMeter | None = None,
     ) -> str:
         budget = max_tokens
         for attempt in (1, 2):
@@ -214,6 +226,11 @@ class LLMClient:
                 what="llm",
                 max_wait=cold_start_wait,
             )
+            # Recorded before the body is inspected: a response that arrived
+            # was paid for, whether or not it turns out to be usable. The
+            # second attempt below is a second billed call and lands here too.
+            if meter is not None:
+                meter.record(UsageKind.chat, data, model=model or self.model)
             try:
                 choice = data["choices"][0]
                 content = choice["message"].get("content")
@@ -251,6 +268,7 @@ class LLMClient:
         *,
         max_tokens: int = 1024,
         temperature: float | None = None,
+        meter: UsageMeter | None = None,
     ) -> AsyncIterator[str]:
         """Yield answer text as the model produces it.
 
@@ -264,6 +282,7 @@ class LLMClient:
         different answers together, so a failure after that point is raised.
         """
         attempts = [self.model, *self.fallback_models]
+        meter = meter or self.meter
         for position, model in enumerate(attempts):
             last = position + 1 == len(attempts)
             try:
@@ -272,10 +291,13 @@ class LLMClient:
                     max_tokens=max_tokens,
                     temperature=temperature,
                     model=None if position == 0 else model,
+                    meter=meter,
                 ):
                     yield piece
                 return
             except (ModelServerError, httpx.HTTPError) as exc:
+                if meter is not None:
+                    meter.failure(UsageKind.chat, model)
                 if last:
                     raise
                 logger.warning(
@@ -292,6 +314,7 @@ class LLMClient:
         max_tokens: int = 1024,
         temperature: float | None = None,
         model: str | None = None,
+        meter: UsageMeter | None = None,
     ) -> AsyncIterator[str]:
         body = self._body(
             messages,
@@ -301,7 +324,11 @@ class LLMClient:
             model=model,
         )
         body["stream"] = True
+        # OpenRouter sends the usage block on the final chunk regardless, but
+        # this is the documented switch and other providers want asking.
+        body["usage"] = {"include": True}
         headers = {"Accept": "text/event-stream"}
+        billed = False
         async with self.client.stream(
             "POST", f"{self.base_url}/chat/completions", json=body, headers=headers
         ) as response:
@@ -319,6 +346,15 @@ class LLMClient:
                     chunk = json.loads(payload)
                 except json.JSONDecodeError:
                     continue
+                # The last chunk carries the usage block and an empty delta, so
+                # it is the one place a streamed answer says what it cost. It
+                # used to fall through the `if piece:` below and be lost.
+                if isinstance(chunk, dict) and chunk.get("usage"):
+                    served = response_model(chunk, model or self.model)
+                    counts = read_usage(chunk)
+                    if meter is not None:
+                        meter.record_counts(UsageKind.chat, served, counts)
+                    billed = True
                 try:
                     delta = chunk["choices"][0]["delta"]
                 except KeyError, IndexError, TypeError:
@@ -326,6 +362,10 @@ class LLMClient:
                 piece = delta.get("content")
                 if piece:
                     yield str(piece)
+        if not billed and meter is not None:
+            # A provider that streams without ever reporting usage still made a
+            # call we paid for; count the call even though the tokens are lost.
+            meter.record_counts(UsageKind.chat, model or self.model, Counts(requests=1))
 
 
 def clean_completion(text: str) -> str:

@@ -96,11 +96,11 @@ class StubEmbeddings:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(self, texts: list[str], **_: object) -> list[list[float]]:
         self.calls += 1
         return [[float(len(t) % 7), 1.0, 0.5, 0.25] for t in texts]
 
-    async def embed_query(self, text: str) -> list[float]:
+    async def embed_query(self, text: str, **_: object) -> list[float]:
         return (await self.embed([text]))[0]
 
 

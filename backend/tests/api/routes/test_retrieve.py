@@ -36,10 +36,10 @@ RETRIEVE = f"{API}/search/retrieve"
 class StubEmbeddings:
     """Deterministic embeddings so vector search is reproducible in tests."""
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(self, texts: list[str], **_: object) -> list[list[float]]:
         return [_vector(t) for t in texts]
 
-    async def embed_query(self, text: str) -> list[float]:
+    async def embed_query(self, text: str, **_: object) -> list[float]:
         return _vector(text)
 
 

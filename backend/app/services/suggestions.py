@@ -25,6 +25,7 @@ from sqlmodel import Session, col, delete, func, select
 from app.core.config import settings
 from app.models import SearchSuggestion
 from app.services.llm import LLMClient, LLMTask
+from app.services.usage import UsageMeter
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,9 @@ def _clean(text: str) -> str:
     return query[:MAX_LENGTH]
 
 
-async def question_for_document(title: str, summary: str) -> str | None:
+async def question_for_document(
+    title: str, summary: str, *, meter: UsageMeter | None = None
+) -> str | None:
     """One example search for a page, or None if the model would not write one.
 
     Failure here is not worth retrying or reporting: the page is indexed either
@@ -57,7 +60,7 @@ async def question_for_document(title: str, summary: str) -> str | None:
     source = (summary or "").strip()
     if not source:
         return None
-    llm = LLMClient(task=LLMTask.indexing)
+    llm = LLMClient(task=LLMTask.indexing, meter=meter)
     try:
         answer = await llm.chat(
             [

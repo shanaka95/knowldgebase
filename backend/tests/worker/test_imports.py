@@ -87,7 +87,7 @@ class FakeLLMParser:
         self.pages_seen = 0
 
     async def parse_page(
-        self, image: Any, prompt: str | None = None
+        self, image: Any, prompt: str | None = None, **_: object
     ) -> tuple[str, int]:
         self.pages_seen += 1
         return self._html, 1

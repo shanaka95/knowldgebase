@@ -27,6 +27,7 @@ from typing import Protocol
 from app.core.config import settings
 from app.models import EmbeddingKind
 from app.services.sparse import encode_query, tokenize
+from app.services.usage import UsageMeter
 from app.services.vectors import ScoredPoint, VectorStore
 
 SearchMethod = str  # "bm25" | "vector"
@@ -35,8 +36,12 @@ SearchMethod = str  # "bm25" | "vector"
 class Embedder(Protocol):
     """Just the part of the embedding client retrieval needs."""
 
-    async def embed(self, texts: list[str]) -> list[list[float]]: ...
-    async def embed_query(self, text: str) -> list[float]: ...
+    async def embed(
+        self, texts: list[str], *, meter: UsageMeter | None = None
+    ) -> list[list[float]]: ...
+    async def embed_query(
+        self, text: str, *, meter: UsageMeter | None = None
+    ) -> list[float]: ...
 
 
 class LexicalSearch(Protocol):
@@ -169,6 +174,7 @@ async def retrieve(
     rrf_k: int | None = None,
     vector_min_score: float | None = None,
     lexical: LexicalSearch | None = None,
+    meter: UsageMeter | None = None,
 ) -> RetrievalResult:
     """Run every enabled source concurrently and fuse the rankings with RRF."""
     per_source = candidates_per_source or settings.RETRIEVAL_CANDIDATES_PER_SOURCE
@@ -180,7 +186,7 @@ async def retrieve(
     if use_vector:
         # One embedding call serves every vector target, and a repeat of the
         # same query costs nothing at all.
-        dense_query = await embeddings.embed_query(query)
+        dense_query = await embeddings.embed_query(query, meter=meter)
 
     async def run_one(
         method: SearchMethod, target: str

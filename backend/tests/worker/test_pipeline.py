@@ -273,6 +273,7 @@ class BlockingLLM:
         *,
         json_mode: bool = False,
         max_tokens: int = 1024,
+        **_: object,
     ) -> str:
         self.calls += 1
         self.started.set()
@@ -286,7 +287,7 @@ class FakeEmbedder:
     def __init__(self, on_call: Any = None) -> None:
         self.on_call = on_call
 
-    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+    async def embed_batch(self, texts: list[str], **_: object) -> list[list[float]]:
         if self.on_call is not None:
             self.on_call()
         return [det_vector(t) for t in texts]

@@ -140,6 +140,7 @@ class FakeLLM:
         *,
         json_mode: bool = False,
         max_tokens: int = 1024,
+        **_: object,
     ) -> str:
         self.messages.append(messages)
         reply = self.replies.pop(0)

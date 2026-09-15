@@ -56,6 +56,7 @@ from tests.utils.utils import get_superuser_token_headers  # noqa: E402
 settings.AUTH_CODE_MAX_SENDS = 10_000
 
 TABLES_TO_TRUNCATE = [
+    "usagedaily",
     "askmessage",
     "askconversation",
     "cleanuptask",

@@ -27,7 +27,9 @@ from app.models import (
     EmbeddingStatus,
     JobStage,
     JobStatus,
+    UsageFeature,
 )
+from app.services import usage
 from app.services.embeddings import EmbeddingClient, EmbeddingDimensionError
 from app.services.llm import LLMClient
 from app.services.sparse import encode_document
@@ -129,11 +131,15 @@ async def _write_search_suggestion(doc: Any, summary: str | None) -> None:
     if not summary:
         return
     try:
-        question = await question_for_document(doc.title, summary)
-        if not question:
-            return
+        # Resolved first so the call it pays for can be attributed; it used to
+        # be looked up only after the model had already been asked.
         owner = await asyncio.to_thread(queue.document_owner, doc.id)
         if owner is None:
+            return
+        with usage.meter(owner, UsageFeature.suggestions) as m:
+            m.operation()
+            question = await question_for_document(doc.title, summary, meter=m)
+        if not question:
             return
         await asyncio.to_thread(
             queue.save_search_suggestion,
@@ -149,12 +155,17 @@ async def _write_search_suggestion(doc: Any, summary: str | None) -> None:
 async def _embed_all(
     embedder: EmbeddingClient, inputs: list[str], ctx: JobContext
 ) -> list[list[float]]:
+    """Every chunk of the page, in batches, counted against its owner."""
     vectors: list[list[float]] = []
     batch_size = embedder.batch_size
     total = len(inputs)
     for start in range(0, total, batch_size):
         await ctx.checkpoint()  # [CK] before every embedding batch
-        vectors.extend(await embedder.embed_batch(inputs[start : start + batch_size]))
+        vectors.extend(
+            await embedder.embed_batch(
+                inputs[start : start + batch_size], meter=ctx.meter
+            )
+        )
         done = min(start + batch_size, total)
         await ctx.set_progress(60 + int(30 * done / max(total, 1)))
     return vectors
@@ -162,7 +173,9 @@ async def _embed_all(
 
 async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
     """Run one claimed job to a terminal state. Never raises except on shutdown."""
-    ctx = JobContext(job)
+    owner = await asyncio.to_thread(queue.document_owner, job.document_id)
+    ctx = JobContext(job, user_id=owner)
+    ctx.meter.operation()
     log = logging.LoggerAdapter(
         logger, {"job": str(job.id)[:8], "doc": str(job.document_id)[:8]}
     )
@@ -194,6 +207,7 @@ async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
                 doc.title,
                 blocks,
                 checkpoint=ctx.checkpoint,  # [CK2] per LLM call
+                meter=ctx.meter,
             )
             chunks, method = result.chunks, result.method
             ctx.stats.update(result.stats)
@@ -206,6 +220,7 @@ async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
             doc.title,
             blocks,
             checkpoint=ctx.checkpoint,  # [CK4]
+            meter=ctx.meter,
         )
         await ctx.checkpoint()  # [CK5]
 
@@ -307,3 +322,7 @@ async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
             ctx.finalize_stats(),
         )
         return status
+    finally:
+        # However the job ended, including a shutdown that re-raises: the
+        # tokens spent before it ended were still spent.
+        await asyncio.shield(asyncio.to_thread(ctx.meter.flush))

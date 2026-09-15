@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     Column,
     Computed,
+    Date,
     DateTime,
     Index,
     String,
@@ -2392,3 +2393,101 @@ class WhatsAppPairingPublic(SQLModel):
     # The QR rendered server-side, so the dashboard needs no encoder of its own.
     qr_svg: str | None = None
     updated_at: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# Usage metering
+#
+# Every call to a model provider is billed, and the questions asked of that
+# spend are always the same three: whose, which day, which model. So that is
+# the shape of the row - there is no event log underneath this and no rollup
+# job on top of it. Calls are accumulated in memory for the length of one
+# request or job and folded in with a single UPSERT that adds to the counters,
+# which is atomic per row and therefore safe under any amount of concurrency.
+#
+# `cost_nanos` is an integer because these are money: a year of summing floats
+# drifts, and the provider hands us a figure per call anyway, so there is no
+# price table here to fall out of date.
+# ---------------------------------------------------------------------------
+
+
+class UsageFeature(StrEnum):
+    """What the person was doing when the call happened."""
+
+    ask = "ask"
+    search = "search"
+    # Turning a file into a page: one vision call per page of a PDF, and on a
+    # hosted deployment the largest thing the product spends money on.
+    import_ = "import"
+    # Making a page searchable: chunking, summarising, embedding. Separate from
+    # `import` because every page is indexed and only some are imported.
+    indexing = "indexing"
+    translation = "translation"
+    suggestions = "suggestions"
+    agent = "agent"
+
+
+class UsageKind(StrEnum):
+    """What kind of call it was.
+
+    ``feature`` is not a model call at all: it is one row per thing a person
+    did, so "1,208 searches" stays true even when the query was served from the
+    embedding cache and cost nothing.
+    """
+
+    feature = "feature"
+    chat = "chat"
+    embedding = "embedding"
+    rerank = "rerank"
+
+
+class UsageDaily(SQLModel, table=True):
+    """One account's usage of one model, for one feature, on one day."""
+
+    __table_args__ = (
+        # The UPSERT target. Everything else about this table follows from it.
+        UniqueConstraint(
+            "day", "user_id", "feature", "kind", "model", name="uq_usagedaily_bucket"
+        ),
+        # "my usage over this range" - the only question the user's own
+        # dashboard asks.
+        Index("ix_usagedaily_user_day", "user_id", "day"),
+        # "everyone's usage over this range" - the admin one. Per-group
+        # roll-ups join `user.group_id`, which is already indexed.
+        Index("ix_usagedaily_day", "day"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    # UTC. Stored rather than derived with date_trunc, which keeps the index a
+    # plain b-tree like every other index here.
+    day: date = Field(sa_type=Date, nullable=False)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    feature: UsageFeature = Field(sa_type=String(20))  # type: ignore
+    kind: UsageKind = Field(sa_type=String(12))  # type: ignore
+    # The model that actually answered, which is not the one we asked for when
+    # the provider re-routed across the fallback list. Empty on `feature` rows:
+    # it is part of the unique key, and NULLs would be distinct there.
+    model: str = Field(default="", max_length=160)
+
+    # On a `feature` row: operations the person performed. On a model row:
+    # upstream HTTP calls actually made. More than the operation count means
+    # retries and fallbacks; fewer means something was served from a cache.
+    requests: int = Field(default=0)
+    # Calls that raised. A failed call returns no usage block and costs nothing.
+    failures: int = Field(default=0)
+
+    input_tokens: int = Field(default=0, sa_type=BigInteger)
+    output_tokens: int = Field(default=0, sa_type=BigInteger)
+    reasoning_tokens: int = Field(default=0, sa_type=BigInteger)
+    cached_tokens: int = Field(default=0, sa_type=BigInteger)
+    cache_write_tokens: int = Field(default=0, sa_type=BigInteger)
+    # Rerank bills per search unit, not per token.
+    search_units: int = Field(default=0, sa_type=BigInteger)
+    # US dollars x 1e9. Self-hosted servers report no cost, and 0 is the right
+    # answer there.
+    cost_nanos: int = Field(default=0, sa_type=BigInteger)
+
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)

@@ -17,7 +17,8 @@ import asyncio
 import logging
 
 from app.core.content import html_to_text
-from app.models import ImportStatus
+from app.models import ImportStatus, UsageFeature
+from app.services import usage
 from app.services.parsing import (
     LLMPageParser,
     MinerUParser,
@@ -93,6 +94,11 @@ async def run_import(
 ) -> ImportStatus:
     """Run one claimed import job to a terminal state. Never raises."""
     log = logging.LoggerAdapter(logger, {"import": str(job.id)[:8]})
+    # `IMPORT_PARSER=llm` sends one vision call per page through the chat
+    # model, which on a hosted deployment makes a long PDF the most expensive
+    # thing anybody can do here. `ImportJob.created_by` says whose it is.
+    meter = usage.UsageMeter(user_id=job.created_by, feature=UsageFeature.import_)
+    meter.operation()
 
     async def ensure_active() -> None:
         if await asyncio.to_thread(queue.import_cancel_requested, job.id):
@@ -149,6 +155,7 @@ async def run_import(
                 mineru=mineru,
                 llm=llm,
                 on_page=on_page,
+                meter=meter,
             )
             html_parts.append(parsed.html)
             parsers.append(str(parsed.parser))
@@ -235,3 +242,8 @@ async def run_import(
             "will retry" if status == ImportStatus.queued else "giving up",
         )
         return status
+
+    finally:
+        # A cancelled or failed import still parsed however many pages it got
+        # through before it stopped, and those pages were billed.
+        await asyncio.shield(asyncio.to_thread(meter.flush))

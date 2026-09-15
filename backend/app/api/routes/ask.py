@@ -18,6 +18,7 @@ Two things change that shape:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
@@ -56,8 +57,10 @@ from app.models import (
     EmbeddingKind,
     Message,
     Namespace,
+    UsageFeature,
     User,
 )
+from app.services import usage
 from app.services.answering import (
     AnswerContext,
     Passage,
@@ -93,6 +96,8 @@ async def _matching_chunks(
     embeddings: EmbeddingsDep,
     query: str,
     document_ids: list[uuid.UUID],
+    *,
+    meter: usage.UsageMeter | None = None,
 ) -> dict[uuid.UUID, list[int]]:
     """Rank the individual sections of the chosen pages against the question.
 
@@ -107,7 +112,7 @@ async def _matching_chunks(
     ids = [str(d) for d in document_ids]
     per_source = settings.RETRIEVAL_CANDIDATES_PER_SOURCE
     sparse_query = encode_query(query)
-    dense_query = await embeddings.embed_query(query)
+    dense_query = await embeddings.embed_query(query, meter=meter)
 
     rankings: dict[tuple[str, str], list[ScoredPoint]] = {}
     if sparse_query.indices:
@@ -319,6 +324,7 @@ async def _search(
     body: AskRequest,
     *,
     query: str | None = None,
+    meter: usage.UsageMeter | None = None,
 ) -> tuple[list[Passage], float, int, bool]:
     """Find the pages worth reading, then narrow them to the ones worth quoting.
 
@@ -343,12 +349,13 @@ async def _search(
         namespace_ids=namespace_ids,
         document_ids=document_ids,
         lexical=_lexical_source(session, auth.user, body.namespace_id),
+        meter=meter,
     )
     top_k = body.top_k or settings.ASK_TOP_K
     candidates = result.hits[:top_k]
 
     ranked, scores = await rerank_hits(
-        session, auth.user, question, candidates, reranker
+        session, auth.user, question, candidates, reranker, meter=meter
     )
     if scores:
         hits = ranked[: keep_count(scores)]
@@ -356,7 +363,7 @@ async def _search(
         hits = ranked[: settings.ASK_DOCUMENTS_WITHOUT_RERANK]
 
     chunks_by_document = await _matching_chunks(
-        vectors, embeddings, question, [h.document_id for h in hits]
+        vectors, embeddings, question, [h.document_id for h in hits], meter=meter
     )
     passages = _passages_for(session, auth.user, hits, chunks_by_document)
     return (
@@ -381,6 +388,7 @@ async def _prepare(
     body: AskRequest,
     *,
     history: Sequence[Turn] = (),
+    meter: usage.UsageMeter | None = None,
 ) -> tuple[list[Passage], float, int, bool]:
     """Find what this turn should be answered from.
 
@@ -400,6 +408,7 @@ async def _prepare(
         reranker,
         body,
         query=retrieval_query(body.q, history),
+        meter=meter,
     )
 
 
@@ -481,21 +490,23 @@ async def ask_question(
     history = (
         history_for_prompt(session, conversation.id) if conversation is not None else []
     )
-    passages, retrieval_ms, searched, reranked = await _prepare(
-        session, auth, vectors, embeddings, reranker, body, history=history
-    )
-    context = build_context(passages)
-    llm = LLMClient(task=LLMTask.answer)
-    try:
-        text = await answer(
-            llm,
-            body.q,
-            context,
-            history=history,
-            language=answer_language(body.q, history),
+    async with usage.ameter(auth.user.id, UsageFeature.ask) as m:
+        m.operation()
+        passages, retrieval_ms, searched, reranked = await _prepare(
+            session, auth, vectors, embeddings, reranker, body, history=history, meter=m
         )
-    finally:
-        await llm.close()
+        context = build_context(passages)
+        llm = LLMClient(task=LLMTask.answer, meter=m)
+        try:
+            text = await answer(
+                llm,
+                body.q,
+                context,
+                history=history,
+                language=answer_language(body.q, history),
+            )
+        finally:
+            await llm.close()
 
     citations = _citations(session, context, text)
     took_ms = (time.perf_counter() - started) * 1000
@@ -546,9 +557,13 @@ async def ask_context(
         raise HTTPException(status_code=422, detail="Ask a question")
 
     started = time.perf_counter()
-    passages, retrieval_ms, searched, reranked = await _prepare(
-        session, auth, vectors, embeddings, reranker, body
-    )
+    # Retrieval without generation still embeds and still reranks, so it is
+    # still billed - and it is the shape an MCP caller uses most.
+    async with usage.ameter(auth.user.id, UsageFeature.ask) as m:
+        m.operation()
+        passages, retrieval_ms, searched, reranked = await _prepare(
+            session, auth, vectors, embeddings, reranker, body, meter=m
+        )
     context = build_context(passages)
     return AskContext(
         question=body.q.strip(),
@@ -593,8 +608,15 @@ async def ask_question_stream(
     # still finds the thread, with the question they asked in it.
     append_message(session, conversation, role=AskRole.user, content=body.q.strip())
 
+    # Built here, not in a dependency: a `StreamingResponse` iterates its body
+    # after the request's dependencies have been torn down, so anything the
+    # generator needs has to be captured now - the same reason `user_id` and
+    # `language` below are pulled out rather than read later.
+    m = usage.UsageMeter(user_id=auth.user.id, feature=UsageFeature.ask)
+    m.operation()
+
     passages, retrieval_ms, searched, reranked = await _prepare(
-        session, auth, vectors, embeddings, reranker, body, history=history
+        session, auth, vectors, embeddings, reranker, body, history=history, meter=m
     )
     context = build_context(passages)
     # Citations are resolved up front so they can be shown while the answer is
@@ -660,7 +682,7 @@ async def ask_question_stream(
                 "model": settings.LLM_ANSWER_MODEL,
             },
         )
-        llm = LLMClient(task=LLMTask.answer)
+        llm = LLMClient(task=LLMTask.answer, meter=m)
         collected: list[str] = []
         try:
             async for piece in stream_answer(
@@ -673,8 +695,10 @@ async def ask_question_stream(
         finally:
             await llm.close()
             # Also reached when the reader navigates away mid-answer, which is
-            # why a partial answer is kept rather than lost.
+            # why a partial answer is kept rather than lost - and why the
+            # tokens spent getting that far are still counted.
             save_answer("".join(collected), (time.perf_counter() - started) * 1000)
+            await asyncio.to_thread(m.flush)
         text = "".join(collected)
         yield event(
             "done",

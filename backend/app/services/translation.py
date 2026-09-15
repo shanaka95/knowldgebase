@@ -23,7 +23,8 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.content import html_to_text, sanitize_html
-from app.models import DocumentTranslation, DocumentVersion
+from app.models import DocumentTranslation, DocumentVersion, UsageFeature
+from app.services import usage
 from app.services.language import LANGUAGES, language_name
 from app.services.llm import LLMClient, LLMTask
 
@@ -178,12 +179,17 @@ async def translate_version(
     if stored is not None:
         return stored
 
-    llm = LLMClient(task=LLMTask.translation)
-    try:
-        title = await translate_title(llm, version.title, label)
-        html = await translate_html(llm, version.content_html, label)
-    finally:
-        await llm.close()
+    # One translation, however many windows a long page is cut into - and the
+    # returned-from-storage case above never gets here, so a page translated
+    # twice is counted once.
+    async with usage.ameter(requested_by, UsageFeature.translation) as m:
+        m.operation()
+        llm = LLMClient(task=LLMTask.translation, meter=m)
+        try:
+            title = await translate_title(llm, version.title, label)
+            html = await translate_html(llm, version.content_html, label)
+        finally:
+            await llm.close()
 
     # Through the same gate every saved page goes through: this HTML came from
     # a model, and nothing a model writes is trusted as markup.

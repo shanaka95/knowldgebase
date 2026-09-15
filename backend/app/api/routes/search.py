@@ -38,8 +38,10 @@ from app.models import (
     SearchResults,
     SearchSuggestionPublic,
     SearchSuggestionsPublic,
+    UsageFeature,
     User,
 )
+from app.services import usage
 from app.services.model_client import ModelServerError
 from app.services.reranking import (
     Reranker,
@@ -285,6 +287,8 @@ async def rerank_hits(
     query: str,
     hits: Sequence[FusedHit],
     reranker: Reranker | None,
+    *,
+    meter: usage.UsageMeter | None = None,
 ) -> tuple[list[FusedHit], list[float]]:
     """Reorder the leading candidates by how well each answers the query.
 
@@ -309,7 +313,7 @@ async def rerank_hits(
         return ordered, []
 
     try:
-        scored = await reranker.rerank(query, documents)
+        scored = await reranker.rerank(query, documents, meter=meter)
     except (ModelServerError, httpx.HTTPError) as exc:
         logger.warning("rerank failed, keeping fused order: %s", exc)
         return ordered, []
@@ -452,24 +456,34 @@ async def retrieve_documents(
 
     started = time.perf_counter()
     namespace_ids, document_ids = _access_scope(session, auth.user, namespace_id)
-    result = await retrieve(
-        q.strip(),
-        vectors=vectors,
-        embeddings=embeddings,
-        use_bm25=bm25,
-        use_vector=vector,
-        targets=[str(t) for t in targets],
-        namespace_ids=namespace_ids,
-        document_ids=document_ids,
-        candidates_per_source=candidates_per_source,
-        rrf_k=rrf_k,
-        lexical=_lexical_source(session, auth.user, namespace_id),
-    )
-    # Rerank before trimming to `limit`: the point is to decide which pages
-    # deserve the top places, and that cannot be done after they are cut.
-    hits, rerank_scores = await rerank_hits(
-        session, auth.user, q.strip(), result.hits, reranker if rerank else None
-    )
+    # One search, however many calls it turns into - and sometimes none at all,
+    # because the same query embedded a minute ago is served from memory.
+    async with usage.ameter(auth.user.id, UsageFeature.search) as m:
+        m.operation()
+        result = await retrieve(
+            q.strip(),
+            vectors=vectors,
+            embeddings=embeddings,
+            use_bm25=bm25,
+            use_vector=vector,
+            targets=[str(t) for t in targets],
+            namespace_ids=namespace_ids,
+            document_ids=document_ids,
+            candidates_per_source=candidates_per_source,
+            rrf_k=rrf_k,
+            lexical=_lexical_source(session, auth.user, namespace_id),
+            meter=m,
+        )
+        # Rerank before trimming to `limit`: the point is to decide which pages
+        # deserve the top places, and that cannot be done after they are cut.
+        hits, rerank_scores = await rerank_hits(
+            session,
+            auth.user,
+            q.strip(),
+            result.hits,
+            reranker if rerank else None,
+            meter=m,
+        )
     data = _hydrate(session, auth.user, hits[:limit], result.query_tokens)
     return RetrievalResults(
         data=data,

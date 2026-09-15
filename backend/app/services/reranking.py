@@ -34,11 +34,13 @@ from typing import Any, Protocol
 import httpx
 
 from app.core.config import settings
+from app.models import UsageKind
 from app.services.model_client import (
     ModelServerError,
     make_http_client,
     post_json_with_cold_start_retry,
 )
+from app.services.usage import UsageMeter
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +59,12 @@ class RerankedDocument:
 
 class Reranker(Protocol):
     async def rerank(
-        self, query: str, documents: list[str], *, top_n: int | None = None
+        self,
+        query: str,
+        documents: list[str],
+        *,
+        top_n: int | None = None,
+        meter: UsageMeter | None = None,
     ) -> list[RerankedDocument]: ...
 
 
@@ -91,7 +98,12 @@ class RerankClient:
             self._client = None
 
     async def rerank(
-        self, query: str, documents: list[str], *, top_n: int | None = None
+        self,
+        query: str,
+        documents: list[str],
+        *,
+        top_n: int | None = None,
+        meter: UsageMeter | None = None,
     ) -> list[RerankedDocument]:
         if not documents:
             return []
@@ -102,9 +114,19 @@ class RerankClient:
         }
         if top_n is not None:
             body["top_n"] = top_n
-        data = await post_json_with_cold_start_retry(
-            self.client, f"{self.base_url}/rerank", body, what="rerank"
-        )
+        try:
+            data = await post_json_with_cold_start_retry(
+                self.client, f"{self.base_url}/rerank", body, what="rerank"
+            )
+        except Exception:
+            if meter is not None:
+                meter.failure(UsageKind.rerank, self.model)
+            raise
+        # Reranking bills per search unit rather than per token, and at a rate
+        # that makes one call cost more than a small chat completion - worth
+        # metering even though there are no tokens to count.
+        if meter is not None:
+            meter.record(UsageKind.rerank, data, model=self.model)
         try:
             results = data["results"]
         except (KeyError, TypeError) as exc:
