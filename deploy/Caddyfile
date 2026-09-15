@@ -66,6 +66,16 @@
 	@shell not path /assets/* /api/*
 	header @shell Cache-Control "no-cache"
 
+	# An error Caddy makes itself - an upstream it could not reach - never
+	# reaches the application, so the application cannot say how to cache it.
+	# It says so here instead. A 502 is not cacheable by default, but "not by
+	# default" is a weaker guarantee than saying it, and this is the failure
+	# whose caching broke /search for a week.
+	handle_errors {
+		header Cache-Control "no-store"
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
+
 	handle {
 		reverse_proxy backend:8000 {
 			# Answers stream as server-sent events; buffering would hold them back.
