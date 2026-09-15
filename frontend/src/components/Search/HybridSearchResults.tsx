@@ -208,9 +208,14 @@ function SearchIntro({ onExample }: { onExample?: (q: string) => void }) {
             Try one of yours
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {suggestions.map((suggestion) => (
+            {suggestions.map((suggestion, index) => (
               <Button
-                key={suggestion.question}
+                // Not the question: two pages can be summarised into the same
+                // words, and React is explicit that duplicate keys are
+                // unsupported - children may be omitted, which is how a list
+                // of suggestions turns into a crash somewhere else entirely.
+                // The list is static for a render, so position identifies it.
+                key={`${suggestion.document_id ?? "none"}-${index}`}
                 variant="outline"
                 size="sm"
                 // A generated question can be long, and a button is

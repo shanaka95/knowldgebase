@@ -148,7 +148,7 @@ def sample_for_user(
     the ones being drawn from.
     """
     limit = limit or settings.SEARCH_SUGGESTIONS_SHOWN
-    pool = list(
+    rows = list(
         session.exec(
             select(SearchSuggestion)
             .where(SearchSuggestion.user_id == user_id)
@@ -156,6 +156,20 @@ def sample_for_user(
             .limit(max(limit * 5, 15))
         ).all()
     )
+
+    # One row per document, but two documents can be summarised into the same
+    # question - two copies of a policy, a form and its renewal. Offering the
+    # same words twice is useless to read and, downstream, gave React two
+    # children with the same key, which it is explicit is unsupported.
+    seen: set[str] = set()
+    pool: list[SearchSuggestion] = []
+    for row in rows:
+        key = " ".join(row.question.lower().split())
+        if key in seen:
+            continue
+        seen.add(key)
+        pool.append(row)
+
     if len(pool) <= limit:
         return pool
     return random.sample(pool, limit)

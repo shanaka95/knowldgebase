@@ -15,8 +15,18 @@ export const Route = createFileRoute("/_layout/usage")({
   staticData: { crumb: "Usage" },
   // In the URL so a range survives a reload and can be linked to.
   validateSearch: z.object({
-    from: z.string().optional().catch(undefined),
-    to: z.string().optional().catch(undefined),
+    // Empty means "not given". `?from=` arrives as "" and would otherwise be
+    // sent to the API as a date it cannot parse, which came back 422.
+    from: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined)
+      .catch(undefined),
+    to: z
+      .string()
+      .optional()
+      .transform((v) => v || undefined)
+      .catch(undefined),
   }),
   head: () => ({ meta: [{ title: "Usage - PlusGPT" }] }),
 })
