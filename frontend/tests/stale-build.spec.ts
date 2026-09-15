@@ -222,3 +222,139 @@ test.describe("A preload failure nobody is going to reload for", () => {
     expect(cancelled).toBe(true)
   })
 })
+
+/**
+ * Recovering from a failure the browser has cached.
+ *
+ * Assets are served `immutable`, which asks the browser never to revalidate
+ * them. The origin used to send that on its 404s and 502s too, and a deploy has
+ * a few seconds with no upstream — so a request made at the wrong moment left a
+ * year-long "this chunk does not exist" that a reload could not dislodge, on a
+ * filename the next build still used. Recovery therefore escalates: reload,
+ * then repair the cache and reload, then stop and say what happened.
+ */
+test.describe("Recovery escalates rather than repeating", () => {
+  const CHUNK = new Error(
+    "Failed to fetch dynamically imported module: /assets/search-abc123.js",
+  )
+
+  test("the second attempt refetches past the cache, then reloads", async ({
+    page,
+  }) => {
+    await page.goto("/")
+    await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
+
+    // The reload is real - `window.location.reload` cannot be redefined in
+    // Chrome, and stubbing it would test the stub. So what happened is recorded
+    // in `sessionStorage`, which survives the reload and can be read after it.
+    const navigated = page
+      .waitForNavigation({ timeout: 20_000 })
+      .catch(() => null)
+    await page.evaluate((message) => {
+      // A tab that has already reloaded once: the cheap step is spent, so the
+      // next failure must reach for the expensive one.
+      sessionStorage.setItem("stale-build-reload", String(Date.now()))
+      sessionStorage.removeItem("stale-build-repaired")
+      sessionStorage.setItem("test-refetched", "[]")
+
+      // `cache: "reload"` is the whole point - it is the only request that goes
+      // past the cache and writes what it finds back over it.
+      const real = window.fetch
+      window.fetch = (input, init) => {
+        if (init?.cache === "reload") {
+          const seen = JSON.parse(
+            sessionStorage.getItem("test-refetched") ?? "[]",
+          )
+          seen.push(String(input))
+          sessionStorage.setItem("test-refetched", JSON.stringify(seen))
+        }
+        return real(input, init)
+      }
+
+      // Not awaited: it ends by reloading, which would destroy this context.
+      // @ts-expect-error - runtime import inside the browser
+      void import("/src/lib/staleBuild.ts").then((m) =>
+        m.recoverFromStaleBuild(new Error(message)),
+      )
+    }, CHUNK.message)
+    await navigated
+
+    await expect(page.getByTestId("dashboard-greeting")).toBeVisible()
+    const refetched = await page.evaluate(() =>
+      JSON.parse(sessionStorage.getItem("test-refetched") ?? "[]"),
+    )
+    expect(
+      (refetched as string[]).some((url) => url.includes("search-abc123.js")),
+      `the failed chunk is refetched past the cache (saw ${JSON.stringify(refetched)})`,
+    ).toBe(true)
+    const repaired = await page.evaluate(() =>
+      sessionStorage.getItem("stale-build-repaired"),
+    )
+    expect(
+      repaired,
+      "and the repair is spent, so it cannot loop",
+    ).not.toBeNull()
+  })
+
+  test("a third failure stops, so the page says what happened", async ({
+    page,
+  }) => {
+    await page.goto("/")
+    await page.evaluate(() => {
+      sessionStorage.setItem("stale-build-reload", String(Date.now()))
+      sessionStorage.setItem("stale-build-repaired", String(Date.now()))
+    })
+
+    const recovering = await page.evaluate(async (message) => {
+      // @ts-expect-error - runtime import inside the browser
+      const { recoverFromStaleBuild } = await import("/src/lib/staleBuild.ts")
+      return recoverFromStaleBuild(new Error(message))
+    }, CHUNK.message)
+
+    // Both steps are spent. Saying "Updating" now would be a claim that nothing
+    // is going to make good on — which is exactly what left the page showing
+    // "A new version was released. Loading it now…" indefinitely.
+    expect(recovering).toBe(false)
+  })
+})
+
+test.describe("The page never parks on a promise it cannot keep", () => {
+  test("a chunk that will not load, with recovery spent, says so", async ({
+    page,
+  }) => {
+    // Both steps already used, which is the state a tab is in by the time
+    // somebody is watching it fail. Set before any script runs, because the
+    // error boundary consults them on its first render.
+    await page.addInitScript(() => {
+      sessionStorage.setItem("stale-build-reload", String(Date.now()))
+      sessionStorage.setItem("stale-build-repaired", String(Date.now()))
+    })
+
+    // Break the route's own chunk, so the import genuinely fails rather than
+    // the state being simulated. Matched in both shapes: the dev server splits
+    // routes with a query, a build splits them into hashed files.
+    await page.route("**/*", (route) => {
+      const url = route.request().url()
+      const isSearchChunk =
+        (/tsr-split/.test(url) && /search/.test(url)) ||
+        /\/assets\/search-[A-Za-z0-9_-]+\.js/.test(url)
+      return isSearchChunk ? route.abort("failed") : route.continue()
+    })
+
+    await page.goto("/search?q=")
+
+    // The reported bug: "Updating — A new version was released. Loading it
+    // now…" with nothing loading and no way out. Nothing is going to reload, so
+    // the page must not claim otherwise.
+    //
+    // Comfortably under the 15s safety timer, deliberately. That timer is a
+    // backstop for a reload that was started and did not arrive; if it is what
+    // rescues this page, the boundary decided to show "Updating" without
+    // checking - which is the bug - and a generous timeout here would hide it.
+    await expect(page.getByTestId("route-error")).toBeVisible({
+      timeout: 8_000,
+    })
+    await expect(page.getByTestId("route-updating")).toHaveCount(0)
+    await expect(page.getByTestId("route-error-reload")).toBeVisible()
+  })
+})

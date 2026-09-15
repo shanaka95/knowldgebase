@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   isStaleChunkError,
-  reloadForNewBuild,
+  recoverFromStaleBuild,
   reloadIfStale,
 } from "@/lib/staleBuild"
 import { EmptyState } from "./EmptyState"
@@ -28,27 +28,42 @@ export function RouteErrorComponent({
   const router = useRouter()
   const path = useRouterState({ select: (s) => s.location.href })
   const status = getErrorStatus(error)
-  const [updating, setUpdating] = useState(() => isStaleChunkError(error))
+  const [updating, setUpdating] = useState(false)
 
-  // A failed import says so plainly and is handled below. Everything else gets
-  // asked rather than guessed: a replaced chunk can also surface as a router
-  // holding a match whose route is undefined, and matching on the wording of
-  // *that* would mean chasing every future phrasing of the same thing.
+  // Nothing is assumed about whether recovery will happen: it is asked, and
+  // "Updating" is shown only once something has actually started. Deciding from
+  // the error alone parked the page on that message for ever whenever recovery
+  // declined - which is most of the time, since it declines precisely when it
+  // has already been tried.
+  //
+  // A failed import says so plainly. Everything else gets asked rather than
+  // guessed: a replaced chunk can also surface as a router holding a match whose
+  // route is undefined, and matching on the wording of *that* would mean chasing
+  // every future phrasing of the same thing.
   useEffect(() => {
     let cancelled = false
-    if (isStaleChunkError(error)) {
-      reloadForNewBuild()
-      return
-    }
-    if (status === undefined) {
-      void reloadIfStale().then((reloading) => {
-        if (reloading && !cancelled) setUpdating(true)
-      })
-    }
+    const started = isStaleChunkError(error)
+      ? recoverFromStaleBuild(error)
+      : status === undefined
+        ? reloadIfStale()
+        : Promise.resolve(false)
+
+    void started.then((recovering) => {
+      if (recovering && !cancelled) setUpdating(true)
+    })
     return () => {
       cancelled = true
     }
   }, [error, status])
+
+  // A reload can be refused, blocked or simply slow, and a message that outlives
+  // the thing it is waiting for is worse than an error: it says the problem is
+  // being handled when nobody is handling it. So the claim expires.
+  useEffect(() => {
+    if (!updating) return
+    const timer = setTimeout(() => setUpdating(false), 15_000)
+    return () => clearTimeout(timer)
+  }, [updating])
 
   if (updating) {
     return (

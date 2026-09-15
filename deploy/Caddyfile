@@ -48,11 +48,11 @@
 		-Server
 	}
 
-	# Built assets carry a content hash in their name, so a given URL can never
-	# change. Telling browsers that saves a revalidation round trip on every
-	# repeat visit; the four-hour default was making them ask again all day.
-	@immutable path /assets/*
-	header @immutable Cache-Control "public, max-age=31536000, immutable"
+	# Asset caching is set by the application, not here, because it depends on
+	# the response status and this directive cannot see one. Setting
+	# `immutable` on every /assets/* answer cached the 404s and 502s too - for a
+	# year, unrevalidatable, and across builds, since chunk filenames are content
+	# hashes and mostly do not change. See AssetCacheHeaders in backend/app/main.py.
 
 	# The shell is the opposite: it names this deploy's asset hashes, so a cached
 	# copy after a deploy points at files that no longer exist.
@@ -72,6 +72,12 @@
 			flush_interval -1
 			# Cloudflare puts the visitor's address here; pass on something truthful.
 			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+
+			# A deploy recreates this container, so for a few seconds there is no
+			# upstream at all. Wait for it to come back rather than answering 502:
+			# a deploy should be slow for a moment, not broken for a moment.
+			lb_try_duration 30s
+			lb_try_interval 250ms
 		}
 	}
 }

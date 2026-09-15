@@ -20,6 +20,14 @@
 const ATTEMPTED = "stale-build-reload"
 
 /**
+ * Whether this tab has already tried the expensive recovery.
+ *
+ * Separate from `ATTEMPTED`, because the two steps answer different questions
+ * and the cheap one must not use up the thorough one.
+ */
+const REPAIRED = "stale-build-repaired"
+
+/**
  * How long one recovery attempt suppresses the next.
  *
  * Time rather than a flag cleared at start-up: clearing it on boot would let a
@@ -68,6 +76,50 @@ export async function isStaleBuild(): Promise<boolean> {
   }
 }
 
+/** Every built asset a page - or an error message - names. */
+const ASSET_URL = /\/assets\/[A-Za-z0-9._-]+\.(?:js|css)/g
+
+/**
+ * Fetch the app's assets again, past the browser's cache.
+ *
+ * Assets are served `immutable`, which asks the browser never to revalidate
+ * them - so if a request for one ever answered 404, that failure is held under
+ * the same terms and an ordinary reload will not go back to the server to find
+ * out otherwise. The origin used to send `immutable` on its 404s and 502s, and
+ * a deploy has a few seconds with no upstream, which is all it takes. Chunk
+ * filenames are content hashes and mostly survive a rebuild, so one poisoned
+ * entry goes on breaking builds that had not been made yet.
+ *
+ * `cache: "reload"` is the one request that ignores the cache on the way out
+ * and *overwrites* it on the way back, which is what makes this a repair rather
+ * than another attempt. Everything the shell names is refreshed, not just what
+ * failed: the failure is reported one chunk at a time and a deploy window does
+ * not poison them one at a time.
+ */
+async function repairAssetCache(failed: readonly string[]): Promise<void> {
+  const urls = new Set(failed)
+  try {
+    const shell = await fetch("/", {
+      cache: "no-store",
+      headers: { Accept: "text/html" },
+    }).then((response) => (response.ok ? response.text() : ""))
+    for (const match of shell.matchAll(ASSET_URL)) urls.add(match[0])
+  } catch {
+    // Offline. The repair below is still worth trying for what did fail.
+  }
+  // Settled, not all: one asset that is genuinely gone must not stop the rest
+  // being repaired, and nothing here is worth failing over.
+  await Promise.allSettled(
+    [...urls].map((url) => fetch(url, { cache: "reload" })),
+  )
+}
+
+/** The asset URLs an error message names, if it names any. */
+export function assetsNamedIn(error: unknown): string[] {
+  const message = error instanceof Error ? error.message : String(error ?? "")
+  return [...message.matchAll(ASSET_URL)].map((match) => match[0])
+}
+
 /** Whether this error is a chunk that is no longer on the server. */
 export function isStaleChunkError(error: unknown): boolean {
   const message =
@@ -103,6 +155,52 @@ export function reloadForNewBuild(): boolean {
   }
   window.location.reload()
   return true
+}
+
+/**
+ * Recover from a chunk that would not load, escalating rather than repeating.
+ *
+ * Three steps, each tried at most once per tab:
+ *
+ * 1. **Reload.** Cheap, and it is the whole answer when the tab was simply
+ *    running a build the server has replaced.
+ * 2. **Repair, then reload.** If a reload did not help, the browser is holding
+ *    a cached failure that a reload cannot dislodge — see `repairAssetCache`.
+ * 3. **Stop.** Two attempts have failed; a third would be a loop. The error
+ *    surfaces with its own message, which names the asset.
+ *
+ * Returns whether recovery is under way, so a caller knows whether the page is
+ * about to be replaced or whether it is the one that has to say what happened.
+ * Never rejects: a recovery that throws is a page that shows nothing at all.
+ */
+export async function recoverFromStaleBuild(error: unknown): Promise<boolean> {
+  if (reloadForNewBuild()) return true
+  if (!once(REPAIRED)) return false
+  try {
+    await repairAssetCache(assetsNamedIn(error))
+  } catch {
+    // Reload anyway. A repair that failed halfway is still worth reloading
+    // into, and there is nothing better left to try.
+  }
+  window.location.reload()
+  return true
+}
+
+/**
+ * Claim a one-time action for this tab, returning whether it was still unclaimed.
+ *
+ * `false` when storage is unavailable, not `true`: without somewhere to record
+ * the attempt there is nothing to stop it repeating, and a reload loop is worse
+ * than the error it replaces.
+ */
+function once(key: string): boolean {
+  try {
+    if (sessionStorage.getItem(key)) return false
+    sessionStorage.setItem(key, String(Date.now()))
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -162,13 +260,25 @@ export function watchForStaleBuild(entryUrl?: string): void {
       event.preventDefault()
       return
     }
-    if (reloadForNewBuild()) event.preventDefault()
+    // Cancelled only if a reload is already under way. `recoverFromStaleBuild`
+    // may yet repair and reload, but not before this handler has to return, and
+    // cancelling on the strength of something that has not happened is what
+    // turned a failed import into `undefined` in the first place.
+    if (reloadForNewBuild()) {
+      event.preventDefault()
+      return
+    }
+    void recoverFromStaleBuild(reason)
   })
   window.addEventListener("unhandledrejection", (event) => {
+    if (!isStaleChunkError(event.reason)) return
     // Cancelled only when reloading, for the same reason: otherwise this is the
     // last place the failure could have been printed.
-    if (isStaleChunkError(event.reason) && reloadForNewBuild())
+    if (reloadForNewBuild()) {
       event.preventDefault()
+      return
+    }
+    void recoverFromStaleBuild(event.reason)
   })
 }
 
@@ -180,5 +290,5 @@ export function watchForStaleBuild(entryUrl?: string): void {
  */
 export async function reloadIfStale(): Promise<boolean> {
   if (!(await isStaleBuild())) return false
-  return reloadForNewBuild()
+  return recoverFromStaleBuild(null)
 }
