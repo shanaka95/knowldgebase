@@ -2502,16 +2502,21 @@ class UsageDaily(SQLModel, table=True):
 
 
 class UsageTotals(SQLModel):
-    """What was done and what it took, with no mention of money."""
+    """What was done and what it took, with no mention of money.
 
-    requests: int = 0
-    failures: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    reasoning_tokens: int = 0
-    cached_tokens: int = 0
-    cache_write_tokens: int = 0
-    search_units: int = 0
+    Every field is required rather than defaulted. A default here would make
+    each one optional in the generated schema, and a client would then have to
+    defend against a count that is never actually absent.
+    """
+
+    requests: int
+    failures: int
+    input_tokens: int
+    output_tokens: int
+    reasoning_tokens: int
+    cached_tokens: int
+    cache_write_tokens: int
+    search_units: int
 
 
 class AdminUsageTotals(UsageTotals):
@@ -2521,7 +2526,7 @@ class AdminUsageTotals(UsageTotals):
     5.12e-06, and rounding that to whole micros loses two per cent of it.
     """
 
-    cost_nanos: int = 0
+    cost_nanos: int
 
 
 class UsagePoint(SQLModel):
@@ -2554,16 +2559,16 @@ class MyUsage(SQLModel):
 
     range: UsageRange
     totals: UsageTotals
-    by_feature: list[UsagePoint] = []
-    by_day: list[UsagePoint] = []
-    by_model: list[UsagePoint] = []
+    by_feature: list[UsagePoint]
+    by_day: list[UsagePoint]
+    by_model: list[UsagePoint]
 
 
 class AdminUsageSummary(SQLModel):
     range: UsageRange
     totals: AdminUsageTotals
-    by_feature: list[AdminUsagePoint] = []
-    by_day: list[AdminUsagePoint] = []
+    by_feature: list[AdminUsagePoint]
+    by_day: list[AdminUsagePoint]
 
 
 class AdminUsageBreakdown(SQLModel):
@@ -2571,5 +2576,5 @@ class AdminUsageBreakdown(SQLModel):
     # "user", "model", "group" or "feature"
     by: str
     totals: AdminUsageTotals
-    data: list[AdminUsagePoint] = []
-    count: int = 0
+    data: list[AdminUsagePoint]
+    count: int

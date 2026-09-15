@@ -9,6 +9,7 @@ import { ChannelsPanel } from "@/components/Admin/ChannelsPanel"
 import { columns, type UserTableData } from "@/components/Admin/columns"
 import { DataSourcesPanel } from "@/components/Admin/DataSourcesPanel"
 import { GroupsPanel } from "@/components/Admin/GroupsPanel"
+import { UsagePanel } from "@/components/Admin/UsagePanel"
 import { DataTable } from "@/components/Common/DataTable"
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
 import PendingUsers from "@/components/Pending/PendingUsers"
@@ -30,8 +31,11 @@ function getUsersQueryOptions() {
   }
 }
 
+const TABS = ["users", "groups", "usage", "channels", "data-sources"] as const
+type Tab = (typeof TABS)[number]
+
 const adminSearchSchema = z.object({
-  tab: z.enum(["users", "groups", "channels", "data-sources"]).catch("users"),
+  tab: z.enum(TABS).catch("users"),
 })
 
 export const Route = createFileRoute("/_layout/admin")({
@@ -90,10 +94,10 @@ function Admin() {
       <Tabs
         value={tab}
         onValueChange={(value) =>
+          // Merged, not replaced: a panel that puts its own state in the URL
+          // would otherwise lose it every time somebody changed tab.
           navigate({
-            search: {
-              tab: value as "users" | "groups" | "channels" | "data-sources",
-            },
+            search: (prev) => ({ ...prev, tab: value as Tab }),
             replace: true,
           })
         }
@@ -101,6 +105,7 @@ function Admin() {
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="groups">Groups</TabsTrigger>
+          <TabsTrigger value="usage">Usage</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>
           <TabsTrigger value="data-sources">Data sources</TabsTrigger>
         </TabsList>
@@ -109,6 +114,9 @@ function Admin() {
         </TabsContent>
         <TabsContent value="groups" className="pt-4">
           <GroupsPanel />
+        </TabsContent>
+        <TabsContent value="usage" className="pt-4">
+          <UsagePanel />
         </TabsContent>
         <TabsContent value="channels" className="pt-4">
           <ChannelsPanel />

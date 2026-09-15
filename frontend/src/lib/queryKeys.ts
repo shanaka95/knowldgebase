@@ -53,6 +53,15 @@ export const queryKeys = {
     limits: () => ["admin", "limits"] as const,
     users: (params: Record<string, unknown> = {}) =>
       ["admin", "users", params] as const,
+    usage: (params: Record<string, unknown> = {}) =>
+      ["admin", "usage", params] as const,
+    usageModels: (params: Record<string, unknown> = {}) =>
+      ["admin", "usage", "models", params] as const,
+  },
+  usage: {
+    all: ["usage"] as const,
+    mine: (params: Record<string, unknown> = {}) =>
+      ["usage", "me", params] as const,
   },
   apiKeys: ["api-keys"] as const,
   health: ["health"] as const,

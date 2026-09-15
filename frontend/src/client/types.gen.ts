@@ -5,6 +5,105 @@ export type ClientOptions = {
 };
 
 /**
+ * AdminUsageBreakdown
+ */
+export type AdminUsageBreakdown = {
+    range: UsageRange;
+    /**
+     * By
+     */
+    by: string;
+    totals: AdminUsageTotals;
+    /**
+     * Data
+     */
+    data: Array<AdminUsagePoint>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * AdminUsagePoint
+ */
+export type AdminUsagePoint = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label?: string | null;
+    group?: GroupRef | null;
+    totals: AdminUsageTotals;
+};
+
+/**
+ * AdminUsageSummary
+ */
+export type AdminUsageSummary = {
+    range: UsageRange;
+    totals: AdminUsageTotals;
+    /**
+     * By Feature
+     */
+    by_feature: Array<AdminUsagePoint>;
+    /**
+     * By Day
+     */
+    by_day: Array<AdminUsagePoint>;
+};
+
+/**
+ * AdminUsageTotals
+ *
+ * The same, for somebody entitled to see the bill.
+ *
+ * Nanos rather than dollars, matching storage exactly: one call can cost
+ * 5.12e-06, and rounding that to whole micros loses two per cent of it.
+ */
+export type AdminUsageTotals = {
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Failures
+     */
+    failures: number;
+    /**
+     * Input Tokens
+     */
+    input_tokens: number;
+    /**
+     * Output Tokens
+     */
+    output_tokens: number;
+    /**
+     * Reasoning Tokens
+     */
+    reasoning_tokens: number;
+    /**
+     * Cached Tokens
+     */
+    cached_tokens: number;
+    /**
+     * Cache Write Tokens
+     */
+    cache_write_tokens: number;
+    /**
+     * Search Units
+     */
+    search_units: number;
+    /**
+     * Cost Nanos
+     */
+    cost_nanos: number;
+};
+
+/**
  * AdminUserPublic
  *
  * An account as an administrator sees it.
@@ -2342,6 +2441,28 @@ export type Message = {
 };
 
 /**
+ * MyUsage
+ *
+ * One account's own usage. Cost is unrepresentable here.
+ */
+export type MyUsage = {
+    range: UsageRange;
+    totals: UsageTotals;
+    /**
+     * By Feature
+     */
+    by_feature: Array<UsagePoint>;
+    /**
+     * By Day
+     */
+    by_day: Array<UsagePoint>;
+    /**
+     * By Model
+     */
+    by_model: Array<UsagePoint>;
+};
+
+/**
  * NamespaceCreate
  */
 export type NamespaceCreate = {
@@ -3246,6 +3367,94 @@ export type UpdatePassword = {
      * New Password
      */
     new_password: string;
+};
+
+/**
+ * UsageFeature
+ *
+ * What the person was doing when the call happened.
+ */
+export type UsageFeature = 'ask' | 'search' | 'import' | 'indexing' | 'translation' | 'suggestions' | 'agent';
+
+/**
+ * UsagePoint
+ *
+ * One row of a breakdown: a day, a feature, a model, or an account.
+ */
+export type UsagePoint = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label?: string | null;
+    totals: UsageTotals;
+};
+
+/**
+ * UsageRange
+ *
+ * The days a reply covers. UTC, and the interface says so.
+ */
+export type UsageRange = {
+    /**
+     * Frm
+     */
+    frm: string;
+    /**
+     * To
+     */
+    to: string;
+    /**
+     * Days
+     */
+    days: number;
+};
+
+/**
+ * UsageTotals
+ *
+ * What was done and what it took, with no mention of money.
+ *
+ * Every field is required rather than defaulted. A default here would make
+ * each one optional in the generated schema, and a client would then have to
+ * defend against a count that is never actually absent.
+ */
+export type UsageTotals = {
+    /**
+     * Requests
+     */
+    requests: number;
+    /**
+     * Failures
+     */
+    failures: number;
+    /**
+     * Input Tokens
+     */
+    input_tokens: number;
+    /**
+     * Output Tokens
+     */
+    output_tokens: number;
+    /**
+     * Reasoning Tokens
+     */
+    reasoning_tokens: number;
+    /**
+     * Cached Tokens
+     */
+    cached_tokens: number;
+    /**
+     * Cache Write Tokens
+     */
+    cache_write_tokens: number;
+    /**
+     * Search Units
+     */
+    search_units: number;
 };
 
 /**
@@ -6380,6 +6589,40 @@ export type askRenameConversationResponses = {
 
 export type askRenameConversationResponse = askRenameConversationResponses[keyof askRenameConversationResponses];
 
+export type usageReadMyUsageData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * From
+         */
+        from?: string | null;
+        /**
+         * To
+         */
+        to?: string | null;
+    };
+    url: '/api/v1/usage/me';
+};
+
+export type usageReadMyUsageErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type usageReadMyUsageError = usageReadMyUsageErrors[keyof usageReadMyUsageErrors];
+
+export type usageReadMyUsageResponses = {
+    /**
+     * Successful Response
+     */
+    200: MyUsage;
+};
+
+export type usageReadMyUsageResponse = usageReadMyUsageResponses[keyof usageReadMyUsageResponses];
+
 export type workersReadWorkersData = {
     body?: never;
     path?: never;
@@ -7065,6 +7308,150 @@ export type adminUserGroupsRemoveGroupMemberResponses = {
 };
 
 export type adminUserGroupsRemoveGroupMemberResponse = adminUserGroupsRemoveGroupMemberResponses[keyof adminUserGroupsRemoveGroupMemberResponses];
+
+export type adminUsageReadUsageSummaryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * From
+         */
+        from?: string | null;
+        /**
+         * To
+         */
+        to?: string | null;
+        /**
+         * User Id
+         */
+        user_id?: string | null;
+        /**
+         * Group Id
+         */
+        group_id?: string | null;
+        /**
+         * Feature
+         */
+        feature?: UsageFeature | null;
+        /**
+         * Model
+         */
+        model?: string | null;
+    };
+    url: '/api/v1/admin/usage/summary';
+};
+
+export type adminUsageReadUsageSummaryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUsageReadUsageSummaryError = adminUsageReadUsageSummaryErrors[keyof adminUsageReadUsageSummaryErrors];
+
+export type adminUsageReadUsageSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUsageSummary;
+};
+
+export type adminUsageReadUsageSummaryResponse = adminUsageReadUsageSummaryResponses[keyof adminUsageReadUsageSummaryResponses];
+
+export type adminUsageReadUsageBreakdownData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * By
+         */
+        by?: string;
+        /**
+         * From
+         */
+        from?: string | null;
+        /**
+         * To
+         */
+        to?: string | null;
+        /**
+         * User Id
+         */
+        user_id?: string | null;
+        /**
+         * Group Id
+         */
+        group_id?: string | null;
+        /**
+         * Feature
+         */
+        feature?: UsageFeature | null;
+        /**
+         * Model
+         */
+        model?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/usage/breakdown';
+};
+
+export type adminUsageReadUsageBreakdownErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUsageReadUsageBreakdownError = adminUsageReadUsageBreakdownErrors[keyof adminUsageReadUsageBreakdownErrors];
+
+export type adminUsageReadUsageBreakdownResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUsageBreakdown;
+};
+
+export type adminUsageReadUsageBreakdownResponse = adminUsageReadUsageBreakdownResponses[keyof adminUsageReadUsageBreakdownResponses];
+
+export type adminUsageReadModelsSeenData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * From
+         */
+        from?: string | null;
+        /**
+         * To
+         */
+        to?: string | null;
+    };
+    url: '/api/v1/admin/usage/models';
+};
+
+export type adminUsageReadModelsSeenErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminUsageReadModelsSeenError = adminUsageReadModelsSeenErrors[keyof adminUsageReadModelsSeenErrors];
+
+export type adminUsageReadModelsSeenResponses = {
+    /**
+     * Response Admin Usage-Read Models Seen
+     *
+     * Successful Response
+     */
+    200: Array<string>;
+};
+
+export type adminUsageReadModelsSeenResponse = adminUsageReadModelsSeenResponses[keyof adminUsageReadModelsSeenResponses];
 
 export type adminUsersReadAdminUsersData = {
     body?: never;

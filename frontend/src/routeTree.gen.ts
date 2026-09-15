@@ -26,6 +26,7 @@ import { Route as LayoutPlaygroundRouteImport } from './routes/_layout/playgroun
 import { Route as LayoutSearchRouteImport } from './routes/_layout/search'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSharedRouteImport } from './routes/_layout/shared'
+import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
 import { Route as LayoutAgentsIndexRouteImport } from './routes/_layout/agents.index'
 import { Route as LayoutAgentsAgentIdRouteImport } from './routes/_layout/agents.$agentId'
@@ -119,6 +120,11 @@ const LayoutSharedRoute = LayoutSharedRouteImport.update({
   path: '/shared',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutUsageRoute = LayoutUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const PSlugRoute = PSlugRouteImport.update({
   id: '/p/$slug',
   path: '/p/$slug',
@@ -181,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof LayoutSearchRoute
   '/settings': typeof LayoutSettingsRoute
   '/shared': typeof LayoutSharedRoute
+  '/usage': typeof LayoutUsageRoute
   '/p/$slug': typeof PSlugRoute
   '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
   '/s/$namespaceSlug': typeof LayoutSNamespaceSlugRouteWithChildren
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/search': typeof LayoutSearchRoute
   '/settings': typeof LayoutSettingsRoute
   '/shared': typeof LayoutSharedRoute
+  '/usage': typeof LayoutUsageRoute
   '/p/$slug': typeof PSlugRoute
   '/': typeof LayoutIndexRoute
   '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
@@ -233,6 +241,7 @@ export interface FileRoutesById {
   '/_layout/search': typeof LayoutSearchRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/shared': typeof LayoutSharedRoute
+  '/_layout/usage': typeof LayoutUsageRoute
   '/p/$slug': typeof PSlugRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/agents/$agentId': typeof LayoutAgentsAgentIdRoute
@@ -262,6 +271,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/shared'
+    | '/usage'
     | '/p/$slug'
     | '/agents/$agentId'
     | '/s/$namespaceSlug'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/shared'
+    | '/usage'
     | '/p/$slug'
     | '/'
     | '/agents/$agentId'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/_layout/search'
     | '/_layout/settings'
     | '/_layout/shared'
+    | '/_layout/usage'
     | '/p/$slug'
     | '/_layout/'
     | '/_layout/agents/$agentId'
@@ -456,6 +468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSharedRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/usage': {
+      id: '/_layout/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof LayoutUsageRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/p/$slug': {
       id: '/p/$slug'
       path: '/p/$slug'
@@ -542,6 +561,7 @@ interface LayoutRouteChildren {
   LayoutSearchRoute: typeof LayoutSearchRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutSharedRoute: typeof LayoutSharedRoute
+  LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutAgentsAgentIdRoute: typeof LayoutAgentsAgentIdRoute
   LayoutSNamespaceSlugRoute: typeof LayoutSNamespaceSlugRouteWithChildren
@@ -558,6 +578,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutSearchRoute: LayoutSearchRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutSharedRoute: LayoutSharedRoute,
+  LayoutUsageRoute: LayoutUsageRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutAgentsAgentIdRoute: LayoutAgentsAgentIdRoute,
   LayoutSNamespaceSlugRoute: LayoutSNamespaceSlugRouteWithChildren,

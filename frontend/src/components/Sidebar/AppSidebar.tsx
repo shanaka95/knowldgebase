@@ -1,5 +1,6 @@
 import {
   Bot,
+  ChartColumn,
   Database,
   LayoutDashboard,
   Search,
@@ -38,6 +39,7 @@ const baseItems: Item[] = [
   // reach the knowledge base, a data source is how documents reach it.
   { icon: Bot, title: "Agents", path: "/agents" },
   { icon: Database, title: "Data sources", path: "/data-sources" },
+  { icon: ChartColumn, title: "Usage", path: "/usage" },
 ]
 
 export function AppSidebar() {
