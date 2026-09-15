@@ -91,9 +91,7 @@ def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     # is three queries for a page of users rather than three per user.
     groups = quota.load_groups(session)
     used = quota.pages_used_for(session, [u.id for u in users])
-    users_public = [
-        to_user_public(session, u, groups=groups, used=used) for u in users
-    ]
+    users_public = [to_user_public(session, u, groups=groups, used=used) for u in users]
     return UsersPublic(data=users_public, count=count)
 
 

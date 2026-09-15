@@ -34,7 +34,7 @@ from app.models import (
     User,
     clean_document_type,
 )
-from app.services import parsing, quota
+from app.services import credits, parsing, quota
 from app.services.storage import ObjectStorage
 
 router = APIRouter(prefix="/imports", tags=["imports"])
@@ -76,6 +76,19 @@ def _check_destination(
             raise HTTPException(
                 status_code=400, detail="Folder is not in this namespace"
             )
+
+
+def _require_credit(session: Session, user: User) -> None:
+    """Refuse an upload the account cannot pay to parse.
+
+    Here rather than in the worker alone: an import is the most expensive thing
+    anybody can start - one vision call per page - so being told now beats a
+    queue of jobs that fail one by one in an hour.
+    """
+    try:
+        credits.ensure_credit(session, user)
+    except credits.CreditsExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
 
 
 def _require_page_capacity(session: Session, user_id: uuid.UUID, wanted: int) -> None:
@@ -180,6 +193,7 @@ async def create_import(
     several files at once.
     """
     _check_destination(session, auth.user, namespace_id, folder_id)
+    _require_credit(session, auth.user)
     _require_page_capacity(session, auth.user.id, 1)
 
     job_id = uuid.uuid4()
@@ -246,6 +260,7 @@ async def create_imports(
     # page each. The whole request is refused rather than partly queued - an
     # import has no "skipped" channel the way a share does, and half a set of
     # scans is worse than none.
+    _require_credit(session, auth.user)
     _require_page_capacity(
         session, auth.user.id, 1 if (combine and len(files) > 1) else len(files)
     )
@@ -379,6 +394,7 @@ def retry_import(session: SessionDep, auth: WriteAuth, import_id: uuid.UUID) -> 
     # so nothing is inserted here and an insert-time check would miss it - but
     # a failed job is terminal and therefore not in the pending count, so it
     # has to be asked for again like any other page.
+    _require_credit(session, auth.user)
     _require_page_capacity(session, job.created_by or auth.user.id, 1)
     job.status = ImportStatus.queued
     job.attempts = 0

@@ -41,7 +41,7 @@ from app.models import (
     UsageFeature,
     User,
 )
-from app.services import usage
+from app.services import credits, usage
 from app.services.model_client import ModelServerError
 from app.services.reranking import (
     Reranker,
@@ -453,6 +453,10 @@ async def retrieve_documents(
     # request into a thousand expensive ones. Order is kept so the reply names
     # the targets in the order they were asked for.
     targets = list(dict.fromkeys(targets))
+    try:
+        credits.ensure_credit(session, auth.user)
+    except credits.CreditsExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
 
     started = time.perf_counter()
     namespace_ids, document_ids = _access_scope(session, auth.user, namespace_id)

@@ -71,12 +71,8 @@ def _to_public(
         is_default=group.is_default,
         is_system=group.is_system,
         member_count=member_count,
-        max_pages=group.max_pages,
-        max_shares_per_document=group.max_shares_per_document,
-        max_members_per_space=group.max_members_per_space,
-        effective_max_pages=effective["max_pages"],
-        effective_max_shares_per_document=effective["max_shares_per_document"],
-        effective_max_members_per_space=effective["max_members_per_space"],
+        **{spec.key: getattr(group, spec.key, None) for spec in quota.LIMITS},
+        **{f"effective_{key}": value for key, value in effective.items()},
         created_at=group.created_at,
         updated_at=group.updated_at,
     )
@@ -129,9 +125,14 @@ def create_user_group(session: SessionDep, body: UserGroupCreate) -> Any:
         slug=slug,
         name=name,
         description=body.description,
-        max_pages=body.max_pages,
-        max_shares_per_document=body.max_shares_per_document,
-        max_members_per_space=body.max_members_per_space,
+        # From the registry rather than field by field: the docstring in
+        # `quota.py` promises a new limit costs four lines, and a route that
+        # names each one by hand is a fifth place that silently drops it.
+        **{
+            spec.key: getattr(body, spec.key, None)
+            for spec in quota.LIMITS
+            if hasattr(body, spec.key)
+        },
     )
     session.add(group)
     session.commit()

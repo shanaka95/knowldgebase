@@ -179,6 +179,19 @@ async def run_job(job: EmbeddingJob, deps: PipelineDeps) -> JobStatus:
     owner = await asyncio.to_thread(queue.document_owner, job.document_id)
     ctx = JobContext(job, user_id=owner)
     ctx.meter.operation()
+    # Checked here as well as wherever the work was started: a job queued an
+    # hour ago can outlive the balance that paid for it, and chunking a long
+    # page is not free. Failed rather than retried - a balance does not become
+    # untrue on a second attempt.
+    if not await asyncio.to_thread(queue.has_credit, owner):
+        await asyncio.to_thread(
+            queue.retry_or_fail,
+            job.id,
+            "Out of credits for this month",
+            {},
+            force_fail=True,
+        )
+        return JobStatus.failed
     log = logging.LoggerAdapter(
         logger, {"job": str(job.id)[:8], "doc": str(job.document_id)[:8]}
     )

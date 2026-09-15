@@ -85,8 +85,8 @@ from app.models import (
     UserRef,
     clean_document_type,
 )
+from app.services import credits, quota, sharing
 from app.services import notes as notes_service
-from app.services import quota, sharing
 from app.services.cloning import copy_embedded_attachments
 from app.services.email import (
     Email,
@@ -1160,6 +1160,13 @@ async def translate_document(
     code = body.language.strip().lower()
     if not is_supported(code):
         raise HTTPException(status_code=422, detail="That language is not offered")
+    # After the stored-translation check below would be kinder, but this runs
+    # before it on purpose: a page already translated returns without calling a
+    # model, and the check costs two aggregates either way.
+    try:
+        credits.ensure_credit(session, auth.user)
+    except credits.CreditsExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
 
     version = get_version(session, document.id, document.version)
     if version is None:

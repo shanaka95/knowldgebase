@@ -167,6 +167,7 @@ class UserUpdate(SQLModel):
     max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
     max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
+    monthly_credits: int | None = Field(default=None, ge=0, le=10_000_000)
     group_id: uuid.UUID | None = Field(default=None)
 
 
@@ -217,6 +218,8 @@ class User(UserBase, table=True):
     # The same idea for a whole space. Separate from the per-page limit because
     # they are different decisions: a space is a bigger thing to hand over.
     max_members_per_space: int | None = Field(default=None)
+    # Model work per calendar month, in credits. See app/services/credits.py.
+    monthly_credits: int | None = Field(default=None)
 
     namespaces: list[Namespace] = Relationship(
         back_populates="owner", cascade_delete=True
@@ -240,6 +243,7 @@ class UserPublic(UserBase):
     pages_used: int = 0
     max_shares_per_document: int = 50
     max_members_per_space: int = 50
+    monthly_credits: int = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +293,7 @@ class UserGroup(SQLModel, table=True):
     max_pages: int | None = Field(default=None)
     max_shares_per_document: int | None = Field(default=None)
     max_members_per_space: int | None = Field(default=None)
+    monthly_credits: int | None = Field(default=None)
 
     created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
     updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
@@ -300,6 +305,7 @@ class UserGroupCreate(SQLModel):
     max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
     max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
+    monthly_credits: int | None = Field(default=None, ge=0, le=10_000_000)
 
 
 class UserGroupUpdate(SQLModel):
@@ -308,6 +314,7 @@ class UserGroupUpdate(SQLModel):
     max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
     max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
+    monthly_credits: int | None = Field(default=None, ge=0, le=10_000_000)
 
 
 class UserGroupPublic(SQLModel):
@@ -323,9 +330,11 @@ class UserGroupPublic(SQLModel):
     max_pages: int | None = None
     max_shares_per_document: int | None = None
     max_members_per_space: int | None = None
+    monthly_credits: int | None = None
     effective_max_pages: int = 0
     effective_max_shares_per_document: int = 0
     effective_max_members_per_space: int = 0
+    effective_monthly_credits: int = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -373,8 +382,14 @@ class AdminUserPublic(UserBase):
     pages_used: int = 0
     max_shares_per_document: int = 50
     max_members_per_space: int = 50
+    monthly_credits: int = 1000
     group: GroupRef | None = None
     limits: list[ResolvedLimit] = []
+    # This month's credit position, so the table can show it without a request
+    # per row. `credits_total` is the allowance plus any live grants.
+    credits_total: float = 0
+    credits_used: float = 0
+    credits_remaining: float = 0
 
 
 class AdminUsersPublic(SQLModel):
@@ -2663,3 +2678,83 @@ class DocumentNotePublic(SQLModel):
 class DocumentNotesPublic(SQLModel):
     data: list[DocumentNotePublic]
     count: int
+
+
+# ---------------------------------------------------------------------------
+# Credits
+#
+# What an account may spend on model work. The allowance resolves through the
+# same four tiers every other limit does; a grant is an administrator topping
+# somebody up by hand. See app/services/credits.py for the arithmetic and, more
+# importantly, for why a grant has an end date.
+# ---------------------------------------------------------------------------
+
+
+class CreditGrant(SQLModel, table=True):
+    """Credits an administrator gave one account, on top of its allowance."""
+
+    __table_args__ = (
+        # "what is this account holding right now" - asked on every balance
+        # check, which is every metered operation.
+        Index("ix_creditgrant_user_expires", "user_id", "expires_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    # Milli-credits, like everything else here: a thousandth of a credit is one
+    # token, which is the smallest thing anybody spends.
+    amount_milli: int
+    reason: str = Field(default="", max_length=300)
+    granted_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    # When it stops counting. Never NULL: a grant that never expires is not a
+    # one-off top-up, it is a permanent raise, and the right way to give one of
+    # those is the account's own `monthly_credits` override.
+    expires_at: datetime = _tz_datetime()
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class CreditGrantCreate(SQLModel):
+    credits: int = Field(gt=0, le=10_000_000)
+    reason: str = Field(default="", max_length=300)
+    # Days the grant stays spendable. Left out, it lasts to the end of the
+    # month it was given in, which is when the allowance renews anyway.
+    days: int | None = Field(default=None, ge=1, le=365)
+
+
+class CreditGrantPublic(SQLModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    credits: float
+    reason: str
+    granted_by: uuid.UUID | None = None
+    expires_at: datetime
+    created_at: datetime
+    expired: bool = False
+
+
+class CreditGrantsPublic(SQLModel):
+    data: list[CreditGrantPublic]
+    count: int
+
+
+class CreditBalance(SQLModel):
+    """What an account has left this month, and what it spent getting there."""
+
+    # The calendar month this describes, as YYYY-MM, and when it renews.
+    period: str
+    renews_at: datetime
+    # The monthly allowance, resolved through user → group → default → constant.
+    allowance: float
+    # Still-live one-off grants, which do not survive their expiry date.
+    granted: float
+    used: float
+    remaining: float
+    # What the spend went on, so "where did my credits go" has an answer.
+    used_on_answers: float
+    used_on_search: float
+    used_on_indexing: float
+    used_on_other: float

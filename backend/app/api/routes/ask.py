@@ -60,7 +60,7 @@ from app.models import (
     UsageFeature,
     User,
 )
-from app.services import usage
+from app.services import credits, usage
 from app.services.answering import (
     AnswerContext,
     Passage,
@@ -89,6 +89,19 @@ from app.services.sparse import encode_query
 from app.services.vectors import ScoredPoint
 
 router = APIRouter(prefix="/ask", tags=["ask"])
+
+
+def _require_credit(session: Session, user: User) -> None:
+    """Refuse before any model is called, not after the bill has been run up.
+
+    402 rather than 409: this is the one status that means "there is nothing
+    left to pay with", and the interface reads it to show the balance instead
+    of a generic failure.
+    """
+    try:
+        credits.ensure_credit(session, user)
+    except credits.CreditsExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
 
 
 def _readable_text(document: Document) -> str:
@@ -492,6 +505,7 @@ async def ask_question(
     """Answer a question from the knowledge base, with citations."""
     if not body.q.strip():
         raise HTTPException(status_code=422, detail="Ask a question")
+    _require_credit(session, auth.user)
 
     started = time.perf_counter()
     # A thread is only continued here, never started: this endpoint is what
@@ -570,6 +584,7 @@ async def ask_context(
     """
     if not body.q.strip():
         raise HTTPException(status_code=422, detail="Ask a question")
+    _require_credit(session, auth.user)
 
     started = time.perf_counter()
     # Retrieval without generation still embeds and still reranks, so it is
@@ -613,6 +628,7 @@ async def ask_question_stream(
     """
     if not body.q.strip():
         raise HTTPException(status_code=422, detail="Ask a question")
+    _require_credit(session, auth.user)
 
     started = time.perf_counter()
     conversation = _resolve_conversation(session, auth.user, body)

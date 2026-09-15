@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     # The values themselves are administered at runtime (see
     # app/services/quota.py); these are the last resort, not the product default.
     MAX_PAGES_PER_USER: int = 100
+    # Credits an account may spend on model work each calendar month. One
+    # credit buys a thousand tokens, or ten embeddings, or ten rerank calls -
+    # see app/services/credits.py for why those three are the same unit.
+    MONTHLY_CREDITS: int = 1000
 
     # --- API keys -----------------------------------------------------------
     API_KEY_PREFIX: str = "kb_"

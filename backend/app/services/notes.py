@@ -107,9 +107,7 @@ def note_count(session: Session, document_id: uuid.UUID) -> int:
     )
 
 
-def counts_for(
-    session: Session, document_ids: list[uuid.UUID]
-) -> dict[uuid.UUID, int]:
+def counts_for(session: Session, document_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
     """How many notes each of these pages has, in one query.
 
     A list of pages showing a note count would otherwise be a query per row.
@@ -138,9 +136,7 @@ def copy_to(
     """
     for note in list_notes(session, source_id):
         session.add(
-            DocumentNote(
-                document_id=target.id, body=note.body, created_by=author_id
-            )
+            DocumentNote(document_id=target.id, body=note.body, created_by=author_id)
         )
     session.flush()
     refresh(session, target, reindex=False)

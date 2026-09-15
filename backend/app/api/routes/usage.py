@@ -15,8 +15,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import CurrentUser, SessionDep
-from app.models import MyUsage, UsageFeature
-from app.services import usage
+from app.models import CreditBalance, MyUsage, UsageFeature
+from app.services import credits, usage
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
@@ -68,3 +68,15 @@ def read_my_usage(
             usage.model_rows(models), label=usage.model_labels(models).get
         ),
     )
+
+
+@router.get("/me/credits", response_model=CreditBalance)
+def read_my_credits(session: SessionDep, current_user: CurrentUser) -> Any:
+    """What this account has left this month, and what it went on.
+
+    Cost is still absent: a credit is what you may spend, not what it cost us.
+    That is the point of having a unit of our own - somebody can be told
+    exactly where they stand without being shown the bill.
+    """
+    balance = credits.balance_for(session, current_user)
+    return credits.to_public(balance, session, current_user)

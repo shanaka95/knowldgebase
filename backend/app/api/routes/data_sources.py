@@ -31,8 +31,8 @@ from app.models import (
     Message,
     User,
 )
+from app.services import credits, parsing, quota
 from app.services import data_sources as service
-from app.services import parsing, quota
 from app.services.storage import ObjectStorage
 
 router = APIRouter(prefix="/data-sources", tags=["data_sources"])
@@ -180,6 +180,10 @@ async def import_from_google_drive(
         quota.ensure_page_capacity(session, auth.user.id, wanted=len(body.files))
     except quota.QuotaExceeded as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    try:
+        credits.ensure_credit(session, auth.user)
+    except credits.CreditsExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
 
     connection = session.exec(
         select(DataSourceConnection).where(

@@ -156,11 +156,27 @@ export type AdminUserPublic = {
      * Max Members Per Space
      */
     max_members_per_space?: number;
+    /**
+     * Monthly Credits
+     */
+    monthly_credits?: number;
     group?: GroupRef | null;
     /**
      * Limits
      */
     limits?: Array<ResolvedLimit>;
+    /**
+     * Credits Total
+     */
+    credits_total?: number;
+    /**
+     * Credits Used
+     */
+    credits_used?: number;
+    /**
+     * Credits Remaining
+     */
+    credits_remaining?: number;
 };
 
 /**
@@ -1073,6 +1089,124 @@ export type ChannelType = 'whatsapp' | 'telegram' | 'slack' | 'discord';
  * ContentFormat
  */
 export type ContentFormat = 'html' | 'markdown' | 'text';
+
+/**
+ * CreditBalance
+ *
+ * What an account has left this month, and what it spent getting there.
+ */
+export type CreditBalance = {
+    /**
+     * Period
+     */
+    period: string;
+    /**
+     * Renews At
+     */
+    renews_at: string;
+    /**
+     * Allowance
+     */
+    allowance: number;
+    /**
+     * Granted
+     */
+    granted: number;
+    /**
+     * Used
+     */
+    used: number;
+    /**
+     * Remaining
+     */
+    remaining: number;
+    /**
+     * Used On Answers
+     */
+    used_on_answers: number;
+    /**
+     * Used On Search
+     */
+    used_on_search: number;
+    /**
+     * Used On Indexing
+     */
+    used_on_indexing: number;
+    /**
+     * Used On Other
+     */
+    used_on_other: number;
+};
+
+/**
+ * CreditGrantCreate
+ */
+export type CreditGrantCreate = {
+    /**
+     * Credits
+     */
+    credits: number;
+    /**
+     * Reason
+     */
+    reason?: string;
+    /**
+     * Days
+     */
+    days?: number | null;
+};
+
+/**
+ * CreditGrantPublic
+ */
+export type CreditGrantPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Credits
+     */
+    credits: number;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Granted By
+     */
+    granted_by?: string | null;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Expired
+     */
+    expired?: boolean;
+};
+
+/**
+ * CreditGrantsPublic
+ */
+export type CreditGrantsPublic = {
+    /**
+     * Data
+     */
+    data: Array<CreditGrantPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
 
 /**
  * DataSourceConfigPublic
@@ -3627,6 +3761,10 @@ export type UserGroupCreate = {
      * Max Members Per Space
      */
     max_members_per_space?: number | null;
+    /**
+     * Monthly Credits
+     */
+    monthly_credits?: number | null;
 };
 
 /**
@@ -3674,6 +3812,10 @@ export type UserGroupPublic = {
      */
     max_members_per_space?: number | null;
     /**
+     * Monthly Credits
+     */
+    monthly_credits?: number | null;
+    /**
      * Effective Max Pages
      */
     effective_max_pages?: number;
@@ -3685,6 +3827,10 @@ export type UserGroupPublic = {
      * Effective Max Members Per Space
      */
     effective_max_members_per_space?: number;
+    /**
+     * Effective Monthly Credits
+     */
+    effective_monthly_credits?: number;
     /**
      * Created At
      */
@@ -3719,6 +3865,10 @@ export type UserGroupUpdate = {
      * Max Members Per Space
      */
     max_members_per_space?: number | null;
+    /**
+     * Monthly Credits
+     */
+    monthly_credits?: number | null;
 };
 
 /**
@@ -3811,6 +3961,10 @@ export type UserPublic = {
      * Max Members Per Space
      */
     max_members_per_space?: number;
+    /**
+     * Monthly Credits
+     */
+    monthly_credits?: number;
 };
 
 /**
@@ -3887,6 +4041,10 @@ export type UserUpdate = {
      * Max Members Per Space
      */
     max_members_per_space?: number | null;
+    /**
+     * Monthly Credits
+     */
+    monthly_credits?: number | null;
     /**
      * Group Id
      */
@@ -6848,6 +7006,22 @@ export type usageReadMyUsageResponses = {
 
 export type usageReadMyUsageResponse = usageReadMyUsageResponses[keyof usageReadMyUsageResponses];
 
+export type usageReadMyCreditsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/usage/me/credits';
+};
+
+export type usageReadMyCreditsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CreditBalance;
+};
+
+export type usageReadMyCreditsResponse = usageReadMyCreditsResponses[keyof usageReadMyCreditsResponses];
+
 export type workersReadWorkersData = {
     body?: never;
     path?: never;
@@ -7533,6 +7707,130 @@ export type adminUserGroupsRemoveGroupMemberResponses = {
 };
 
 export type adminUserGroupsRemoveGroupMemberResponse = adminUserGroupsRemoveGroupMemberResponses[keyof adminUserGroupsRemoveGroupMemberResponses];
+
+export type adminCreditsReadBalanceData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/credits/{user_id}';
+};
+
+export type adminCreditsReadBalanceErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminCreditsReadBalanceError = adminCreditsReadBalanceErrors[keyof adminCreditsReadBalanceErrors];
+
+export type adminCreditsReadBalanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: CreditBalance;
+};
+
+export type adminCreditsReadBalanceResponse = adminCreditsReadBalanceResponses[keyof adminCreditsReadBalanceResponses];
+
+export type adminCreditsReadGrantsData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/credits/{user_id}/grants';
+};
+
+export type adminCreditsReadGrantsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminCreditsReadGrantsError = adminCreditsReadGrantsErrors[keyof adminCreditsReadGrantsErrors];
+
+export type adminCreditsReadGrantsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CreditGrantsPublic;
+};
+
+export type adminCreditsReadGrantsResponse = adminCreditsReadGrantsResponses[keyof adminCreditsReadGrantsResponses];
+
+export type adminCreditsCreateGrantData = {
+    body: CreditGrantCreate;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/credits/{user_id}/grants';
+};
+
+export type adminCreditsCreateGrantErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminCreditsCreateGrantError = adminCreditsCreateGrantErrors[keyof adminCreditsCreateGrantErrors];
+
+export type adminCreditsCreateGrantResponses = {
+    /**
+     * Successful Response
+     */
+    201: CreditGrantPublic;
+};
+
+export type adminCreditsCreateGrantResponse = adminCreditsCreateGrantResponses[keyof adminCreditsCreateGrantResponses];
+
+export type adminCreditsDeleteGrantData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+        /**
+         * Grant Id
+         */
+        grant_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/credits/{user_id}/grants/{grant_id}';
+};
+
+export type adminCreditsDeleteGrantErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminCreditsDeleteGrantError = adminCreditsDeleteGrantErrors[keyof adminCreditsDeleteGrantErrors];
+
+export type adminCreditsDeleteGrantResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type adminCreditsDeleteGrantResponse = adminCreditsDeleteGrantResponses[keyof adminCreditsDeleteGrantResponses];
 
 export type adminUsageReadUsageSummaryData = {
     body?: never;

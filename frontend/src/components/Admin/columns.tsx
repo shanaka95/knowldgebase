@@ -2,6 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 
 import type { AdminUserPublic } from "@/client"
 import { Badge } from "@/components/ui/badge"
+import { compactNumber as compact } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { UserActionsMenu } from "./UserActionsMenu"
 
@@ -94,6 +95,36 @@ export const columns: ColumnDef<UserTableData>[] = [
         <span className="flex items-center gap-1.5" data-testid="user-pages">
           <span className="text-sm tabular-nums">
             {user.pages_used ?? 0} / {user.max_pages ?? 0}
+          </span>
+          {overridden && (
+            <Badge variant="outline" className="text-xs">
+              Override
+            </Badge>
+          )}
+        </span>
+      )
+    },
+  },
+  {
+    id: "credits",
+    header: "Credits",
+    cell: ({ row }) => {
+      const user = row.original
+      const total = user.credits_total ?? 0
+      const remaining = user.credits_remaining ?? 0
+      const out = remaining <= 0
+      const low = !out && total > 0 && remaining <= total * 0.1
+      const overridden = limitSource(user, "monthly_credits") === "user"
+      return (
+        <span className="flex items-center gap-1.5" data-testid="user-credits">
+          <span
+            className={cn(
+              "text-sm tabular-nums",
+              out && "text-destructive",
+              low && "text-warning-foreground",
+            )}
+          >
+            {compact(remaining)} / {compact(total)}
           </span>
           {overridden && (
             <Badge variant="outline" className="text-xs">

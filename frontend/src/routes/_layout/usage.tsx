@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { z } from "zod"
 
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
+import { CreditBalanceCard } from "@/components/Usage/CreditBalanceCard"
 import { MyUsagePanel } from "@/components/Usage/MyUsagePanel"
 import {
   DEFAULT_RANGE_DAYS,
@@ -50,6 +51,9 @@ function UsagePage() {
           />
         }
       />
+      {/* Above the activity: what you have left is the question somebody
+          opens this page with; what you did is the explanation. */}
+      <CreditBalanceCard />
       <MyUsagePanel range={range} />
     </PageContainer>
   )

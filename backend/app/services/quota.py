@@ -103,6 +103,17 @@ LIMITS: tuple[LimitSpec, ...] = (
         maximum=10_000,
         unit="people",
     ),
+    LimitSpec(
+        key="monthly_credits",
+        label="Credits a month",
+        description=(
+            "Model work an account may do each calendar month. One credit is "
+            "a thousand tokens, ten embeddings, or ten rerank calls."
+        ),
+        settings_attr="MONTHLY_CREDITS",
+        maximum=10_000_000,
+        unit="credits",
+    ),
 )
 
 LIMIT_KEYS = frozenset(spec.key for spec in LIMITS)
@@ -122,6 +133,7 @@ class Limits:
     max_pages: int
     max_shares_per_document: int
     max_members_per_space: int
+    monthly_credits: int
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +162,7 @@ def ensure_default_group(session: Session) -> UserGroup:
         max_pages=settings.MAX_PAGES_PER_USER,
         max_shares_per_document=settings.SHARE_MAX_RECIPIENTS,
         max_members_per_space=settings.SHARE_MAX_RECIPIENTS,
+        monthly_credits=settings.MONTHLY_CREDITS,
     )
     session.add(group)
     session.commit()
@@ -432,8 +445,7 @@ def page_limit_message(limit: int, used: int, wanted: int) -> str:
     pages = "page" if limit == 1 else "pages"
     if limit == 0:
         return (
-            "This account cannot create pages. Ask an administrator to raise "
-            "the limit."
+            "This account cannot create pages. Ask an administrator to raise the limit."
         )
     if wanted > 1:
         return (
@@ -460,6 +472,7 @@ def limits_for_owner(session: Session, owner: User | None) -> Limits:
             max_pages=settings.MAX_PAGES_PER_USER,
             max_shares_per_document=settings.SHARE_MAX_RECIPIENTS,
             max_members_per_space=settings.SHARE_MAX_RECIPIENTS,
+            monthly_credits=settings.MONTHLY_CREDITS,
         )
     return resolve_limits(session, owner)
 

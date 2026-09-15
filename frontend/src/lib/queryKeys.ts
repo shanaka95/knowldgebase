@@ -69,6 +69,8 @@ export const queryKeys = {
     all: ["usage"] as const,
     mine: (params: Record<string, unknown> = {}) =>
       ["usage", "me", params] as const,
+    credits: () => ["usage", "credits"] as const,
+    grants: (userId: string) => ["admin", "credits", userId, "grants"] as const,
   },
   apiKeys: ["api-keys"] as const,
   health: ["health"] as const,

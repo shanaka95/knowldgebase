@@ -27,7 +27,7 @@ from app.models import (
     UserAssignment,
     UserGroup,
 )
-from app.services import quota
+from app.services import credits, quota
 
 router = APIRouter(
     prefix="/admin/users",
@@ -41,9 +41,24 @@ def _to_admin_public(
     user: User,
     groups: dict[uuid.UUID, UserGroup],
     used: dict[uuid.UUID, int] | None = None,
+    spent: dict[uuid.UUID, int] | None = None,
+    granted: dict[uuid.UUID, int] | None = None,
 ) -> AdminUserPublic:
     limits = quota.resolve_limits(session, user, groups=groups)
     group = groups.get(user.group_id) if user.group_id else None
+
+    # Gathered for the whole page rather than per row, like the page counts
+    # above it. The balance is derived, so this is two aggregates for the
+    # table rather than two per account.
+    spent_milli = (
+        spent[user.id] if spent is not None else credits.spent_milli(session, user.id)
+    )
+    granted_milli = (
+        granted[user.id]
+        if granted is not None
+        else credits.granted_milli(session, user.id)
+    )
+    total_milli = max(0, limits.monthly_credits) * credits.MILLI + granted_milli
     return AdminUserPublic(
         **user.model_dump(
             include={
@@ -66,6 +81,9 @@ def _to_admin_public(
         if group
         else None,
         limits=quota.resolve_detail(session, user, groups=groups),
+        credits_total=credits.as_credits(total_milli),
+        credits_used=credits.as_credits(spent_milli),
+        credits_remaining=credits.as_credits(max(0, total_milli - spent_milli)),
     )
 
 
@@ -114,9 +132,14 @@ def read_admin_users(
     # Both gathered once for the page rather than per row: a thousand accounts
     # would otherwise be a thousand group lookups and two thousand counts.
     groups = quota.load_groups(session)
-    used = quota.pages_used_for(session, [u.id for u in users])
+    ids = [u.id for u in users]
+    used = quota.pages_used_for(session, ids)
+    spent = credits.spent_for(session, ids)
+    granted = credits.granted_for(session, ids)
     return AdminUsersPublic(
-        data=[_to_admin_public(session, u, groups, used) for u in users],
+        data=[
+            _to_admin_public(session, u, groups, used, spent, granted) for u in users
+        ],
         count=int(count),
     )
 

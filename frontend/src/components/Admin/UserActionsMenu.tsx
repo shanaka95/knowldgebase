@@ -1,4 +1,4 @@
-import { EllipsisVertical, SlidersHorizontal } from "lucide-react"
+import { Coins, EllipsisVertical, SlidersHorizontal } from "lucide-react"
 import { useState } from "react"
 
 import type { AdminUserPublic } from "@/client"
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import useAuth from "@/hooks/useAuth"
+import { CreditsDialog } from "./CreditsDialog"
 import DeleteUser from "./DeleteUser"
 import EditUser from "./EditUser"
 import { UserAssignmentDialog } from "./UserAssignmentDialog"
@@ -21,6 +22,7 @@ interface UserActionsMenuProps {
 export const UserActionsMenu = ({ user }: UserActionsMenuProps) => {
   const [open, setOpen] = useState(false)
   const [assigning, setAssigning] = useState(false)
+  const [crediting, setCrediting] = useState(false)
   const { user: currentUser } = useAuth()
 
   if (user.id === currentUser?.id) {
@@ -45,8 +47,28 @@ export const UserActionsMenu = ({ user }: UserActionsMenuProps) => {
           <SlidersHorizontal className="size-4" />
           Group and limits
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => e.preventDefault()}
+          onClick={() => setCrediting(true)}
+          data-testid="edit-credits"
+        >
+          <Coins className="size-4" />
+          Credits
+        </DropdownMenuItem>
         <DeleteUser id={user.id} onSuccess={() => setOpen(false)} />
       </DropdownMenuContent>
+
+      {crediting && (
+        <CreditsDialog
+          userId={user.id}
+          name={user.full_name || user.email}
+          open={crediting}
+          onOpenChange={(next) => {
+            setCrediting(next)
+            if (!next) setOpen(false)
+          }}
+        />
+      )}
 
       {assigning && (
         <UserAssignmentDialog

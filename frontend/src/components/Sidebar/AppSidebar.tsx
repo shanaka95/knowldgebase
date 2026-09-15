@@ -21,23 +21,34 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
+import { CreditsMeter } from "./CreditsMeter"
 import { NamespaceSwitcher } from "./NamespaceSwitcher"
 import { type Item, NavMain } from "./NavMain"
 import { SpaceTree } from "./SpaceTree"
 import { User } from "./User"
 
+/**
+ * Ordered by what somebody opened the app to do, not by how the product grew.
+ *
+ * Asking is the point of the thing, so it leads. Then searching, then getting
+ * documents in — those three are the daily loop. Where pages live comes next,
+ * and the integrations and the meter last, because they are visited
+ * occasionally and on purpose.
+ */
 const baseItems: Item[] = [
-  // Not Home: "home" is one of the icons a space can choose, and the most
-  // likely choice for a personal one, so the two were identical in the
-  // collapsed rail.
-  { icon: LayoutDashboard, title: "Dashboard", path: "/" },
-  { icon: Share2, title: "Shared with me", path: "/shared" },
   { icon: Sparkles, title: "Ask", path: "/ask" },
   { icon: Search, title: "Search", path: "/search" },
   { icon: Upload, title: "Upload documents", path: "/capture" },
-  // Integrations, in the two directions they run: an agent is how you
-  // reach the knowledge base, a data source is how documents reach it.
-  { icon: Bot, title: "Agents", path: "/agents" },
+
+  // Not Home: "home" is one of the icons a space can choose, and the most
+  // likely choice for a personal one, so the two were identical in the
+  // collapsed rail.
+  { icon: LayoutDashboard, title: "Dashboard", path: "/", startsGroup: true },
+  { icon: Share2, title: "Shared with me", path: "/shared" },
+
+  // Integrations, in the two directions they run: an agent is how you reach
+  // the knowledge base, a data source is how documents reach it.
+  { icon: Bot, title: "Agents", path: "/agents", startsGroup: true },
   { icon: Database, title: "Data sources", path: "/data-sources" },
   { icon: ChartColumn, title: "Usage", path: "/usage" },
 ]
@@ -74,6 +85,9 @@ export function AppSidebar() {
         <SpaceTree />
       </SidebarContent>
       <SidebarFooter>
+        {/* Above the theme switch and the account: it is the one number in
+            here that changes on its own. */}
+        <CreditsMeter />
         <SidebarMenu>
           <SidebarAppearance />
         </SidebarMenu>

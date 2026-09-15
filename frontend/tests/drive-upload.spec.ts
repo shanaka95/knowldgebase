@@ -70,7 +70,9 @@ test.describe("Uploading from Google Drive", () => {
 
     await expect(page.getByTestId("drive-pick")).toBeVisible()
     // Both constraints stated before anybody picks anything.
-    await expect(page.getByText(/PDFs and images, up to 50 MB each/)).toBeVisible()
+    await expect(
+      page.getByText(/PDFs and images, up to 50 MB each/),
+    ).toBeVisible()
 
     // The title field is hidden: a Drive import always names its own page.
     await expect(page.getByTestId("import-auto-title")).toBeHidden()

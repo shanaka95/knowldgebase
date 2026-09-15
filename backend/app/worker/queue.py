@@ -31,9 +31,10 @@ from app.models import (
     ImportStatus,
     JobStage,
     JobStatus,
+    User,
     WorkerHeartbeat,
 )
-from app.services import notes, quota
+from app.services import credits, notes, quota
 from app.services.suggestions import store_suggestion
 from app.services.versioning import detect_document_language, record_version
 from app.worker.errors import JobCancelled, JobSuperseded
@@ -856,6 +857,25 @@ def create_document_from_import(
 # ---------------------------------------------------------------------------
 # Example searches
 # ---------------------------------------------------------------------------
+
+
+def has_credit(user_id: uuid.UUID | None) -> bool:
+    """Whether this account can still pay for model work.
+
+    Work belonging to nobody is never refused: a page whose author was deleted
+    is not chargeable to anybody, and failing it would punish no one.
+    """
+    if user_id is None:
+        return True
+    with Session(engine) as session:
+        user = session.get(User, user_id)
+        if user is None:
+            return True
+        try:
+            credits.ensure_credit(session, user)
+        except credits.CreditsExhausted:
+            return False
+        return True
 
 
 def document_owner(document_id: uuid.UUID) -> uuid.UUID | None:
