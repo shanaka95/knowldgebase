@@ -16,8 +16,10 @@ from fastapi.responses import RedirectResponse
 from sqlmodel import Session, col, select
 
 from app.api.deps import AuthDep, SessionDep, SessionUser, StorageDep, WriteAuth
+from app.api.serializers import to_import_job_public
 from app.core.config import settings
 from app.models import (
+    NOTE_MAX,
     DataSourceConnection,
     DataSourcePublic,
     DataSourcesPublic,
@@ -194,17 +196,36 @@ async def import_from_google_drive(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     max_bytes = settings.MAX_IMPORT_SIZE_MB * 1024 * 1024
-    jobs: list[ImportJob] = []
+
+    # Everything is checked before anything is fetched. A refusal after three
+    # of five files had been downloaded and stored would leave objects behind
+    # that nothing will ever collect, and would have paid for the transfer to
+    # find out what Drive could have told us first.
+    described_files: list[service.DriveFile] = []
     for picked in body.files:
         described = await _describe(access_token, picked.file_id)
         if not parsing.is_supported(described.mime_type, described.name):
             raise HTTPException(
                 status_code=415,
                 detail=(
-                    f"{described.name} is not a PDF or an image, so it cannot "
+                    f"“{described.name}” is not a PDF or an image, so it cannot "
                     "be turned into a page."
                 ),
             )
+        # Drive reports the size, so an oversized file costs one metadata call
+        # rather than a download that is abandoned partway through.
+        if described.size > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"“{described.name}” is {_megabytes(described.size)} MB. "
+                    f"The most a file may be is {settings.MAX_IMPORT_SIZE_MB} MB."
+                ),
+            )
+        described_files.append(described)
+
+    jobs: list[ImportJob] = []
+    for described in described_files:
         data = await _download(access_token, described.file_id, max_bytes=max_bytes)
         job_id = uuid.uuid4()
         object_key = _store_bytes(
@@ -223,6 +244,7 @@ async def import_from_google_drive(
                 title=None,
                 doc_type=(body.doc_type or "").strip()[:100] or None,
                 prompt=(body.prompt or "").strip() or None,
+                note=(body.note or "").strip()[:NOTE_MAX] or None,
                 filename=described.name,
                 content_type=described.mime_type[:127],
                 size=len(data),
@@ -236,8 +258,6 @@ async def import_from_google_drive(
     session.commit()
     for job in jobs:
         session.refresh(job)
-
-    from app.api.routes.imports import to_import_job_public
 
     return ImportJobsPublic(
         data=[to_import_job_public(session, job) for job in jobs], count=len(jobs)
@@ -273,3 +293,8 @@ def _store_bytes(
     object_key = f"{key}{suffix}"
     storage.put(object_key, BytesIO(data), len(data), content_type)
     return object_key
+
+
+def _megabytes(size: int) -> str:
+    """A size a person can compare against the limit they were told."""
+    return f"{size / (1024 * 1024):.1f}".rstrip("0").rstrip(".")

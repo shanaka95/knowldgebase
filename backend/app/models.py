@@ -2335,6 +2335,9 @@ class GoogleDriveImportRequest(SQLModel):
     folder_id: uuid.UUID | None = None
     doc_type: str | None = Field(default=None, max_length=100)
     prompt: str | None = Field(default=None, max_length=2000)
+    # Kept as the first note on every page this import creates, the same as an
+    # ordinary upload.
+    note: str | None = Field(default=None, max_length=NOTE_MAX)
     combine: bool = False
 
 

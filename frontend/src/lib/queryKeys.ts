@@ -58,6 +58,9 @@ export const queryKeys = {
     usageModels: (params: Record<string, unknown> = {}) =>
       ["admin", "usage", "models", params] as const,
   },
+  dataSources: {
+    all: ["data-sources"] as const,
+  },
   notes: {
     all: ["notes"] as const,
     list: (documentId: string) => ["documents", documentId, "notes"] as const,

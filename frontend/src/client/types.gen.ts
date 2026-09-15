@@ -2142,6 +2142,10 @@ export type GoogleDriveImportRequest = {
      */
     prompt?: string | null;
     /**
+     * Note
+     */
+    note?: string | null;
+    /**
      * Combine
      */
     combine?: boolean;

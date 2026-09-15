@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test"
 
-import { adminToken, API, auth, createDocument, createNamespace, uid } from "./utils/api.ts"
+import {
+  API,
+  adminToken,
+  auth,
+  createDocument,
+  createNamespace,
+  uid,
+} from "./utils/api.ts"
 
 /**
  * Notes on a page, from the side that matters: they show up, they can be
@@ -30,7 +37,9 @@ test.describe("Notes on a page", () => {
     )
 
     await notes.getByTestId("add-note").click()
-    await notes.getByTestId("note-input").fill("Paid in March; this is the disputed copy.")
+    await notes
+      .getByTestId("note-input")
+      .fill("Paid in March; this is the disputed copy.")
     await notes.getByTestId("save-new-note").click()
 
     await expect(notes.getByTestId("note")).toHaveCount(1)
@@ -61,13 +70,17 @@ test.describe("Notes on a page", () => {
     await note.getByTestId("edit-note").click()
     await note.getByTestId("note-edit-input").fill("Corrected note")
     await note.getByTestId("save-note").click()
-    await expect(page.getByTestId("note").first()).toContainText("Corrected note")
+    await expect(page.getByTestId("note").first()).toContainText(
+      "Corrected note",
+    )
 
     await page.getByTestId("note").first().getByTestId("delete-note").click()
     await expect(page.getByTestId("note")).toHaveCount(0)
   })
 
-  test("a note is findable by searching for what it says", async ({ request }) => {
+  test("a note is findable by searching for what it says", async ({
+    request,
+  }) => {
     // The claim the whole design rests on. Through the API, because what is
     // being checked is the index rather than the interface.
     const token = await adminToken(request)

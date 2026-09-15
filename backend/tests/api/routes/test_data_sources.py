@@ -98,9 +98,7 @@ def _jobs_in(db: Session, namespace_id: uuid.UUID) -> list[ImportJob]:
 def test_only_an_admin_can_configure_a_data_source(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
-    assert (
-        client.get(f"{ADMIN}/", headers=normal_user_token_headers).status_code == 403
-    )
+    assert client.get(f"{ADMIN}/", headers=normal_user_token_headers).status_code == 403
     assert (
         client.put(
             f"{ADMIN}/google_drive",
@@ -165,9 +163,7 @@ def test_the_redirect_uri_is_published_for_the_console(
     """It has to match Google's registration exactly, so it is not retyped."""
     body = client.get(f"{ADMIN}/", headers=superuser_token_headers).json()
     drive = next(d for d in body["data"] if d["source_type"] == "google_drive")
-    assert drive["redirect_uri"].endswith(
-        "/api/v1/data-sources/google-drive/callback"
-    )
+    assert drive["redirect_uri"].endswith("/api/v1/data-sources/google-drive/callback")
 
 
 # --- what a user sees -------------------------------------------------------
@@ -376,9 +372,7 @@ def test_withholding_drive_access_is_not_stored_as_a_connection(
             },
         )
     )
-    revoked = respx.post(service.REVOKE_ENDPOINT).mock(
-        return_value=httpx.Response(200)
-    )
+    revoked = respx.post(service.REVOKE_ENDPOINT).mock(return_value=httpx.Response(200))
 
     response = client.get(
         CALLBACK,
@@ -404,7 +398,9 @@ def test_only_pdfs_and_images_become_pages(
     headers = login(client, user, pw)
 
     respx.post(service.TOKEN_ENDPOINT).mock(
-        return_value=httpx.Response(200, json={"access_token": "at", "expires_in": 3599})
+        return_value=httpx.Response(
+            200, json={"access_token": "at", "expires_in": 3599}
+        )
     )
     respx.get(f"{service.DRIVE_FILES}/sheet1").mock(
         return_value=httpx.Response(
@@ -413,8 +409,7 @@ def test_only_pdfs_and_images_become_pages(
                 "id": "sheet1",
                 "name": "Budget.xlsx",
                 "mimeType": (
-                    "application/vnd.openxmlformats-officedocument."
-                    "spreadsheetml.sheet"
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 ),
                 "size": "10",
             },
@@ -444,7 +439,9 @@ def test_a_picked_pdf_becomes_an_ordinary_import(
     headers = login(client, user, pw)
 
     respx.post(service.TOKEN_ENDPOINT).mock(
-        return_value=httpx.Response(200, json={"access_token": "at", "expires_in": 3599})
+        return_value=httpx.Response(
+            200, json={"access_token": "at", "expires_in": 3599}
+        )
     )
     respx.get(f"{service.DRIVE_FILES}/pdf1").mock(
         side_effect=[
@@ -534,9 +531,7 @@ def test_disconnecting_revokes_the_grant_at_google(
     user, pw = create_user_with_password(db)
     _connect(db, user.id, refresh="token-to-revoke")
     headers = login(client, user, pw)
-    revoked = respx.post(service.REVOKE_ENDPOINT).mock(
-        return_value=httpx.Response(200)
-    )
+    revoked = respx.post(service.REVOKE_ENDPOINT).mock(return_value=httpx.Response(200))
 
     response = client.delete(f"{SOURCES}/google-drive/connection", headers=headers)
     assert response.status_code == 200
@@ -556,3 +551,157 @@ def test_one_persons_connection_is_not_anothers(
     drive = next(d for d in body["data"] if d["source_type"] == "google_drive")
     assert drive["connected"] is False
     assert drive["account_email"] is None
+
+
+@respx.mock
+def test_a_file_over_the_limit_is_refused_before_it_is_fetched(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    """Drive reports the size, so an oversized file costs one metadata call.
+
+    The download is mocked to fail outright: if the route ever reaches it, the
+    check is happening in the wrong place and this test says so.
+    """
+    _configure(client, superuser_token_headers)
+    user, pw = create_user_with_password(db)
+    ns = create_namespace(db, user)
+    _connect(db, user.id)
+    headers = login(client, user, pw)
+
+    respx.post(service.TOKEN_ENDPOINT).mock(
+        return_value=httpx.Response(
+            200, json={"access_token": "at", "expires_in": 3599}
+        )
+    )
+    oversized = (settings.MAX_IMPORT_SIZE_MB + 12) * 1024 * 1024
+    # One response in the sequence, deliberately: the metadata call consumes
+    # it, and a download would exhaust the sequence and fail the test. That is
+    # the assertion — the file must never be fetched.
+    route = respx.get(f"{service.DRIVE_FILES}/huge").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "id": "huge",
+                    "name": "Scanned archive.pdf",
+                    "mimeType": "application/pdf",
+                    "size": str(oversized),
+                },
+            ),
+        ]
+    )
+
+    response = client.post(
+        f"{SOURCES}/google-drive/import",
+        headers=headers,
+        json={
+            "files": [{"file_id": "huge", "name": "Scanned archive.pdf"}],
+            "namespace_id": str(ns.id),
+        },
+    )
+    assert response.status_code == 413, response.text
+    # The message names the file and the limit, so it can be acted on.
+    assert "Scanned archive.pdf" in response.text
+    assert str(settings.MAX_IMPORT_SIZE_MB) in response.text
+    assert route.call_count == 1, "only the metadata call, never the download"
+    assert _jobs_in(db, ns.id) == [], "nothing queued from a refused file"
+
+
+@respx.mock
+def test_one_bad_file_refuses_the_whole_batch_before_anything_is_stored(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    """A partial import would leave objects in storage nothing will collect."""
+    _configure(client, superuser_token_headers)
+    user, pw = create_user_with_password(db)
+    ns = create_namespace(db, user)
+    _connect(db, user.id)
+    headers = login(client, user, pw)
+
+    respx.post(service.TOKEN_ENDPOINT).mock(
+        return_value=httpx.Response(
+            200, json={"access_token": "at", "expires_in": 3599}
+        )
+    )
+    respx.get(f"{service.DRIVE_FILES}/good").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "good",
+                "name": "Invoice.pdf",
+                "mimeType": "application/pdf",
+                "size": "2048",
+            },
+        )
+    )
+    respx.get(f"{service.DRIVE_FILES}/bad").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "bad",
+                "name": "Notes.txt",
+                "mimeType": "text/plain",
+                "size": "12",
+            },
+        )
+    )
+
+    response = client.post(
+        f"{SOURCES}/google-drive/import",
+        headers=headers,
+        json={
+            "files": [
+                {"file_id": "good", "name": "Invoice.pdf"},
+                {"file_id": "bad", "name": "Notes.txt"},
+            ],
+            "namespace_id": str(ns.id),
+        },
+    )
+    assert response.status_code == 415, response.text
+    assert "Notes.txt" in response.text
+    assert _jobs_in(db, ns.id) == [], "the good file was not queued either"
+
+
+@respx.mock
+def test_a_note_given_at_import_becomes_the_page_s_first_note(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    _configure(client, superuser_token_headers)
+    user, pw = create_user_with_password(db)
+    ns = create_namespace(db, user)
+    _connect(db, user.id)
+    headers = login(client, user, pw)
+
+    respx.post(service.TOKEN_ENDPOINT).mock(
+        return_value=httpx.Response(
+            200, json={"access_token": "at", "expires_in": 3599}
+        )
+    )
+    respx.get(f"{service.DRIVE_FILES}/doc1").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "id": "doc1",
+                    "name": "Contract.pdf",
+                    "mimeType": "application/pdf",
+                    "size": "2048",
+                },
+            ),
+            httpx.Response(200, content=b"%PDF-1.4 fake"),
+        ]
+    )
+
+    response = client.post(
+        f"{SOURCES}/google-drive/import",
+        headers=headers,
+        json={
+            "files": [{"file_id": "doc1", "name": "Contract.pdf"}],
+            "namespace_id": str(ns.id),
+            "note": "Signed copy; the countersigned one is still coming.",
+        },
+    )
+    assert response.status_code == 200, response.text
+    jobs = _jobs_in(db, ns.id)
+    assert len(jobs) == 1
+    assert jobs[0].note == "Signed copy; the countersigned one is still coming."

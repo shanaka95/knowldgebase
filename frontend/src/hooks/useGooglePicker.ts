@@ -31,6 +31,22 @@ export interface PickedFile {
   file_id: string
   name: string
   mime_type: string
+  /** Bytes, as Google's picker reports them. 0 when it does not say. */
+  size: number
+}
+
+/**
+ * The most a single file may be, matching `MAX_IMPORT_SIZE_MB` on the server.
+ *
+ * Checked here as well as there because the picker already knows the size: a
+ * 200MB file can be refused the instant it is chosen, instead of after the
+ * server has fetched it from Google to find out.
+ */
+export const MAX_FILE_MB = 50
+export const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
+
+export function tooLarge(files: PickedFile[]): PickedFile[] {
+  return files.filter((f) => f.size > MAX_FILE_BYTES)
 }
 
 declare global {
@@ -108,6 +124,7 @@ export async function pickFromGoogleDrive(): Promise<PickedFile[]> {
               file_id: String(doc.id),
               name: String(doc.name ?? "file"),
               mime_type: String(doc.mimeType ?? ""),
+              size: Number(doc.sizeBytes ?? 0) || 0,
             })),
           )
         } else if (data.action === picker.Action.CANCEL) {

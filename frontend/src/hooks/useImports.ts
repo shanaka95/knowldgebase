@@ -1,6 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 
-import { type ImportJobPublic, ImportsService } from "@/client"
+import {
+  DataSourcesService,
+  type ImportJobPublic,
+  ImportsService,
+} from "@/client"
 import useCustomToast from "@/hooks/useCustomToast"
 import { invalidateNamespaceViews } from "@/hooks/useKbMutations"
 import { importKeys } from "@/queries/imports"
@@ -117,6 +121,54 @@ export function useDeleteImport() {
     onError: handleError.bind(showErrorToast),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: importKeys.all })
+    },
+  })
+}
+
+export interface DriveImportInput {
+  files: { file_id: string; name: string; mime_type: string }[]
+  namespaceId: string
+  folderId: string | null
+  prompt?: string | null
+  note?: string | null
+}
+
+/**
+ * Import files somebody picked in Google's chooser.
+ *
+ * A separate endpoint from the upload one because nothing is uploaded: the
+ * server fetches each file from Drive with the grant that picking created.
+ * Everything after that — parsing, page creation, indexing — is the same path
+ * an upload takes.
+ */
+export function useImportFromDrive() {
+  const queryClient = useQueryClient()
+  const { showSuccessToast, showErrorToast } = useCustomToast()
+
+  return useMutation({
+    mutationFn: async (input: DriveImportInput): Promise<ImportJobPublic[]> => {
+      const res = await DataSourcesService.importFromGoogleDrive({
+        body: {
+          files: input.files,
+          namespace_id: input.namespaceId,
+          folder_id: input.folderId,
+          prompt: input.prompt?.trim() || null,
+          note: input.note?.trim() || null,
+        },
+      })
+      return res.data.data
+    },
+    onSuccess: (jobs) => {
+      showSuccessToast(
+        jobs.length === 1
+          ? `“${jobs[0]?.filename}” is queued. It becomes a page once parsing finishes.`
+          : `${jobs.length} files queued from Drive. Each becomes a page once parsing finishes.`,
+      )
+    },
+    onError: handleError.bind(showErrorToast),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({ queryKey: importKeys.all })
+      invalidateNamespaceViews(queryClient, input.namespaceId)
     },
   })
 }
