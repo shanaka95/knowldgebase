@@ -35,8 +35,8 @@ const SignOutEverywhere = () => {
     <div className="max-w-md mt-8 rounded-lg border p-4">
       <h3 className="font-semibold">Sign out everywhere</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        End every session on this account, on every device. This one included —
-        you will have to sign in again.
+        Ends every session on this account, on every device. That includes this
+        one, so you will need to sign in again.
       </p>
 
       <Dialog>

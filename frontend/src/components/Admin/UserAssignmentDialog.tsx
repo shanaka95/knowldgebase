@@ -82,8 +82,8 @@ export function UserAssignmentDialog({
         <DialogHeader>
           <DialogTitle>Group and limits</DialogTitle>
           <DialogDescription>
-            {user.full_name || user.email}. They are never shown any of this —
-            an account that reaches a limit is told its number, not where the
+            {user.full_name || user.email}. None of this is shown to them. An
+            account that reaches a limit sees the number it hit, not where the
             number came from.
           </DialogDescription>
         </DialogHeader>
@@ -100,7 +100,7 @@ export function UserAssignmentDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_GROUP}>
-                  No group — uses the defaults
+                  No group (uses the defaults)
                 </SelectItem>
                 {(groups?.data ?? []).map((group) => (
                   <SelectItem key={group.id} value={group.id}>

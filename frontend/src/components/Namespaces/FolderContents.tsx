@@ -390,7 +390,7 @@ export function FolderContents({
                     {relativeTime(f.updated_at)}
                   </td>
                   <td className="hidden px-3 py-2 text-muted-foreground md:table-cell">
-                    —
+                    -
                   </td>
                   <td className="px-3 py-2 text-right">
                     {canEdit && (

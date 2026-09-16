@@ -75,7 +75,7 @@ test.describe("Sharing a page with several people", () => {
     // both outcomes are visible in the list afterwards, told apart
     await expect(dialog.getByTestId("share-row")).toContainText(guest.email)
     await expect(dialog.getByTestId("invitation-row")).toContainText(
-      "Invited — not yet accepted",
+      "Invited, not yet accepted",
     )
     // the counter counts an invitation as a recipient, exactly as the API does
     await expect(dialog.getByTestId("share-recipients")).toContainText(

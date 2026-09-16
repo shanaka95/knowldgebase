@@ -16,9 +16,9 @@ export const TARGET_LABELS: Record<SearchTarget, string> = {
 }
 
 export const TARGET_HINTS: Record<SearchTarget, string> = {
-  document: "The whole page — broad topical match.",
-  summary: "The AI summary — matches the gist even when wording differs.",
-  chunk: "Individual sections — finds the exact passage.",
+  document: "The whole page, for a broad match on the topic.",
+  summary: "The AI summary, which matches the gist when the wording differs.",
+  chunk: "Individual sections, for finding the exact passage.",
 }
 
 export const DEFAULT_RRF_K = 60

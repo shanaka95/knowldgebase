@@ -51,7 +51,7 @@ const SAMPLE = `
     return f"Hello, {name}!"</code></pre>
 <div data-panel data-panel-type="warning"><p>Never commit <code>.env</code> files with real secrets.</p></div>
 <blockquote><p>Documentation is a love letter that you write to your future self.</p></blockquote>
-<p style="text-align: center">— centred text —</p>
+<p style="text-align: center">centred text</p>
 `
 
 const STATUSES: AutosaveStatus[] = [

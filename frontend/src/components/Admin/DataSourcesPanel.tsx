@@ -37,7 +37,7 @@ const FIELD_HINTS: Record<string, string> = {
   client_id: "From the OAuth 2.0 Client ID you created (a Web application).",
   client_secret: "Its secret. Stored encrypted; it is never sent to a browser.",
   api_key:
-    "Restrict it to the Picker API and to this site's referrer — the browser needs it, so it is public.",
+    "Restrict it to the Picker API and to this site's referrer. The browser needs it, so it is public.",
 }
 
 export const dataSourceAdminKey = ["admin", "data-sources"] as const

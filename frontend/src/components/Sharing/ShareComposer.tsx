@@ -256,7 +256,7 @@ export function ShareComposer({
           id="share-message"
           rows={2}
           maxLength={MESSAGE_MAX}
-          placeholder="Optional — included in the email."
+          placeholder="Add a message (optional)"
           value={message}
           onChange={(e) => onMessageChange(e.target.value)}
           data-testid="share-message"
@@ -305,7 +305,7 @@ export function ShareOutcome({
             {shared.length} {plural(shared.length, "person", "people")} now{" "}
             {plural(shared.length, "has", "have")} access
           </span>{" "}
-          — {shared.map((s) => s.user.email).join(", ")}
+          : {shared.map((s) => s.user.email).join(", ")}
         </p>
       )}
       {invited.length > 0 && (
@@ -314,15 +314,15 @@ export function ShareOutcome({
             {invited.length}{" "}
             {plural(invited.length, "invitation", "invitations")} sent
           </span>{" "}
-          — {invited.map((i) => i.email).join(", ")}. The {subject} opens for
-          them as soon as they create an account on that address and confirm it.
+          : {invited.map((i) => i.email).join(", ")}. The {subject} opens for
+          them once they create an account on that address and confirm it.
         </p>
       )}
       {skipped.length > 0 && (
         <ul className="flex flex-col gap-1" data-testid="share-skipped">
           {skipped.map((s) => (
             <li key={s.email} className="text-muted-foreground">
-              <span className="font-medium text-foreground">{s.email}</span> —{" "}
+              <span className="font-medium text-foreground">{s.email}</span>:{" "}
               {s.reason}
             </li>
           ))}

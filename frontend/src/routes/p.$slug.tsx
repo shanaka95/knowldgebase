@@ -1,7 +1,7 @@
 import { createFileRoute, Link as RouterLink } from "@tanstack/react-router"
 
 import { Appearance } from "@/components/Common/Appearance"
-import { APP_NAME, APP_TAGLINE, Logo } from "@/components/Common/Logo"
+import { APP_NAME, Logo } from "@/components/Common/Logo"
 import { DocumentTypeBadge } from "@/components/Documents/DocumentTypeBadge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { relativeTime } from "@/lib/format"
@@ -39,7 +39,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       </main>
       <footer className="border-t px-4 py-6 text-center text-xs text-muted-foreground md:px-8">
         <RouterLink to="/" className="hover:text-foreground">
-          Published with {APP_NAME} — {APP_TAGLINE}
+          Published with {APP_NAME}
         </RouterLink>
       </footer>
     </div>

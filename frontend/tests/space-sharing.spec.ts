@@ -119,7 +119,7 @@ test.describe("Sharing a space with several people", () => {
     const invitation = dialog
       .getByTestId("invitation-row")
       .filter({ hasText: stranger })
-    await expect(invitation).toContainText("Invited — not yet accepted")
+    await expect(invitation).toContainText("Invited, not yet accepted")
     // owner + new member + pending invitation
     await expect(dialog.getByTestId("share-recipients")).toContainText("3 of")
 

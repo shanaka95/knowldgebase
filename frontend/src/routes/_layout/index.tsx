@@ -126,8 +126,8 @@ function Dashboard() {
       </div>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <FileText className="size-3.5" />
-        Every page is indexed automatically for AI search — see the status pill
-        on each page.
+        Every page is indexed for AI search automatically. The status pill on
+        each page shows where it is up to.
       </p>
     </PageContainer>
   )

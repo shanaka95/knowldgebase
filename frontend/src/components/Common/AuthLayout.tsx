@@ -43,11 +43,11 @@ export function AuthLayout({ children, hero, heroCompact }: AuthLayoutProps) {
           {hero ?? (
             <div className="max-w-md space-y-3">
               <h2 className="font-semibold text-3xl tracking-tight">
-                {APP_NAME} — {APP_TAGLINE}.
+                {APP_NAME} is {APP_TAGLINE}.
               </h2>
               <p className="text-muted-foreground">
-                Spaces, folders and beautifully written pages — searchable,
-                shareable, and indexed for AI.
+                Keep your pages in spaces and folders. Search them, share them,
+                and ask questions answered from them.
               </p>
             </div>
           )}

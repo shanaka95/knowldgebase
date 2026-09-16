@@ -156,7 +156,7 @@ export function SearchExplain({
                           )}
                         </td>
                         <td className="py-1.5 pr-4 text-right font-mono tabular-nums">
-                          {s.error ? "—" : s.hits}
+                          {s.error ? "-" : s.hits}
                         </td>
                         <td className="py-1.5 text-right font-mono text-muted-foreground tabular-nums">
                           {Math.round(s.took_ms)} ms
@@ -170,9 +170,9 @@ export function SearchExplain({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Each source ranks pages on its own. Ranks — not scores — are then
-            fused: a page gets 1 / (k + rank) from every source that found it,
-            so agreement across methods outranks a single strong match.
+            Each source ranks pages on its own, then the ranks are combined: a
+            page scores 1 / (k + rank) from every source that found it, so pages
+            several sources agree on come out on top.
           </p>
         </div>
       </CollapsibleContent>

@@ -49,7 +49,7 @@ function AgentsPage() {
     <PageContainer className="flex flex-col gap-6">
       <PageHeader
         title="Agents"
-        description="An assistant you can message from WhatsApp or Telegram. It answers from your knowledge base, and can write pages from what you tell it."
+        description="An assistant you can message from WhatsApp or Telegram. It answers from your knowledge base and can save notes as pages."
         actions={
           <Button onClick={() => setCreating(true)} data-testid="agent-new">
             <Plus />
@@ -71,9 +71,9 @@ function AgentsPage() {
             </EmptyMedia>
             <EmptyTitle>No agents yet</EmptyTitle>
             <EmptyDescription>
-              An agent is your knowledge base with a chat window in front of it.
-              Create one, connect a messaging channel, and you can ask it things
-              — or dictate a note to keep — without opening PlusGPT.
+              An agent puts a chat window in front of your knowledge base.
+              Create one, connect a messaging channel, and you can ask it
+              questions or dictate a note without opening PlusGPT.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>

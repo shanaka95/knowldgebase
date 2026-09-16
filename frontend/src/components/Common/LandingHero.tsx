@@ -15,23 +15,23 @@ import { APP_NAME } from "@/components/Common/Logo"
 const POINTS: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: MessagesSquare,
-    title: "Ask, and see the receipts",
-    body: "Answers come back with the passages they were written from, so you can check them.",
+    title: "Answers you can check",
+    body: "Every answer shows the passages it came from, so you can see where it got that.",
   },
   {
     icon: FileSearch,
-    title: "Search that reads both ways",
-    body: "Exact wording and meaning at once — the two rankings are fused, so neither is missed.",
+    title: "Search by wording or meaning",
+    body: "Keyword and meaning search run together, so a page turns up even when you forget the exact words.",
   },
   {
     icon: Sparkles,
     title: "Drop in a PDF, get a page",
-    body: "Scans are transcribed, organised and indexed. The original is always one click away.",
+    body: "Scans are transcribed, organised and indexed. The original stays one click away.",
   },
   {
     icon: ShieldCheck,
-    title: "Yours, and only shared on purpose",
-    body: "Spaces, folders and per-page sharing. A link you turn off stays off.",
+    title: "Private until you share it",
+    body: "Share a space, a folder or a single page. Turn a link off and it stays off.",
   },
 ]
 

@@ -207,7 +207,7 @@ test.describe("Sharing", () => {
     const invitation = dialog
       .getByTestId("invitation-row")
       .filter({ hasText: stranger })
-    await expect(invitation).toContainText("Invited — not yet accepted")
+    await expect(invitation).toContainText("Invited, not yet accepted")
 
     await dialog
       .getByRole("button", {

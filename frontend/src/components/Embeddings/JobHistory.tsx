@@ -41,7 +41,7 @@ function durationLabel(job: EmbeddingJobPublic): string | null {
 }
 
 function relative(iso: string | null | undefined): string {
-  if (!iso) return "—"
+  if (!iso) return "-"
   return `${formatDistanceToNowStrict(new Date(iso))} ago`
 }
 
@@ -166,19 +166,19 @@ export function JobHistory({ jobs }: JobHistoryProps) {
                         Queued:{" "}
                         {job.created_at
                           ? format(new Date(job.created_at), "PPpp")
-                          : "—"}
+                          : "-"}
                       </div>
                       <div>
                         Started:{" "}
                         {job.started_at
                           ? format(new Date(job.started_at), "PPpp")
-                          : "—"}
+                          : "-"}
                       </div>
                       <div>
                         Finished:{" "}
                         {job.finished_at
                           ? format(new Date(job.finished_at), "PPpp")
-                          : "—"}
+                          : "-"}
                       </div>
                     </TooltipContent>
                   </Tooltip>

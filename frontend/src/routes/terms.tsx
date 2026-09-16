@@ -110,7 +110,7 @@ function Terms() {
 
       <Section id="limits" title="Limits">
         <p>
-          Accounts have limits — on how many pages they may create, and on how
+          Accounts have limits on how many pages they may create, and on how
           widely a single page or space may be shared. Administrators of this
           installation set them, per person or per group. When you reach one,
           the service tells you the number and what to do about it.
@@ -124,7 +124,7 @@ function Terms() {
       <Section id="sharing" title="Sharing">
         <p>
           You decide who sees what. A public link makes a page readable by
-          anyone holding it — treat it as public. Turning link sharing off and
+          anyone holding it, so treat it as public. Turning link sharing off and
           on again issues a new link and breaks the old one, which is the
           intended way to revoke access.
         </p>
@@ -166,8 +166,8 @@ function Terms() {
         <p className="font-medium">Otherwise</p>
         <p>
           For slight negligence we are liable only where we breach an obligation
-          that is essential to the contract — one you must be able to rely on
-          for the service to work at all — and then only for the loss typically
+          that is essential to the contract, one you must be able to rely on for
+          the service to work at all, and then only for the loss typically
           foreseeable for this kind of service. All other liability for slight
           negligence is excluded, including for lost profits and for indirect or
           consequential loss.
@@ -189,8 +189,8 @@ function Terms() {
           You may close your account at any time from <strong>Settings</strong>.
           Doing so deletes it and the pages only you could see. We may close or
           suspend an account for a serious or repeated breach of these terms, or
-          if we stop offering the service — in which case we will give
-          reasonable notice and a chance to export what you have.
+          if we stop offering the service, in which case we will give reasonable
+          notice and a chance to export what you have.
         </p>
       </Section>
 

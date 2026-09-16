@@ -45,7 +45,7 @@ function useCameraAvailable(): boolean {
 function namedCapture(file: File, position: number): File {
   const stamp = new Date().toISOString().slice(0, 10)
   const extension = file.name.includes(".") ? file.name.split(".").pop() : "jpg"
-  return new File([file], `Photo ${position} — ${stamp}.${extension}`, {
+  return new File([file], `Photo ${position} (${stamp}).${extension}`, {
     type: file.type,
     lastModified: file.lastModified,
   })

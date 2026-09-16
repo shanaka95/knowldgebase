@@ -239,7 +239,7 @@ function Composer({
           if (e.key === "Escape") setOpen(false)
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit()
         }}
-        placeholder="Context the document itself does not give — why it was kept, what it replaces, what to watch out for."
+        placeholder="Why it was kept, what it replaces, anything to watch out for."
         data-testid="note-input"
       />
       <div className="flex items-center gap-2">

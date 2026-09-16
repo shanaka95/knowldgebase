@@ -53,7 +53,7 @@ function Privacy() {
         <Bullets
           items={[
             "Your email address, and your name if you give one.",
-            "A hash of your password — never the password itself.",
+            "A hash of your password, never the password itself.",
             "Sign-in codes sent to your email, which expire and are then discarded.",
             "API keys you create, stored hashed. The key itself is shown once and never again.",
           ]}
@@ -70,7 +70,7 @@ function Privacy() {
         <p className="font-medium">How the service is used</p>
         <Bullets
           items={[
-            "Counts of what you did — questions asked, searches run, pages imported — by day and by model, together with the tokens and cost each involved.",
+            "Counts of what you did (questions asked, searches run, pages imported) by day and by model, together with the tokens and cost each involved.",
             "Operational logs and error reports needed to keep the service running.",
           ]}
         />
@@ -97,7 +97,7 @@ function Privacy() {
         <p>What gets sent, and when:</p>
         <Bullets
           items={[
-            "When a page is indexed: its title, its text, and any notes on it — to be summarised, split into sections, and turned into vectors.",
+            "When a page is indexed: its title, its text, and any notes on it, so it can be summarised, split into sections and turned into vectors.",
             "When a file is imported: an image of each page, so a model can transcribe it.",
             "When you ask a question: your question, the recent turns of that thread, and excerpts of the pages found to be relevant.",
             "When you translate a page: that page's text.",
@@ -116,16 +116,16 @@ function Privacy() {
         <Bullets
           items={[
             <>
-              <strong>To provide the service</strong> — storing, indexing,
+              <strong>To provide the service</strong>: storing, indexing,
               searching and sharing what you put in. Without this there is no
               product.
             </>,
             <>
-              <strong>To keep accounts secure</strong> — sign-in codes, password
+              <strong>To keep accounts secure</strong>: sign-in codes, password
               hashing, and records of access.
             </>,
             <>
-              <strong>To run the service responsibly</strong> — usage counts and
+              <strong>To run the service responsibly</strong>: usage counts and
               limits, so one account cannot exhaust the service or the budget
               for everybody else.
             </>,
@@ -148,7 +148,7 @@ function Privacy() {
               cost. Administrators can reach content when they need to operate
               or support the service.
             </>,
-            "Service providers we depend on to run it — see below.",
+            "Service providers we depend on to run it, listed below.",
           ]}
         />
         <p>
@@ -165,14 +165,14 @@ function Privacy() {
         <Bullets
           items={[
             <>
-              <strong>OpenRouter</strong> — the model calls described above.
+              <strong>OpenRouter</strong>: the model calls described above.
             </>,
             <>
-              <strong>Amazon Web Services (Amazon SES)</strong> — delivering
+              <strong>Amazon Web Services (Amazon SES)</strong>: delivering
               sign-in codes, invitations and password resets.
             </>,
             <>
-              <strong>Our server hosting provider</strong> — the virtual servers
+              <strong>Our server hosting provider</strong>: the virtual servers
               holding the database, the uploaded files and the search index.
             </>,
           ]}
@@ -196,8 +196,8 @@ function Privacy() {
             <>
               <strong>Closing your account</strong> removes it, its usage
               records and the pages you alone could see. Notes you left on pages
-              that still exist remain, without your name against them — a note
-              is part of a page's history, and removing an account should not
+              that still exist remain, without your name against them. A note is
+              part of a page's history, and removing an account should not
               silently change what a page says.
             </>,
           ]}
@@ -243,10 +243,10 @@ function Privacy() {
 
       <Section id="cookies" title="Cookies and local storage">
         <p>
-          {APP_NAME} stores your sign-in token and a few preferences — your
-          theme, your search settings, which panel you had open — in your
-          browser. They are needed for the service to work and to remember how
-          you like it. There are no advertising or analytics cookies.
+          {APP_NAME} stores your sign-in token and a few preferences in your
+          browser: your theme, your search settings, which panel you had open.
+          They are needed for the service to work and to remember how you like
+          it. There are no advertising or analytics cookies.
         </p>
       </Section>
 

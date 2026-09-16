@@ -200,7 +200,7 @@ function ImportRow({ job }: { job: ImportJobPublic }) {
             <AlertDialogTitle>Remove this import?</AlertDialogTitle>
             <AlertDialogDescription>
               {job.document_id
-                ? "The page it created and the attached original file are kept — only this record is removed."
+                ? "The page it created and the original file are kept. Only this record is removed."
                 : "The uploaded file is discarded. This cannot be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>

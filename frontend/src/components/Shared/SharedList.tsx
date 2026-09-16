@@ -63,7 +63,7 @@ export function SharedList() {
         <SectionHeader
           title="Whole spaces shared with you"
           count={spaces.length}
-          explanation="Everything in these spaces is open to you — every page and folder in them now, and anything added to them later."
+          explanation="Everything in these spaces is open to you, including anything added to them later."
         />
         {spaces.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -102,7 +102,7 @@ export function SharedList() {
         <SectionHeader
           title="Individual pages shared with you"
           count={docs.length}
-          explanation="Only these pages. The space each one sits in is not shared with you: you cannot browse it, and pages added to it later will not appear here."
+          explanation="Only these pages. You cannot browse the spaces they sit in, and pages added later will not show up here."
         />
         {docs.length === 0 ? (
           <p className="text-sm text-muted-foreground">

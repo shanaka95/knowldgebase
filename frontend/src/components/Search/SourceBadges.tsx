@@ -80,8 +80,8 @@ export function FusedScore({ score, k }: { score: number; k: number }) {
         <p className="font-medium">Fused score {score.toFixed(5)}</p>
         <p className="mt-1 text-muted-foreground">
           Reciprocal Rank Fusion: every source contributes 1 / (k + its rank),
-          with k = {k}. Scores from different methods are not comparable, so
-          ranks are fused instead — a page several sources agree on wins.
+          with k = {k}. Scores from different methods are not comparable, so the
+          ranks are combined instead and pages several sources agree on win.
         </p>
       </TooltipContent>
     </Tooltip>

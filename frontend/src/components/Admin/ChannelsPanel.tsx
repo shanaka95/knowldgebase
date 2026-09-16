@@ -152,17 +152,17 @@ function ChannelCard({ channel }: { channel: ChannelConfigPublic }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cloud_api">
-                  Cloud API — official, scales, priced per conversation
+                  Cloud API (official, scales, priced per conversation)
                 </SelectItem>
                 <SelectItem value="bridge">
-                  Local bridge — QR-paired, free, unofficial
+                  Local bridge (QR-paired, free, unofficial)
                 </SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              The bridge signs in as an ordinary WhatsApp account. It is against
-              WhatsApp's terms, and a ban would take every user's agent down at
-              once — fine for testing, risky in production.
+              The bridge signs in as an ordinary WhatsApp account. That is
+              against WhatsApp's terms, and a ban would take every user's agent
+              down at once. Fine for testing, risky in production.
             </p>
           </div>
         )}

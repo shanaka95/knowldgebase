@@ -14,7 +14,6 @@ import {
 import type { ApiKeyCreated, ApiKeyPublic } from "@/client"
 import { ApiKeyList } from "@/components/ApiKeys/ApiKeysTable"
 import { CreateApiKeyDialog } from "@/components/ApiKeys/CreateApiKeyDialog"
-import { APP_NAME } from "@/components/Common/Logo"
 import { EmptyState } from "@/components/Layout/EmptyState"
 import { PendingList } from "@/components/Pending/PendingList"
 import { Button } from "@/components/ui/button"
@@ -110,10 +109,9 @@ export function McpSettings() {
         <div className="max-w-2xl">
           <h2 className="text-lg font-semibold">MCP</h2>
           <p className="text-sm text-muted-foreground">
-            The Model Context Protocol lets an AI assistant — Claude, for
-            instance — read and write this knowledge base while you chat with
-            it. A connection reaches only the spaces and pages of the account
-            whose key it holds, and nothing else in {APP_NAME}.
+            The Model Context Protocol lets an AI assistant like Claude read and
+            write this knowledge base while you chat with it. A connection only
+            reaches the spaces and pages of the account whose key it holds.
           </p>
         </div>
         <CreateApiKeyDialog

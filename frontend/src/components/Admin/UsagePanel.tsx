@@ -291,7 +291,7 @@ function BreakdownTable({
                       {row.group.name}
                     </Badge>
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <span className="text-muted-foreground">-</span>
                   )}
                 </td>
               )}
@@ -318,7 +318,7 @@ function Cell({ value }: { value: number }) {
       className="py-1.5 pr-4 text-right font-mono text-muted-foreground tabular-nums"
       title={fullNumber(value)}
     >
-      {value > 0 ? compactNumber(value) : "—"}
+      {value > 0 ? compactNumber(value) : "-"}
     </td>
   )
 }

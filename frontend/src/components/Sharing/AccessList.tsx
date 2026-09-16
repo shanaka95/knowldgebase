@@ -160,7 +160,7 @@ export function AccessList({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{invitation.email}</p>
             <p className="truncate text-xs text-muted-foreground">
-              Invited — not yet accepted · expires{" "}
+              Invited, not yet accepted · expires{" "}
               {shortDate(invitation.expires_at)}
             </p>
           </div>

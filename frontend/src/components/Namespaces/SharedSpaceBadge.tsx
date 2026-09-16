@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 
 const EXPLANATION =
-  "Shared with you. This space belongs to someone else — its owner decides who is in it and can withdraw your access."
+  "Shared with you. This space belongs to someone else, and its owner decides who is in it."
 
 /**
  * The mark that a space is not yours, shown wherever a space is named.

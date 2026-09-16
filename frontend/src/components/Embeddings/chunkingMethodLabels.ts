@@ -8,7 +8,7 @@ export const CHUNKING_METHOD_LABELS: Record<string, string> = {
 }
 
 export function chunkingMethodLabel(method: string | null | undefined): string {
-  if (!method) return "—"
+  if (!method) return "-"
   return CHUNKING_METHOD_LABELS[method] ?? method.replace(/_/g, " ")
 }
 

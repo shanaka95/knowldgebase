@@ -120,7 +120,7 @@ export function NamespaceFormDialog({
           <DialogDescription>
             {isEdit
               ? "Change the name, description or look of this space."
-              : "Spaces group related pages — for example Personal, Office or a project."}
+              : "Spaces group related pages, like Personal, Office or a project."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

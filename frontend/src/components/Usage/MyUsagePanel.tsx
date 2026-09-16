@@ -204,7 +204,7 @@ function PointTable({
                   className="py-1.5 text-right font-mono text-muted-foreground tabular-nums"
                   title={fullNumber(tokens)}
                 >
-                  {tokens > 0 ? compactNumber(tokens) : "—"}
+                  {tokens > 0 ? compactNumber(tokens) : "-"}
                 </td>
               </tr>
             )

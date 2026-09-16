@@ -133,7 +133,7 @@ export function AiIndexPanel({
             />
             {data.is_stale && state !== "failed" && (
               <span className="text-[11px] text-muted-foreground">
-                indexed v{data.embedding_version ?? "—"} · current v
+                indexed v{data.embedding_version ?? "-"} · current v
                 {data.version}
               </span>
             )}
@@ -179,7 +179,7 @@ export function AiIndexPanel({
               value={
                 data.embedding_version != null
                   ? String(data.chunk_count ?? 0)
-                  : "—"
+                  : "-"
               }
             />
             <Detail
@@ -212,7 +212,7 @@ export function AiIndexPanel({
               value={
                 data.embedding_version != null
                   ? `${2 + (data.chunk_count ?? 0)} (page, summary, chunks)`
-                  : "—"
+                  : "-"
               }
             />
           </dl>

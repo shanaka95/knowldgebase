@@ -27,7 +27,7 @@ export function shortDate(value?: string | null): string {
         month: "short",
         day: "numeric",
       })
-    : "—"
+    : "-"
 }
 
 /**
@@ -37,7 +37,7 @@ export function shortDate(value?: string | null): string {
  * order of magnitude is. The full number stays available as a `title`.
  */
 export function compactNumber(value: number): string {
-  if (!Number.isFinite(value)) return "—"
+  if (!Number.isFinite(value)) return "-"
   return new Intl.NumberFormat(undefined, {
     notation: value >= 10_000 ? "compact" : "standard",
     maximumFractionDigits: value >= 10_000 ? 1 : 0,
@@ -45,7 +45,7 @@ export function compactNumber(value: number): string {
 }
 
 export function fullNumber(value: number): string {
-  return Number.isFinite(value) ? new Intl.NumberFormat().format(value) : "—"
+  return Number.isFinite(value) ? new Intl.NumberFormat().format(value) : "-"
 }
 
 /**
@@ -57,7 +57,7 @@ export function fullNumber(value: number): string {
  * fewer, and says "<$0.01" only when there is really nothing to show.
  */
 export function costFromNanos(nanos: number): string {
-  if (!Number.isFinite(nanos)) return "—"
+  if (!Number.isFinite(nanos)) return "-"
   const dollars = nanos / 1_000_000_000
   if (dollars === 0) return "$0.00"
   if (dollars < 0.01)

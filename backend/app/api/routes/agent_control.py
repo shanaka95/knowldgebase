@@ -136,9 +136,9 @@ def _link_confirmation(agent: Agent | None, owner: User | None) -> str:
     agent_name = agent.name if agent else "your assistant"
     email = owner.email if owner else "your account"
     return (
-        f"{who} — you're connected to PlusGPT as {email}.\n\n"
+        f"{who}, you're connected to PlusGPT as {email}.\n\n"
         f"I'm {agent_name}. I can look things up in your knowledge base, and file "
-        f"anything you send me — a PDF, a photo of a letter, or just a note to keep.\n\n"
+        f"anything you send me: a PDF, a photo of a letter, or just a note to keep.\n\n"
         f"Ask me something, or send me a document to start."
     )
 

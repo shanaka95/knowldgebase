@@ -104,9 +104,8 @@ export function WhatsAppPairing() {
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        The bridge signs in the way WhatsApp Web does — by scanning a QR code
-        with the phone whose account the agent will use. There is no token to
-        paste in.
+        The bridge signs in the way WhatsApp Web does. Scan the QR code with the
+        phone whose account the agent will use. There is no token to paste in.
       </p>
 
       <Dialog

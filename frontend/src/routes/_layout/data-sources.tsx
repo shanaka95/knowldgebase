@@ -212,7 +212,7 @@ function SourceCard({
                 ? (source.account_email ??
                   "Choose files and they become searchable pages.")
                 : source.available
-                  ? "Pick files in Google's own chooser. PlusGPT sees only what you pick — never the rest of your Drive."
+                  ? "Pick files in Google's own chooser. PlusGPT only sees what you pick, never the rest of your Drive."
                   : "An administrator has not switched this on yet."}
             </p>
           </div>

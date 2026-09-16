@@ -139,7 +139,7 @@ export function DrivePicker({
 
       <p className="text-muted-foreground text-xs">
         PDFs and images, up to {MAX_FILE_MB} MB each. PlusGPT sees only what you
-        pick — never the rest of your Drive.
+        pick, never the rest of your Drive.
       </p>
     </div>
   )

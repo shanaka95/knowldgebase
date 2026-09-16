@@ -28,7 +28,7 @@ export function NamespaceCards() {
         compact
         icon={FolderKanban}
         title="No spaces yet"
-        description="Spaces group your pages — create one for personal notes and one for work."
+        description="Spaces group your pages. Try one for personal notes and one for work."
         action={
           <Button
             onClick={() => openDialog({ kind: "createNamespace" })}

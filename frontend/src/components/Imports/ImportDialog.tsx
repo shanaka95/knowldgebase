@@ -297,7 +297,7 @@ export function ImportDialog({
               value={note}
               disabled={busy}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Anything you want to add to this document — why you are keeping it, what it replaces, what to watch out for. Saved with the page and searchable alongside it."
+              placeholder="Why you are keeping it, what it replaces, anything to watch out for."
               data-testid="import-note"
             />
             <p className="text-muted-foreground text-xs">
@@ -320,7 +320,7 @@ export function ImportDialog({
               value={prompt}
               disabled={busy}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Only used if the document model is unavailable and a general model transcribes the pages instead. Usually leave this empty."
+              placeholder="Only used if the document model is unavailable. Usually leave this empty."
               data-testid="import-prompt"
             />
           </div>
