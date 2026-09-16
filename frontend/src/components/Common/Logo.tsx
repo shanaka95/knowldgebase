@@ -62,13 +62,19 @@ function Wordmark({ className }: { className?: string }) {
       {/*
         The source art draws the letters as hairline outlines, which all but
         vanish beside the mark at interface sizes. Stroking the same path in the
-        same colour thickens every stem evenly — closer to a text weight, and
+        same colour thickens every stem evenly, closer to a text weight and
         without redrawing the letterforms.
+
+        The width is measured, not guessed: a stroke grows a stem on both sides,
+        so it is not proportional to the weight you see. 1.2 paints half again
+        as much ink as the 0.65 it replaces, which is the 1.5x asked for, and it
+        is the most the counters in P, G and S take before they start to close
+        at 14px.
       */}
       <path
         d={WORDMARK_PATH}
         stroke="currentColor"
-        strokeWidth={0.65}
+        strokeWidth={1.2}
         strokeLinejoin="round"
       />
     </svg>
