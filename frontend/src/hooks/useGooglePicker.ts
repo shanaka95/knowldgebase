@@ -49,6 +49,46 @@ export function tooLarge(files: PickedFile[]): PickedFile[] {
   return files.filter((f) => f.size > MAX_FILE_BYTES)
 }
 
+/**
+ * Google's picker mounts itself on `<body>`, outside whatever opened it.
+ *
+ * That is the whole difficulty with hosting it in a dialog. React never sees
+ * these nodes, so to a Radix dialog every click in the picker is a click
+ * *outside* itself - which is a request to close - and every focus landing in
+ * it is focus escaping the trap.
+ */
+const PICKER_ROOTS = ".picker-dialog, .picker-dialog-bg"
+
+export function fromGooglePicker(target: unknown): boolean {
+  const node = target as Element | null
+  if (!node || typeof node.closest !== "function") return false
+  return Boolean(node.closest(PICKER_ROOTS))
+}
+
+/** The shape Radix hands to its outside-interaction handlers. */
+type OutsideEvent = {
+  target?: EventTarget | null
+  detail?: { originalEvent?: { target?: EventTarget | null } }
+  preventDefault: () => void
+}
+
+const keepOpen = (event: OutsideEvent) => {
+  const target = event.detail?.originalEvent?.target ?? event.target
+  if (fromGooglePicker(target)) event.preventDefault()
+}
+
+/**
+ * Spread onto the `DialogContent` that opens the picker.
+ *
+ * Without it, the first click on a file in Drive closes the dialog underneath
+ * and the picker along with it.
+ */
+export const ignoreGooglePicker = {
+  onPointerDownOutside: keepOpen,
+  onInteractOutside: keepOpen,
+  onFocusOutside: keepOpen,
+}
+
 declare global {
   interface Window {
     gapi?: {

@@ -55,15 +55,23 @@ export function DrivePicker({
   files,
   onChange,
   disabled,
+  onPickingChange,
 }: {
   files: PickedFile[]
   onChange: (files: PickedFile[]) => void
   disabled?: boolean
+  /**
+   * Called while Google's chooser is on screen, so the dialog hosting this can
+   * stand down: its focus trap and its modal pointer blocking both apply to
+   * the whole document, and the picker is not inside it.
+   */
+  onPickingChange?: (picking: boolean) => void
 }) {
   const [opening, setOpening] = useState(false)
 
   const pick = async () => {
     setOpening(true)
+    onPickingChange?.(true)
     try {
       const picked = await pickFromGoogleDrive()
       if (picked.length === 0) return // cancelled, which is not a failure
@@ -90,6 +98,7 @@ export function DrivePicker({
       )
     } finally {
       setOpening(false)
+      onPickingChange?.(false)
     }
   }
 

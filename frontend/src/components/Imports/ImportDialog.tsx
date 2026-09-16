@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import type { PickedFile } from "@/hooks/useGooglePicker"
+import { ignoreGooglePicker, type PickedFile } from "@/hooks/useGooglePicker"
 import { useCreateImport, useImportFromDrive } from "@/hooks/useImports"
 import { canEditNamespace, useNamespaces } from "@/hooks/useNamespaces"
 import { FileDropzone } from "./FileDropzone"
@@ -58,6 +58,8 @@ export function ImportDialog({
   // Which source the dialog is showing. Drive is offered only where it is
   // actually reachable, so nobody is sent down a path that ends in a wall.
   const [source, setSource] = useState<"device" | "drive">("device")
+  // True while Google's chooser is on screen; see the Dialog below.
+  const [picking, setPicking] = useState(false)
   const drive = useDriveConnected()
   const [title, setTitle] = useState("")
   /**
@@ -140,8 +142,16 @@ export function ImportDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg" data-testid="import-dialog">
+    // Not modal while Google's chooser is open. A modal dialog puts
+    // `pointer-events: none` on everything it does not own and traps focus, and
+    // the chooser mounts on `<body>` - so every click and every scroll meant for
+    // it landed on this dialog instead.
+    <Dialog open={open} onOpenChange={onOpenChange} modal={!picking}>
+      <DialogContent
+        className="sm:max-w-lg"
+        data-testid="import-dialog"
+        {...ignoreGooglePicker}
+      >
         <DialogHeader>
           <DialogTitle>Upload a document</DialogTitle>
           <DialogDescription>
@@ -191,6 +201,7 @@ export function ImportDialog({
                 files={driveFiles}
                 onChange={setDriveFiles}
                 disabled={busy}
+                onPickingChange={setPicking}
               />
             ) : (
               <DriveNotConnected onLeave={() => onOpenChange(false)} />

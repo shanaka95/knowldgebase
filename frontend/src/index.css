@@ -154,3 +154,25 @@
     cursor: pointer;
   }
 }
+
+/*
+  Google's file picker, which mounts on <body> rather than inside the dialog
+  that opened it.
+
+  A modal dialog sets `pointer-events: none` on everything it does not own, and
+  `pointer-events` inherits - so the picker rendered in full while every click
+  and scroll passed straight through it to the dialog underneath. The host
+  dialog stands down while the picker is open (see ImportDialog), and these
+  rules make that hold even if some other dialog forgets to, and keep the
+  picker above a dialog it was opened from.
+*/
+.picker-dialog-bg {
+  z-index: 2000;
+}
+.picker-dialog {
+  z-index: 2001;
+}
+.picker-dialog,
+.picker-dialog-bg {
+  pointer-events: auto;
+}
