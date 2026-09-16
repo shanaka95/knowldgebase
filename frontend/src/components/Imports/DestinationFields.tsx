@@ -148,9 +148,12 @@ export function DestinationFields({
             {spaces.length > 0 && <SelectSeparator />}
             {spaces.map((ns) => (
               <SelectItem key={ns.id} value={ns.id}>
-                <span className="flex items-center gap-2">
+                {/* Radix clones this into the closed trigger, where the width
+                    is whatever is left of a phone: a space named by somebody
+                    else has to truncate rather than widen the dialog. */}
+                <span className="flex min-w-0 items-center gap-2">
                   <NamespaceIcon icon={ns.icon} color={ns.color} size="xs" />
-                  {ns.name}
+                  <span className="truncate">{ns.name}</span>
                 </span>
               </SelectItem>
             ))}
@@ -208,9 +211,9 @@ export function DestinationFields({
                 value={NEW}
                 data-testid={`${idPrefix}-new-folder-option`}
               >
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <Plus className="size-3.5" />
-                  New folder in {parentLabel}…
+                <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                  <Plus className="size-3.5 shrink-0" />
+                  <span className="truncate">New folder in {parentLabel}…</span>
                 </span>
               </SelectItem>
               <SelectSeparator />

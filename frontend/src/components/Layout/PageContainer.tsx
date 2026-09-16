@@ -58,7 +58,13 @@ export function PageHeader({
         )}
       </div>
       {actions && (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        // `min-w-0` because a flex item will not shrink below its content
+        // otherwise, and these are the page's controls: a date range or a row
+        // of buttons is wider than a 320px phone, and without this the header
+        // pushed the whole page sideways rather than letting them wrap.
+        <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2">
+          {actions}
+        </div>
       )}
     </div>
   )

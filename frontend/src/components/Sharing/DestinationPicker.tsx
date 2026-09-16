@@ -52,7 +52,7 @@ function FolderOption({
     <li>
       <div
         className={cn(
-          "flex h-8 items-center gap-1 rounded-md pr-2 text-sm",
+          "flex h-8 min-w-0 items-center gap-1 rounded-md pr-2 text-sm",
           isSelected && "bg-primary/10 text-primary",
           !isSelected && !isDisabled && "hover:bg-accent",
           isDisabled && "opacity-40",
@@ -140,9 +140,11 @@ export function DestinationPicker({
         <SelectContent>
           {spaces.map((ns) => (
             <SelectItem key={ns.id} value={ns.id}>
-              <span className="flex items-center gap-2">
+              {/* Cloned into the closed trigger, where the space name has only
+                  the width of a phone to fit in. */}
+              <span className="flex min-w-0 items-center gap-2">
                 <NamespaceIcon icon={ns.icon} color={ns.color} size="xs" />
-                {ns.name}
+                <span className="truncate">{ns.name}</span>
               </span>
             </SelectItem>
           ))}
@@ -170,8 +172,10 @@ export function DestinationPicker({
                   )}
                   data-testid="destination-root-option"
                 >
-                  <Home className="ml-5 size-4 text-muted-foreground" />
-                  <span>{selectedSpace?.name ?? "Space"} (root)</span>
+                  <Home className="ml-5 size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    {selectedSpace?.name ?? "Space"} (root)
+                  </span>
                 </button>
               </li>
               {index.childrenOf(null).map((f) => (

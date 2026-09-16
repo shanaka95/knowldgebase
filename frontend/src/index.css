@@ -176,3 +176,17 @@
 .picker-dialog-bg {
   pointer-events: auto;
 }
+
+/*
+  Radix gives a ScrollArea's viewport a `display: table` wrapper, inline, so the
+  content sizes itself and can scroll. That also means it shrink-wraps to its
+  widest row: a folder named by somebody else stopped truncating and widened the
+  dialog around it instead. Nothing here scrolls sideways on purpose, so the
+  wrapper is made an ordinary block that can be narrower than its content.
+*/
+[data-slot="scroll-area-viewport"] > div {
+  /* biome-ignore lint/complexity/noImportantStyles: Radix sets these inline, and an inline style cannot be overridden otherwise. */
+  display: block !important;
+  /* biome-ignore lint/complexity/noImportantStyles: as above. */
+  min-width: 0 !important;
+}

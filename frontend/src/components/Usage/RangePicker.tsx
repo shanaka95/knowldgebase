@@ -55,7 +55,7 @@ export function RangePicker({
 
   return (
     <div
-      className={cn("flex flex-wrap items-center gap-2", className)}
+      className={cn("flex min-w-0 flex-wrap items-center gap-2", className)}
       data-testid="range-picker"
     >
       {PRESETS.map((preset) => (
@@ -77,7 +77,10 @@ export function RangePicker({
       >
         This month
       </Button>
-      <span className="flex items-center gap-1.5">
+      {/* The pair shrinks rather than pushing the row off a narrow screen:
+          two fixed 9.5rem fields plus the word between them do not fit a 320px
+          phone, and this row is the one thing on /usage that did not wrap. */}
+      <span className="flex w-full min-w-0 items-center gap-1.5 sm:w-auto">
         <Input
           type="date"
           value={value.from}
@@ -85,7 +88,7 @@ export function RangePicker({
           onChange={(e) =>
             e.target.value && onChange({ ...value, from: e.target.value })
           }
-          className="h-8 w-[9.5rem]"
+          className="h-8 min-w-0 flex-1 sm:w-[9.5rem] sm:flex-none"
           aria-label="From"
           data-testid="range-from"
         />
@@ -98,7 +101,7 @@ export function RangePicker({
           onChange={(e) =>
             e.target.value && onChange({ ...value, to: e.target.value })
           }
-          className="h-8 w-[9.5rem]"
+          className="h-8 min-w-0 flex-1 sm:w-[9.5rem] sm:flex-none"
           aria-label="To"
           data-testid="range-to"
         />

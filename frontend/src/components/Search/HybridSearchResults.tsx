@@ -220,8 +220,12 @@ function SearchIntro({ onExample }: { onExample?: (q: string) => void }) {
                 size="sm"
                 // A generated question can be long, and a button is
                 // `whitespace-nowrap` by default - which pushed the page
-                // sideways on a phone rather than wrapping.
-                className="h-auto max-w-full whitespace-normal py-1.5 text-left"
+                // sideways on a phone rather than wrapping. `wrap-anywhere`
+                // rather than `break-words` because wrapping needs somewhere to
+                // wrap: a title that is one long unbroken token - a filename, a
+                // pasted URL - has no space to break at, and only `anywhere`
+                // narrows the button's own min-content width so it can shrink.
+                className="h-auto max-w-full wrap-anywhere whitespace-normal py-1.5 text-left"
                 onClick={() => onExample?.(suggestion.question)}
                 data-testid="search-suggestion"
               >
