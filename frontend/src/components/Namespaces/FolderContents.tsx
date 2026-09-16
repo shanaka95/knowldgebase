@@ -190,7 +190,10 @@ export function FolderContents({
   return (
     <section className="flex flex-col gap-4" data-testid="folder-contents">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        {/* Both groups wrap on their own. The row wrapping is not enough: each
+            group is then one unbreakable block, and three buttons do not fit a
+            360px phone, so the last one hung off the screen. */}
+        <div className="flex flex-wrap items-center gap-2">
           <Select
             value={sort}
             onValueChange={(v) => {
@@ -232,7 +235,7 @@ export function FolderContents({
           </ToggleGroup>
         </div>
         {canEdit && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <Button
               variant="outline"
               size="sm"
@@ -356,7 +359,12 @@ export function FolderContents({
         </div>
       ) : (
         <div className="w-full overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
+          {/* `table-fixed` so the columns divide the width they are given
+              rather than growing to fit the longest name. Under the default
+              auto layout the `truncate` on each cell never applied: the table
+              simply got wider than the phone, and reading a file name meant
+              dragging the list sideways. */}
+          <table className="w-full table-fixed text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-medium">Name</th>
@@ -380,9 +388,9 @@ export function FolderContents({
                     <Link
                       to="/s/$namespaceSlug/f/$folderId"
                       params={{ namespaceSlug, folderId: f.id }}
-                      className="flex items-center gap-2 font-medium hover:underline"
+                      className="flex min-w-0 items-center gap-2 font-medium hover:underline"
                     >
-                      <Folder className="size-4 text-muted-foreground" />
+                      <Folder className="size-4 shrink-0 text-muted-foreground" />
                       <span className="truncate">{f.name}</span>
                     </Link>
                   </td>
