@@ -45,6 +45,14 @@ interface AskHistoryProps {
   activeId: string | undefined
   onOpen: (conversation: AskConversationPublic) => void
   onNew: () => void
+  /**
+   * Keep the header clear of a dialog's own close button.
+   *
+   * In the mobile sheet the panel is laid under a close control pinned to the
+   * top right corner, which landed exactly on top of New. The rail on a desktop
+   * has no such control and wants the full width.
+   */
+  insetForClose?: boolean
 }
 
 /** Threads in the buckets people actually think in. */
@@ -56,7 +64,12 @@ function bucketOf(iso: string): string {
   return "Older"
 }
 
-export function AskHistory({ activeId, onOpen, onNew }: AskHistoryProps) {
+export function AskHistory({
+  activeId,
+  onOpen,
+  onNew,
+  insetForClose = false,
+}: AskHistoryProps) {
   const { data, isPending, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useInfiniteQuery(conversationsQuery())
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -89,7 +102,12 @@ export function AskHistory({ activeId, onOpen, onNew }: AskHistoryProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2",
+          insetForClose && "pr-9",
+        )}
+      >
         <h2 className="text-sm font-medium">Chats</h2>
         <Button
           variant="outline"

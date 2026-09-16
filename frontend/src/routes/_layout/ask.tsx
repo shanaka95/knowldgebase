@@ -164,7 +164,7 @@ function AskPage() {
                   <History className="size-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-80 p-0">
+              <SheetContent side="right" className="w-80 max-w-full p-0">
                 <SheetHeader className="sr-only">
                   <SheetTitle>Chat history</SheetTitle>
                 </SheetHeader>
@@ -173,6 +173,7 @@ function AskPage() {
                     activeId={c}
                     onOpen={openThread}
                     onNew={newThread}
+                    insetForClose
                   />
                 </div>
               </SheetContent>
