@@ -90,6 +90,34 @@ Cloudflare passes `/.well-known/acme-challenge/` through to the origin, so
 issuance works while proxied. It does block unusual user agents, which is worth
 remembering when a script that works against the IP fails against the domain.
 
+#### Purging an asset
+
+A browser asks for `/assets/*` in CORS mode, because Vite marks the entry
+`crossorigin`, so those requests carry an `Origin` header and curl does not.
+While the origin answered `Vary: Origin` that was a **second cached copy**, and
+the two can disagree: one 502 cached into the `Origin` copy left `/search` dead
+in every browser while curl, the uptime check and the Cloudflare dashboard all
+saw 200, because they were all looking at the other copy.
+
+The origin no longer sends `Vary: Origin` on assets, so new entries have one
+copy. Anything cached before that still has two, and **Purge by URL clears only
+the copy with no `Origin`** - which is the one that was already fine. Name the
+variant, or purge everything:
+
+```sh
+curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+  -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"files":[{"url":"https://plusgpt.io/assets/NAME.js",
+                 "headers":{"Origin":"https://plusgpt.io"}}]}'
+```
+
+To check a purge rather than trust it, ask the way a browser asks - the header
+is the whole difference:
+
+```sh
+curl -sI https://plusgpt.io/assets/NAME.js -H 'Origin: https://plusgpt.io'
+```
+
 ## Things that will bite you
 
 * **`EMBEDDING_DIM` must match the model.** Qwen3-Embedding-8B is 4096, Jina v5

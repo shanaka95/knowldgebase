@@ -23,6 +23,19 @@ ASSET_PREFIX = "/assets/"
 # serve one, however it is spelled.
 SERVED = frozenset({200, 206, 304})
 
+# CORS headers, stripped from asset responses. A built asset is same-origin, and
+# a same-origin request passes the CORS check whatever its mode, so these grant
+# nothing - they only make the response depend on who asked.
+CORS_RESPONSE_HEADERS = frozenset(
+    {b"access-control-allow-origin", b"access-control-allow-credentials"}
+)
+
+
+def vary_without_origin(value: bytes) -> bytes:
+    """`value` with `Origin` removed, keeping the rest of the list intact."""
+    kept = [part.strip() for part in value.split(b",") if part.strip()]
+    return b", ".join(part for part in kept if part.lower() != b"origin")
+
 
 class AssetCacheHeaders:
     """Cache a built asset for ever; never cache a failure to serve one.
@@ -40,6 +53,16 @@ class AssetCacheHeaders:
     which is how /search became permanently unloadable for one person while
     every one of its fifty-six chunks returned 200 to everybody else.
 
+    It also strips the CORS headers, and `Origin` from `Vary`. Those made a
+    second, independent copy of every asset in the CDN: browsers fetch the
+    module graph in CORS mode, because Vite marks the entry `crossorigin`, so
+    the copy they get is the `Origin` one, while curl, uptime checks and
+    `Cache-Purge` by URL all see the other. When one `Vary: Origin` entry
+    cached a 502 it stayed unreachable by every check that said the file was
+    fine - 200 to everyone measuring, 502 to everyone browsing. Assets are
+    same-origin, so the CORS headers grant nothing; dropping them leaves one
+    copy, which is the one the checks look at.
+
     Raw ASGI rather than `@app.middleware("http")`, which is
     `BaseHTTPMiddleware`: that wraps the response body and gets in the way of
     the server-sent events an answer streams over.
@@ -56,11 +79,16 @@ class AssetCacheHeaders:
         async def send_with_cache_header(message: Message) -> None:
             if message["type"] == "http.response.start":
                 served = message["status"] in SERVED
-                headers = [
-                    (key, value)
-                    for key, value in message["headers"]
-                    if key.lower() != b"cache-control"
-                ]
+                headers = []
+                for key, value in message["headers"]:
+                    lowered = key.lower()
+                    if lowered == b"cache-control" or lowered in CORS_RESPONSE_HEADERS:
+                        continue
+                    if lowered == b"vary":
+                        value = vary_without_origin(value)
+                        if not value:
+                            continue
+                    headers.append((key, value))
                 headers.append(
                     (
                         b"cache-control",
@@ -116,8 +144,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(AssetCacheHeaders)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.FRONTEND_HOST],
@@ -125,6 +151,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added last, so it is the outermost layer and sees the finished response -
+# including the CORS headers, which it strips from assets. Added before
+# CORSMiddleware it would run underneath it and they would be stamped back on.
+app.add_middleware(AssetCacheHeaders)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 if FRONTEND_DIR.exists():
