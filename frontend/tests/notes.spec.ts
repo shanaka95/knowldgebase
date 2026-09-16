@@ -110,9 +110,6 @@ test.describe("Notes on a page", () => {
     await page.getByTestId("import-new").click()
     const field = page.getByTestId("import-note")
     await expect(field).toBeVisible()
-    await expect(field).toHaveAttribute(
-      "placeholder",
-      /Anything you want to add to this document/,
-    )
+    await expect(field).toHaveAttribute("placeholder", /what it replaces/)
   })
 })

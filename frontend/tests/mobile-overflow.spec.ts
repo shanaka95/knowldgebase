@@ -1,5 +1,12 @@
 import { expect, type Page, test } from "@playwright/test"
 
+import {
+  adminToken,
+  createDocument,
+  createNamespace,
+  uid,
+} from "./utils/api.ts"
+
 /**
  * A phone must never have to be scrolled sideways, and a dialog must never
  * put half of itself off the screen.
@@ -370,5 +377,178 @@ test.describe("a dialog on a small phone", () => {
     await page.getByTestId("create-api-key").click()
     await expect(page.getByRole("dialog")).toBeVisible()
     await expectUsable(page, "the new-API-key dialog")
+  })
+})
+
+/**
+ * The things a phone actually ran into, each one reported from a real device.
+ *
+ * Kept apart from the sweeps above because each is a specific arrangement -
+ * a particular row, a particular pair of controls - rather than a page that
+ * has to survive being filled with long text.
+ */
+test.describe("what a phone ran into", () => {
+  test.use({ viewport: SMALL_PHONE })
+
+  test("a space's actions stay on the screen", async ({ page, request }) => {
+    const token = await adminToken(request)
+    const space = await createNamespace(request, token, {
+      name: `Betriebskostenabrechnung Nebenkostenabrechnung Unterlagen ${uid()}`,
+    })
+    await page.goto(`/s/${space.slug}`)
+    await page.waitForLoadState("networkidle")
+
+    // The reported bug: the last button of the row hung off the right edge,
+    // because the row wrapped but the group inside it did not.
+    for (const id of ["upload-here", "new-folder", "new-page"]) {
+      const box = await page.getByTestId(id).boundingBox()
+      expect(box, `${id} is not visible`).not.toBeNull()
+      expect(
+        Math.round((box?.x ?? 0) + (box?.width ?? 0)),
+        `${id} runs past the right edge`,
+      ).toBeLessThanOrEqual(SMALL_PHONE.width)
+    }
+    await expectNoSidewaysScroll(page, "a space")
+  })
+
+  test("a long file name does not have to be scrolled to be read", async ({
+    page,
+    request,
+  }) => {
+    const token = await adminToken(request)
+    const space = await createNamespace(request, token)
+    await createDocument(request, token, space.id, {
+      title:
+        "Betriebskostenabrechnung_Nebenkostenabrechnung_Heizkosten_2026_final_v3.pdf",
+    })
+    await page.goto(`/s/${space.slug}`)
+    await page.waitForLoadState("networkidle")
+
+    // The list is allowed its own horizontal scroller, so the page-level check
+    // above never saw this: the table grew to fit the longest name and reading
+    // one meant dragging the list sideways. The name truncates instead.
+    const scroller = page.locator(".overflow-x-auto").first()
+    await expect(scroller).toBeVisible()
+    const needsScrolling = await scroller.evaluate(
+      (node) => node.scrollWidth > node.clientWidth + 1,
+    )
+    expect(needsScrolling, "the file list has to be scrolled sideways").toBe(
+      false,
+    )
+  })
+
+  test("the usage range picker fits the narrowest phone", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 })
+    await page.goto("/usage")
+    await page.waitForLoadState("networkidle")
+    // Two fixed-width date fields and the word between them, on one row.
+    await expectNoSidewaysScroll(page, "usage at 320px")
+  })
+
+  test("the chat history's New button is not under the close button", async ({
+    page,
+  }) => {
+    await page.goto("/ask")
+    await page.waitForLoadState("networkidle")
+    await page
+      .getByRole("button", { name: /history/i })
+      .first()
+      .click()
+    const sheet = page.locator('[data-slot="sheet-content"]')
+    await expect(sheet).toBeVisible()
+
+    const newChat = await page.getByTestId("ask-new-chat").boundingBox()
+    const close = await sheet.locator("> button").first().boundingBox()
+    expect(newChat, "no New button").not.toBeNull()
+    expect(close, "no close button").not.toBeNull()
+    if (!newChat || !close) return
+
+    const overlaps =
+      newChat.x < close.x + close.width &&
+      close.x < newChat.x + newChat.width &&
+      newChat.y < close.y + close.height &&
+      close.y < newChat.y + newChat.height
+    expect(overlaps, "the close button sits on top of New").toBe(false)
+  })
+
+  test("a long page name does not widen the dialogs that name it", async ({
+    page,
+    request,
+  }) => {
+    const token = await adminToken(request)
+    const space = await createNamespace(request, token)
+    const doc = await createDocument(request, token, space.id, {
+      // No spaces: wrapping needs somewhere to wrap, and a scanned filename
+      // rarely offers one.
+      title:
+        "Betriebskostenabrechnung_Nebenkostenabrechnung_Heizkosten_2026_final_v3.pdf",
+    })
+    await page.goto(`/s/${space.slug}/d/${doc.id}?mode=view`)
+    await page.waitForLoadState("networkidle")
+
+    for (const item of ["Move", "Delete"]) {
+      await page.getByTestId("document-menu").click()
+      await page
+        .getByRole("menuitem", { name: new RegExp(item, "i") })
+        .first()
+        .click()
+      await expect(
+        page.getByRole("alertdialog").or(page.getByRole("dialog")),
+      ).toBeVisible()
+      await expectNoSidewaysScroll(page, `the ${item} dialog`)
+      await page.keyboard.press("Escape")
+      await page.waitForTimeout(300)
+    }
+  })
+
+  /**
+   * Google's picker mounts on `<body>`, outside the dialog that opened it, so
+   * a modal dialog's `pointer-events: none` left it visible and untouchable:
+   * every click and scroll went to the import dialog underneath instead. The
+   * real picker needs a connected Drive and Google's servers; what is asserted
+   * here is the property that broke, against an element standing where it
+   * mounts.
+   */
+  test("a dialog does not swallow the clicks meant for Google's picker", async ({
+    page,
+  }) => {
+    await page.goto("/capture")
+    await page.waitForLoadState("networkidle")
+    await page.getByTestId("import-new").click()
+    await expect(page.getByTestId("import-dialog")).toBeVisible()
+
+    await page.evaluate(() => {
+      const picker = document.createElement("div")
+      picker.className = "picker-dialog"
+      Object.assign(picker.style, {
+        position: "fixed",
+        left: "20px",
+        top: "120px",
+        width: "260px",
+        height: "300px",
+        background: "#fff",
+      })
+      picker.innerHTML =
+        '<button id="a-file-in-drive" style="width:200px;height:40px">A file</button>'
+      document.body.appendChild(picker)
+    })
+
+    const reaches = await page.evaluate(() => {
+      const button = document.getElementById("a-file-in-drive")
+      if (!button) return false
+      const box = button.getBoundingClientRect()
+      const top = document.elementFromPoint(
+        box.left + box.width / 2,
+        box.top + box.height / 2,
+      )
+      return top === button
+    })
+    expect(reaches, "the picker cannot be clicked through the dialog").toBe(
+      true,
+    )
+
+    // And choosing a file must not dismiss the dialog it was opened from.
+    await page.locator("#a-file-in-drive").click()
+    await expect(page.getByTestId("import-dialog")).toBeVisible()
   })
 })
