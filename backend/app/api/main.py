@@ -25,6 +25,7 @@ from app.api.routes import (
     public,
     search,
     usage,
+    user_notes,
     users,
     utils,
     workers,
@@ -40,6 +41,7 @@ api_router.include_router(namespaces.router)
 api_router.include_router(folders.router)
 api_router.include_router(documents.router)
 api_router.include_router(notes.router)
+api_router.include_router(user_notes.router)
 api_router.include_router(attachments.router)
 api_router.include_router(imports.router)
 api_router.include_router(api_keys.router)
