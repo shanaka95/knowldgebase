@@ -34,10 +34,14 @@ from app.models import (
     Note,
     NoteChunk,
     NoteEmbeddingJob,
+    NoteReminder,
+    NoteReminderDelivery,
+    ReminderRecurrence,
+    ReminderStatus,
     User,
     WorkerHeartbeat,
 )
-from app.services import credits, notes, quota
+from app.services import credits, notes, quota, reminders
 from app.services.suggestions import store_suggestion
 from app.services.versioning import detect_document_language, record_version
 from app.worker.errors import JobCancelled, JobSuperseded
@@ -1259,3 +1263,191 @@ def note_queue_depth() -> dict[str, int]:
             )
         ).all()
         return {str(status): int(count) for status, count in rows}
+
+
+# ---------------------------------------------------------------------------
+# Reminders
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class ReminderSnapshot:
+    """A due reminder, detached from its session."""
+
+    reminder_id: uuid.UUID
+    delivery_id: uuid.UUID
+    occurrence_at: datetime
+    skipped: int
+    to_email: str
+    note_id: uuid.UUID
+    note_title: str
+    note_text: str
+    recurrence_sentence: str
+    recurring: bool
+
+
+def claim_reminders(limit: int) -> list[ReminderSnapshot]:
+    """Take what is due, write the delivery row, and advance - then commit.
+
+    The send happens *after* this returns. That ordering is the whole
+    idempotency story: the unique key on (reminder, occurrence) means even two
+    workers claiming the same row produce one delivery, and a crash between the
+    commit and the send loses an occurrence rather than repeating one. A
+    duplicate reminder costs the trust of every later one; a missed one is a
+    single missed nudge, and it is visible as `sent_at IS NULL`.
+    """
+    if limit <= 0:
+        return []
+    now = _now()
+    out: list[ReminderSnapshot] = []
+
+    with Session(engine) as session:
+        ids = [
+            row[0]
+            for row in session.connection()
+            .execute(
+                text(
+                    """
+                SELECT id FROM notereminder
+                WHERE status = 'active'
+                  AND next_run_at <= :now
+                  AND (locked_until IS NULL OR locked_until <= :now)
+                ORDER BY next_run_at
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED
+                """
+                ),
+                {"now": now, "limit": limit},
+            )
+            .all()
+        ]
+        if not ids:
+            return []
+
+        for reminder in session.exec(
+            select(NoteReminder).where(col(NoteReminder.id).in_(ids))
+        ).all():
+            note = session.get(Note, reminder.note_id)
+            user = session.get(User, reminder.user_id)
+
+            # Never mail an unverified address, and never nag about a note that
+            # has been put away. Paused rather than cancelled, so the interface
+            # can say why and the reader can resume it.
+            if note is None or note.archived_at is not None:
+                reminder.status = ReminderStatus.paused
+                reminder.last_error = "the note is archived"
+                session.add(reminder)
+                continue
+            if user is None or not user.is_active or user.email_verified_at is None:
+                reminder.status = ReminderStatus.paused
+                reminder.last_error = "the address is not confirmed"
+                session.add(reminder)
+                continue
+
+            # Fold every occurrence that went by while nothing was running into
+            # the latest one. Five identical emails at once is how somebody
+            # learns to ignore the sixth.
+            occurrence = reminder.next_run_at
+            local = reminder.next_local_date
+            skipped = 0
+            while True:
+                following = reminders.next_local_date(reminder, local)
+                if following is None:
+                    break
+                instant = reminders.instant_for(
+                    following, reminder.local_time, reminder.timezone
+                )
+                if instant > now:
+                    break
+                local, occurrence, skipped = following, instant, skipped + 1
+
+            # Too old to be worth sending. A reminder about a meeting that
+            # finished two days ago is worse than silence.
+            stale = now - occurrence > timedelta(
+                hours=settings.REMINDER_MAX_LATENESS_HOURS
+            )
+
+            delivery = NoteReminderDelivery(
+                reminder_id=reminder.id,
+                occurrence_at=occurrence,
+                skipped=skipped,
+                error="too late" if stale else None,
+            )
+            session.add(delivery)
+
+            reminder.sent_count += 1
+            following = reminders.next_local_date(reminder, local)
+            if following is None:
+                reminder.status = ReminderStatus.done
+                reminder.locked_until = None
+            else:
+                reminder.next_local_date = following
+                reminder.next_run_at = reminders.instant_for(
+                    following, reminder.local_time, reminder.timezone
+                )
+                reminder.locked_until = now + timedelta(minutes=5)
+            reminder.updated_at = now
+            session.add(reminder)
+
+            if stale:
+                continue
+
+            out.append(
+                ReminderSnapshot(
+                    reminder_id=reminder.id,
+                    delivery_id=delivery.id,
+                    occurrence_at=occurrence,
+                    skipped=skipped,
+                    to_email=user.email,
+                    note_id=note.id,
+                    note_title=note.title or "Untitled",
+                    note_text=note.content_text,
+                    recurrence_sentence=reminders.describe(reminder),
+                    recurring=reminder.recurrence != ReminderRecurrence.none,
+                )
+            )
+        session.commit()
+    return out
+
+
+def complete_reminder(reminder_id: uuid.UUID, delivery_id: uuid.UUID) -> None:
+    with Session(engine) as session:
+        delivery = session.get(NoteReminderDelivery, delivery_id)
+        if delivery is not None:
+            delivery.sent_at = _now()
+            session.add(delivery)
+        reminder = session.get(NoteReminder, reminder_id)
+        if reminder is not None:
+            reminder.last_sent_at = _now()
+            reminder.attempts = 0
+            reminder.last_error = None
+            reminder.locked_until = None
+            session.add(reminder)
+        session.commit()
+
+
+def fail_reminder(
+    reminder_id: uuid.UUID,
+    delivery_id: uuid.UUID,
+    error: str,
+    max_attempts: int = 5,
+) -> None:
+    """Back off, and park after enough tries - with the reason kept."""
+    with Session(engine) as session:
+        delivery = session.get(NoteReminderDelivery, delivery_id)
+        if delivery is not None:
+            delivery.error = error[:1000]
+            session.add(delivery)
+        reminder = session.get(NoteReminder, reminder_id)
+        if reminder is not None:
+            reminder.attempts += 1
+            reminder.last_error = error[:1000]
+            if reminder.attempts >= max_attempts:
+                reminder.status = ReminderStatus.paused
+                reminder.locked_until = None
+            else:
+                reminder.locked_until = _now() + timedelta(
+                    seconds=60 * reminder.attempts
+                )
+            session.add(reminder)
+        session.commit()

@@ -20,6 +20,7 @@ show something useful, and a text part markedly improves deliverability.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import html
 import logging
 from dataclasses import dataclass
@@ -59,12 +60,40 @@ class LoggingEmailSender:
 
     async def send(self, message: Email) -> None:
         self.sent.append(message)
+        _capture_for_dev(message)
         logger.info(
             "email (not sent, EMAIL_ENABLED=false) to=%s subject=%s\n%s",
             message.to,
             message.subject,
             message.text,
         )
+
+
+def _capture_for_dev(message: Email) -> None:
+    """Also record the message in Postgres, in development only.
+
+    The list above belongs to one process, and the worker - which is where a
+    reminder is sent from - is not the process the dev mailbox endpoint runs
+    in. Without this a test polling that mailbox would poll an empty one for
+    ever. Suppressed on failure, because a mailbox must never break a send.
+    """
+    if settings.FASTAPI_ENV != "development":
+        return
+    with contextlib.suppress(Exception):
+        from sqlmodel import Session
+
+        from app.core.db import engine
+        from app.models import CapturedEmailRow
+
+        with Session(engine) as session:
+            session.add(
+                CapturedEmailRow(
+                    to_email=message.to,
+                    subject=message.subject[:500],
+                    text=message.text,
+                )
+            )
+            session.commit()
 
 
 class SesEmailSender:
@@ -470,4 +499,65 @@ def password_changed_email(to: str) -> Email:
             "<p style='font-size:14px;line-height:1.6;margin:12px 0 0;'>"
             "If this was not you, reset your password immediately.</p>",
         ),
+    )
+
+
+def note_reminder_email(
+    to: str,
+    *,
+    title: str,
+    body: str,
+    url: str,
+    recurrence: str,
+    recurring: bool,
+    skipped: int = 0,
+) -> Email:
+    """A note, come back round.
+
+    The note's own words go through `_quote`, which escapes them. That is not
+    paranoia about the author: a note is rich text out of an editor, so it is
+    HTML by construction, and putting somebody's markup inside a signed,
+    correctly branded transactional message is the shape of a phishing kit.
+    """
+    safe_title = _safe(title)
+    extra = (
+        f"<p>This was also due {skipped} more time(s) while you were away.</p>"
+        if skipped
+        else ""
+    )
+    footer = (
+        f'<p style="color:#6b7280;font-size:13px">Sent {_safe(recurrence)}. '
+        f"You can change or stop it on the note.</p>"
+        if recurring
+        else ""
+    )
+    html = _shell(
+        f"Reminder: {safe_title}",
+        f"<p>You asked to be reminded about this note.</p>"
+        f"<p><strong>{safe_title}</strong></p>"
+        f"{_quote(body)}{extra}"
+        f"{_button(url, 'Open the note')}"
+        f"{footer}",
+    )
+    text_parts = [
+        "You asked to be reminded about this note.",
+        "",
+        title,
+        "",
+        _quote_text(body),
+        "",
+        url,
+    ]
+    if skipped:
+        text_parts += [
+            "",
+            f"This was also due {skipped} more time(s) while you were away.",
+        ]
+    if recurring:
+        text_parts += ["", f"Sent {recurrence}. You can change or stop it on the note."]
+    return Email(
+        to=to,
+        subject=f"Reminder: {title}",
+        text="\n".join(text_parts),
+        html=html,
     )

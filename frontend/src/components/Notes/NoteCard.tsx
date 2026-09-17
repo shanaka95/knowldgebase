@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router"
 import {
   Archive,
   ArchiveRestore,
+  Bell,
   Copy,
   ListChecks,
   MoreHorizontal,
@@ -32,6 +33,7 @@ const KIND_ICON = {
 } as const
 
 export interface NoteCardActions {
+  onRemind: (note: NoteSummaryPublic) => void
   onPin: (note: NoteSummaryPublic) => void
   onArchive: (note: NoteSummaryPublic) => void
   onClone: (note: NoteSummaryPublic) => void
@@ -144,6 +146,15 @@ function NoteMenu({
           >
             {note.pinned ? <PinOff /> : <Pin />}
             {note.pinned ? "Unpin" : "Pin"}
+          </DropdownMenuItem>
+        )}
+        {!note.archived && (
+          <DropdownMenuItem
+            onClick={() => actions.onRemind(note)}
+            data-testid="notes-action-remind"
+          >
+            <Bell />
+            Remind me
           </DropdownMenuItem>
         )}
         <DropdownMenuItem

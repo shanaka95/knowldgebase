@@ -31,6 +31,9 @@ from app.models import (
     NoteKind,
     NoteMove,
     NotePublic,
+    NoteReminder,
+    NoteReminderPublic,
+    NoteReminderUpsert,
     NotesPublic,
     NoteTag,
     NoteTagCreate,
@@ -39,8 +42,12 @@ from app.models import (
     NoteTagsPublic,
     NoteTagUpdate,
     NoteUpdate,
+    ReminderEnds,
+    ReminderRecurrence,
+    ReminderStatus,
 )
 from app.services import quota
+from app.services import reminders as reminder_rules
 from app.services import user_notes as notes_service
 
 router = APIRouter(prefix="/notes", tags=["user-notes"])
@@ -48,6 +55,26 @@ router = APIRouter(prefix="/notes", tags=["user-notes"])
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _set_reminder_status(
+    session: SessionDep,
+    note_id: uuid.UUID,
+    status: ReminderStatus,
+    reason: str | None,
+) -> None:
+    """Pause or resume a note's reminder alongside the note itself."""
+    reminder = session.exec(
+        select(NoteReminder).where(col(NoteReminder.note_id) == note_id)
+    ).first()
+    if reminder is None or reminder.status in {
+        ReminderStatus.done,
+        ReminderStatus.cancelled,
+    }:
+        return
+    reminder.status = status
+    reminder.last_error = reason
+    session.add(reminder)
 
 
 def _detail(session: SessionDep, note: Note) -> NotePublic:
@@ -408,6 +435,11 @@ def archive_note(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> An
     note = notes_service.owned_note(session, auth.user, note_id)
     note.archived_at = note.archived_at or _now()
     note.pinned_at = None
+    # And stop nagging about it. Paused rather than deleted, so restoring the
+    # note brings its reminder back rather than silently losing it.
+    _set_reminder_status(
+        session, note.id, ReminderStatus.paused, "the note is archived"
+    )
     session.add(note)
     session.commit()
     session.refresh(note)
@@ -418,6 +450,7 @@ def archive_note(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> An
 def unarchive_note(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> Any:
     note = notes_service.owned_note(session, auth.user, note_id)
     note.archived_at = None
+    _set_reminder_status(session, note.id, ReminderStatus.active, None)
     session.add(note)
     session.commit()
     session.refresh(note)
@@ -493,3 +526,102 @@ def delete_note(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> Any
     session.delete(note)
     session.commit()
     return Message(message="Note deleted")
+
+
+# --- reminders --------------------------------------------------------------
+
+
+def _reminder_public(reminder: NoteReminder) -> NoteReminderPublic:
+    return NoteReminderPublic(
+        id=reminder.id,
+        note_id=reminder.note_id,
+        next_run_at=reminder.next_run_at,
+        local_time=reminder.local_time,
+        timezone=reminder.timezone,
+        recurrence=reminder.recurrence,
+        ends=reminder.ends,
+        ends_on=reminder.ends_on,
+        ends_after=reminder.ends_after,
+        status=reminder.status,
+        sent_count=reminder.sent_count,
+        last_sent_at=reminder.last_sent_at,
+        last_error=reminder.last_error,
+    )
+
+
+@router.get("/{note_id}/reminder", response_model=NoteReminderPublic | None)
+def read_reminder(session: SessionDep, auth: AuthDep, note_id: uuid.UUID) -> Any:
+    note = notes_service.owned_note(session, auth.user, note_id)
+    reminder = session.exec(
+        select(NoteReminder).where(col(NoteReminder.note_id) == note.id)
+    ).first()
+    return _reminder_public(reminder) if reminder else None
+
+
+@router.put("/{note_id}/reminder", response_model=NoteReminderPublic)
+def set_reminder(
+    session: SessionDep,
+    auth: WriteAuth,
+    note_id: uuid.UUID,
+    body: NoteReminderUpsert,
+) -> Any:
+    """Set or replace this note's reminder.
+
+    `at` is a naive local wall clock and `timezone` says which clock. An
+    instant plus a zone would be ambiguous about which reading was meant, and
+    that ambiguity is precisely what drifts across a daylight-saving change.
+    """
+    note = notes_service.owned_note(session, auth.user, note_id)
+    if body.at.tzinfo is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Send a local wall clock without an offset, and the zone it is in.",
+        )
+    if not reminder_rules.is_valid_timezone(body.timezone):
+        raise HTTPException(status_code=422, detail="Unknown time zone")
+    if body.ends == ReminderEnds.on_date and body.ends_on is None:
+        raise HTTPException(status_code=422, detail="Say which date it ends on")
+    if body.ends == ReminderEnds.after and body.ends_after is None:
+        raise HTTPException(status_code=422, detail="Say how many times it runs")
+
+    first = reminder_rules.instant_for(body.at.date(), body.at.time(), body.timezone)
+    if body.recurrence == ReminderRecurrence.none and first <= _now():
+        raise HTTPException(status_code=422, detail="That time has already passed")
+
+    reminder = session.exec(
+        select(NoteReminder).where(col(NoteReminder.note_id) == note.id)
+    ).first()
+    if reminder is None:
+        reminder = NoteReminder(note_id=note.id, user_id=auth.user.id)
+
+    reminder.local_time = body.at.time()
+    reminder.timezone = body.timezone
+    reminder.anchor_date = body.at.date()
+    reminder.recurrence = body.recurrence
+    reminder.ends = body.ends
+    reminder.ends_on = body.ends_on
+    reminder.ends_after = body.ends_after
+    reminder.next_local_date = body.at.date()
+    reminder.next_run_at = first
+    reminder.status = ReminderStatus.active
+    reminder.sent_count = 0
+    reminder.attempts = 0
+    reminder.last_error = None
+    reminder.locked_until = None
+    reminder.updated_at = _now()
+    session.add(reminder)
+    session.commit()
+    session.refresh(reminder)
+    return _reminder_public(reminder)
+
+
+@router.delete("/{note_id}/reminder", response_model=Message)
+def cancel_reminder(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> Any:
+    note = notes_service.owned_note(session, auth.user, note_id)
+    reminder = session.exec(
+        select(NoteReminder).where(col(NoteReminder.note_id) == note.id)
+    ).first()
+    if reminder is not None:
+        session.delete(reminder)
+        session.commit()
+    return Message(message="Reminder removed")

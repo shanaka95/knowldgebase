@@ -14,8 +14,10 @@ from typing import Any
 
 from app.core.config import settings
 from app.models import CleanupKind, CleanupTask
+from app.services.email import get_email_sender, note_reminder_email
 from app.services.embeddings import EmbeddingClient
 from app.services.llm import LLMClient, LLMTask
+from app.services.sharing import note_url
 from app.services.storage import MinioStorage, ObjectStorage
 from app.services.vectors import QdrantStore, VectorStore
 from app.worker import healthfile, queue
@@ -177,6 +179,42 @@ class Worker:
                 logger.warning("cleanup %s failed: %s", task.kind, exc)
                 await asyncio.to_thread(queue.fail_cleanup_task, task.id, str(exc))
 
+    async def _process_reminders(self, limit: int = 20) -> None:
+        """Send what is due.
+
+        Last in the tick, and deliberately. `tick` has no try of its own, so a
+        failure in claiming reminders would otherwise starve the queue that is
+        this worker's actual job. The per-item try means one bad address cannot
+        stop the other nineteen.
+
+        No concurrency budget: these are one HTTP call each, at most twenty a
+        second, and nothing here competes for an embedding slot.
+        """
+        due = await asyncio.to_thread(queue.claim_reminders, limit)
+        for item in due:
+            try:
+                message = note_reminder_email(
+                    item.to_email,
+                    title=item.note_title,
+                    body=item.note_text,
+                    url=note_url(item.note_id),
+                    recurrence=item.recurrence_sentence,
+                    recurring=item.recurring,
+                    skipped=item.skipped,
+                )
+                await get_email_sender().send(message)
+                await asyncio.to_thread(
+                    queue.complete_reminder, item.reminder_id, item.delivery_id
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("reminder %s failed: %s", str(item.reminder_id)[:8], exc)
+                await asyncio.to_thread(
+                    queue.fail_reminder,
+                    item.reminder_id,
+                    item.delivery_id,
+                    str(exc),
+                )
+
     async def _run_cleanup(self, task: CleanupTask) -> None:
         if task.kind == CleanupKind.qdrant_document:
             await self.vectors.delete_document(
@@ -257,6 +295,7 @@ class Worker:
             await asyncio.to_thread(queue.enqueue_stale_notes, 20)
 
         await self._process_cleanup_tasks()
+        await self._process_reminders()
         return started
 
     # -------------------------------------------------------------------- run

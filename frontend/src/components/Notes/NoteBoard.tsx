@@ -1,10 +1,11 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { NotebookPen } from "lucide-react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { NoteSummaryPublic } from "@/client"
 import { EmptyState } from "@/components/Layout/EmptyState"
 import { NoteCard, type NoteCardActions } from "@/components/Notes/NoteCard"
+import { NoteReminderDialog } from "@/components/Notes/NoteReminderDialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   type NoteListParams,
@@ -48,7 +49,10 @@ export function NoteBoard({ params }: { params: NoteListParams }) {
   const clone = useCloneUserNote()
   const remove = useDeleteUserNote()
 
+  const [reminding, setReminding] = useState<NoteSummaryPublic | null>(null)
+
   const actions: NoteCardActions = {
+    onRemind: (note) => setReminding(note),
     onPin: (note) => pin.mutate({ id: note.id, pinned: note.pinned }),
     onArchive: (note) =>
       archive.mutate({ id: note.id, archived: note.archived }),
@@ -101,6 +105,15 @@ export function NoteBoard({ params }: { params: NoteListParams }) {
             ))}
           </div>
         </section>
+      )}
+
+      {reminding && (
+        <NoteReminderDialog
+          noteId={reminding.id}
+          noteTitle={reminding.title}
+          open
+          onOpenChange={(next) => !next && setReminding(null)}
+        />
       )}
 
       <div ref={sentinel} className="h-1" />

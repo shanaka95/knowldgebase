@@ -87,6 +87,15 @@ def invitation_url(token: str) -> str:
     return f"{settings.FRONTEND_HOST.rstrip('/')}/invite?token={token}"
 
 
+def note_url(note_id: object) -> str:
+    """Where somebody goes to open one of their own notes.
+
+    No slug to thread through, unlike a page: a note belongs to one person and
+    has exactly one address.
+    """
+    return f"{str(settings.FRONTEND_HOST).rstrip('/')}/notes/{note_id}"
+
+
 def space_url(slug: str) -> str:
     """Where a person goes to open a space they have access to."""
     return f"{settings.FRONTEND_HOST.rstrip('/')}/s/{slug}"

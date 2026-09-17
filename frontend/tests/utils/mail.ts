@@ -114,3 +114,17 @@ export async function passwordResetToken(
   )
   return tokenFrom(message.text, "/reset-password")
 }
+
+/** The latest reminder message for an address, matched on the note it names. */
+export async function reminderEmail(
+  request: APIRequestContext,
+  email: string,
+  needle: string,
+): Promise<CapturedEmail> {
+  return waitForEmail(
+    request,
+    email,
+    (m) => /^Reminder:/.test(m.subject) && m.text.includes(needle),
+    30_000,
+  )
+}

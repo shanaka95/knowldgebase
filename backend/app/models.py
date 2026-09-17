@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from enum import StrEnum
 from typing import Any
 
@@ -14,6 +14,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    Time,
     UniqueConstraint,
     text,
 )
@@ -3120,3 +3121,179 @@ class NoteEmbeddingJob(SQLModel, table=True):
     chunk_count: int | None = None
     stats: dict[str, Any] | None = Field(default=None, sa_type=JSONB)
     created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+# ---------------------------------------------------------------------------
+# Reminders
+#
+# A note that comes back to you. Stored as a wall clock and a zone rather than
+# an instant, because "every day at nine" means nine o'clock in March and nine
+# o'clock in July, and an instant does not.
+# ---------------------------------------------------------------------------
+
+
+class ReminderRecurrence(StrEnum):
+    none = "none"
+    daily = "daily"
+    weekly = "weekly"
+    monthly = "monthly"
+    yearly = "yearly"
+
+
+class ReminderEnds(StrEnum):
+    never = "never"
+    on_date = "on_date"
+    after = "after"
+
+
+class ReminderStatus(StrEnum):
+    active = "active"
+    # The note was archived, or the account cannot receive mail. Kept rather
+    # than deleted so the interface can say why nothing is arriving.
+    paused = "paused"
+    done = "done"
+    cancelled = "cancelled"
+
+
+class NoteReminder(SQLModel, table=True):
+    __table_args__ = (
+        # The claim query and nothing else. Partial, so the scan only ever
+        # touches rows that could actually fire.
+        Index(
+            "ix_notereminder_due",
+            "next_run_at",
+            postgresql_where=text("status = 'active'"),
+        ),
+        # One per note. Two reminders on one note is a feature nobody asked for
+        # and a second way to send the same mail twice.
+        UniqueConstraint("note_id", name="uq_notereminder_note"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    note_id: uuid.UUID = Field(
+        foreign_key="note.id", nullable=False, ondelete="CASCADE"
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+
+    # The wall clock somebody chose, and the zone they chose it in. Snapshotted
+    # rather than read from the profile at send time: a reminder set as "9am in
+    # Berlin" must not move because its owner later opened the app in Singapore.
+    local_time: time = Field(sa_type=Time)
+    timezone: str = Field(max_length=64)
+    # The local date of the first occurrence. Every later one is derived from
+    # this and never from the previous one, which is what stops a monthly
+    # reminder on the 31st collapsing to the 28th for ever after February.
+    anchor_date: date = Field(sa_type=Date)
+
+    recurrence: ReminderRecurrence = Field(
+        default=ReminderRecurrence.none,
+        sa_type=String(12),  # type: ignore
+    )
+    ends: ReminderEnds = Field(default=ReminderEnds.never, sa_type=String(12))  # type: ignore
+    ends_on: date | None = Field(default=None, sa_type=Date)
+    ends_after: int | None = None
+
+    # The instant, in UTC, that the wall clock above names. Shown to the reader,
+    # so it is never used as a lease - see `locked_until`.
+    next_run_at: datetime = _tz_datetime(nullable=False)
+    next_local_date: date = Field(sa_type=Date)
+    # The lease. `cleanuptask` leases by pushing its `run_after` forward, which
+    # works because that column means only "when to try next". This one is on
+    # screen, and moving it during a send would make the interface lie.
+    locked_until: datetime | None = _tz_datetime(default=None)
+
+    status: ReminderStatus = Field(
+        default=ReminderStatus.active,
+        sa_type=String(12),  # type: ignore
+    )
+    sent_count: int = 0
+    attempts: int = 0
+    last_sent_at: datetime | None = _tz_datetime(default=None)
+    last_error: str | None = Field(default=None, sa_type=Text)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class NoteReminderDelivery(SQLModel, table=True):
+    """One row per occurrence that was claimed. The unique key is the guard.
+
+    Email cannot be made atomic with a commit, so this picks a side: the row is
+    written and committed *before* the send. A crash in between loses that
+    occurrence, which is observable as `sent_at IS NULL`. The other way round
+    would risk sending twice, and a duplicate reminder costs the trust of every
+    later one.
+    """
+
+    __table_args__ = (
+        UniqueConstraint(
+            "reminder_id", "occurrence_at", name="uq_reminderdelivery_occurrence"
+        ),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    reminder_id: uuid.UUID = Field(
+        foreign_key="notereminder.id", nullable=False, ondelete="CASCADE"
+    )
+    # The instant this is the delivery *of*, not when it was sent.
+    occurrence_at: datetime = _tz_datetime(nullable=False)
+    # Occurrences that went by while nothing was running, folded into this one.
+    skipped: int = 0
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    sent_at: datetime | None = _tz_datetime(default=None)
+    error: str | None = Field(default=None, sa_type=Text)
+
+
+class CapturedEmailRow(SQLModel, table=True):
+    """Mail the logging sender kept, visible across processes.
+
+    `LoggingEmailSender` keeps messages in a list belonging to one process, and
+    the worker is not the process the dev mailbox endpoint runs in. Nothing has
+    ever emailed from the worker before, so this has never mattered; a reminder
+    is the first thing that does, and without this a test polling the mailbox
+    would poll an empty one for ever.
+
+    Written only in development, and inert everywhere else.
+    """
+
+    __table_args__ = (
+        Index("ix_capturedemailrow_to_created", "to_email", "created_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    to_email: str = Field(max_length=320)
+    subject: str = Field(max_length=500)
+    text: str = Field(sa_type=Text)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class NoteReminderUpsert(SQLModel):
+    """Set or replace a note's reminder."""
+
+    # A naive local wall clock, deliberately. An instant plus a zone is
+    # ambiguous about which clock reading was meant, and that ambiguity is
+    # exactly what breaks across a daylight-saving boundary.
+    at: datetime
+    timezone: str = Field(max_length=64)
+    recurrence: ReminderRecurrence = ReminderRecurrence.none
+    ends: ReminderEnds = ReminderEnds.never
+    ends_on: date | None = None
+    ends_after: int | None = Field(default=None, ge=1, le=500)
+
+
+class NoteReminderPublic(SQLModel):
+    id: uuid.UUID
+    note_id: uuid.UUID
+    next_run_at: datetime
+    local_time: time
+    timezone: str
+    recurrence: ReminderRecurrence
+    ends: ReminderEnds
+    ends_on: date | None = None
+    ends_after: int | None = None
+    status: ReminderStatus
+    sent_count: int
+    last_sent_at: datetime | None = None
+    # Why a paused reminder is paused, so the interface can explain itself.
+    last_error: str | None = None

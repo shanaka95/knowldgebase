@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test"
 
 import {
+  API,
   adminToken,
   createDocument,
   createNamespace,
@@ -379,6 +380,36 @@ test.describe("a dialog on a small phone", () => {
     await page.getByTestId("create-api-key").click()
     await expect(page.getByRole("dialog")).toBeVisible()
     await expectUsable(page, "the new-API-key dialog")
+  })
+
+  test("the reminder dialog fits, at its tallest", async ({
+    page,
+    request,
+  }) => {
+    // Its tallest is a repeating reminder that ends after a count: that is the
+    // arrangement where every optional row is on screen at once.
+    const token = await adminToken(request)
+    const word = `saffron${uid()}`
+    const made = await request.post(`${API}/notes/`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { title: `Remind ${word}` },
+    })
+    expect(made.ok(), await made.text()).toBeTruthy()
+
+    await page.goto("/notes")
+    await page.waitForLoadState("networkidle")
+    const card = page.getByTestId("notes-card").filter({ hasText: word })
+    await card.getByTestId("notes-card-menu").click()
+    await page.getByTestId("notes-action-remind").click()
+    await expect(page.getByTestId("notes-reminder-dialog")).toBeVisible()
+    await expectUsable(page, "the reminder dialog")
+
+    await page.getByTestId("notes-reminder-repeat").click()
+    await page.getByRole("option", { name: "Every week" }).click()
+    await page.getByTestId("notes-reminder-end").click()
+    await page.getByRole("option", { name: /after a number/i }).click()
+    await expect(page.getByTestId("notes-reminder-end-count")).toBeVisible()
+    await expectUsable(page, "the reminder dialog, repeating and counted")
   })
 })
 

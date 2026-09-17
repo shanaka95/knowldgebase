@@ -3040,6 +3040,81 @@ export type NotePublic = {
 };
 
 /**
+ * NoteReminderPublic
+ */
+export type NoteReminderPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Note Id
+     */
+    note_id: string;
+    /**
+     * Next Run At
+     */
+    next_run_at: string;
+    /**
+     * Local Time
+     */
+    local_time: string;
+    /**
+     * Timezone
+     */
+    timezone: string;
+    recurrence: ReminderRecurrence;
+    ends: ReminderEnds;
+    /**
+     * Ends On
+     */
+    ends_on?: string | null;
+    /**
+     * Ends After
+     */
+    ends_after?: number | null;
+    status: ReminderStatus;
+    /**
+     * Sent Count
+     */
+    sent_count: number;
+    /**
+     * Last Sent At
+     */
+    last_sent_at?: string | null;
+    /**
+     * Last Error
+     */
+    last_error?: string | null;
+};
+
+/**
+ * NoteReminderUpsert
+ *
+ * Set or replace a note's reminder.
+ */
+export type NoteReminderUpsert = {
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Timezone
+     */
+    timezone: string;
+    recurrence?: ReminderRecurrence;
+    ends?: ReminderEnds;
+    /**
+     * Ends On
+     */
+    ends_on?: string | null;
+    /**
+     * Ends After
+     */
+    ends_after?: number | null;
+};
+
+/**
  * NoteSummaryPublic
  *
  * A note as the list and the search results show it: no body.
@@ -3303,6 +3378,21 @@ export type PublicLink = {
      */
     shared_at?: string | null;
 };
+
+/**
+ * ReminderEnds
+ */
+export type ReminderEnds = 'never' | 'on_date' | 'after';
+
+/**
+ * ReminderRecurrence
+ */
+export type ReminderRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+/**
+ * ReminderStatus
+ */
+export type ReminderStatus = 'active' | 'paused' | 'done' | 'cancelled';
 
 /**
  * ResolvedLimit
@@ -7044,6 +7134,98 @@ export type userNotesCloneNoteResponses = {
 };
 
 export type userNotesCloneNoteResponse = userNotesCloneNoteResponses[keyof userNotesCloneNoteResponses];
+
+export type userNotesCancelReminderData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/reminder';
+};
+
+export type userNotesCancelReminderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesCancelReminderError = userNotesCancelReminderErrors[keyof userNotesCancelReminderErrors];
+
+export type userNotesCancelReminderResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type userNotesCancelReminderResponse = userNotesCancelReminderResponses[keyof userNotesCancelReminderResponses];
+
+export type userNotesReadReminderData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/reminder';
+};
+
+export type userNotesReadReminderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesReadReminderError = userNotesReadReminderErrors[keyof userNotesReadReminderErrors];
+
+export type userNotesReadReminderResponses = {
+    /**
+     * Response User-Notes-Read Reminder
+     *
+     * Successful Response
+     */
+    200: NoteReminderPublic | null;
+};
+
+export type userNotesReadReminderResponse = userNotesReadReminderResponses[keyof userNotesReadReminderResponses];
+
+export type userNotesSetReminderData = {
+    body: NoteReminderUpsert;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/reminder';
+};
+
+export type userNotesSetReminderErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesSetReminderError = userNotesSetReminderErrors[keyof userNotesSetReminderErrors];
+
+export type userNotesSetReminderResponses = {
+    /**
+     * Successful Response
+     */
+    200: NoteReminderPublic;
+};
+
+export type userNotesSetReminderResponse = userNotesSetReminderResponses[keyof userNotesSetReminderResponses];
 
 export type attachmentsReadAttachmentsData = {
     body?: never;

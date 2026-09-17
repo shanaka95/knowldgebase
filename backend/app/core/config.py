@@ -509,6 +509,9 @@ class Settings(BaseSettings):
     # Its own budget, so a misbehaving note pipeline cannot starve the queue
     # that indexes pages. Set to 0 to switch note indexing off entirely.
     NOTE_WORKER_CONCURRENCY: int = 2
+    # How late an occurrence may be and still be worth sending. A reminder
+    # about a meeting that finished two days ago is worse than silence.
+    REMINDER_MAX_LATENESS_HOURS: int = 24
     EMBEDDING_MAX_ATTEMPTS: int = 3
     EMBEDDING_RETRY_BACKOFF_SECONDS: int = 30
 
