@@ -978,6 +978,16 @@ export type Body_user_notes_transcribe = {
 };
 
 /**
+ * Body_user-notes-upload_note_asset
+ */
+export type Body_user_notes_upload_note_asset = {
+    /**
+     * File
+     */
+    file: Blob | File;
+};
+
+/**
  * CapturedEmail
  *
  * A message the logging sender kept instead of sending.
@@ -2933,6 +2943,58 @@ export type NewPassword = {
 };
 
 /**
+ * NoteAssetPublic
+ */
+export type NoteAssetPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Note Id
+     */
+    note_id: string;
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Content Type
+     */
+    content_type: string;
+    /**
+     * Size
+     */
+    size: number;
+    /**
+     * Download Url
+     */
+    download_url: string;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * NoteAssetsPublic
+ */
+export type NoteAssetsPublic = {
+    /**
+     * Data
+     */
+    data: Array<NoteAssetPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * NoteCreate
  */
 export type NoteCreate = {
@@ -3047,6 +3109,10 @@ export type NotePublic = {
      * Chunk Count
      */
     chunk_count?: number;
+    /**
+     * Drawing Asset Id
+     */
+    drawing_asset_id?: string | null;
     /**
      * Content Html
      */
@@ -3204,6 +3270,10 @@ export type NoteSummaryPublic = {
      * Chunk Count
      */
     chunk_count?: number;
+    /**
+     * Drawing Asset Id
+     */
+    drawing_asset_id?: string | null;
 };
 
 /**
@@ -7256,6 +7326,132 @@ export type userNotesCloneNoteResponses = {
 };
 
 export type userNotesCloneNoteResponse = userNotesCloneNoteResponses[keyof userNotesCloneNoteResponses];
+
+export type userNotesReadNoteAssetsData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/assets';
+};
+
+export type userNotesReadNoteAssetsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesReadNoteAssetsError = userNotesReadNoteAssetsErrors[keyof userNotesReadNoteAssetsErrors];
+
+export type userNotesReadNoteAssetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: NoteAssetsPublic;
+};
+
+export type userNotesReadNoteAssetsResponse = userNotesReadNoteAssetsResponses[keyof userNotesReadNoteAssetsResponses];
+
+export type userNotesUploadNoteAssetData = {
+    body: Body_user_notes_upload_note_asset;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/assets';
+};
+
+export type userNotesUploadNoteAssetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesUploadNoteAssetError = userNotesUploadNoteAssetErrors[keyof userNotesUploadNoteAssetErrors];
+
+export type userNotesUploadNoteAssetResponses = {
+    /**
+     * Successful Response
+     */
+    200: NoteAssetPublic;
+};
+
+export type userNotesUploadNoteAssetResponse = userNotesUploadNoteAssetResponses[keyof userNotesUploadNoteAssetResponses];
+
+export type userNotesDownloadNoteAssetData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+        /**
+         * Asset Id
+         */
+        asset_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/assets/{asset_id}/download';
+};
+
+export type userNotesDownloadNoteAssetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesDownloadNoteAssetError = userNotesDownloadNoteAssetErrors[keyof userNotesDownloadNoteAssetErrors];
+
+export type userNotesDownloadNoteAssetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type userNotesDeleteNoteAssetData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+        /**
+         * Asset Id
+         */
+        asset_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/assets/{asset_id}';
+};
+
+export type userNotesDeleteNoteAssetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesDeleteNoteAssetError = userNotesDeleteNoteAssetErrors[keyof userNotesDeleteNoteAssetErrors];
+
+export type userNotesDeleteNoteAssetResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type userNotesDeleteNoteAssetResponse = userNotesDeleteNoteAssetResponses[keyof userNotesDeleteNoteAssetResponses];
 
 export type userNotesCancelReminderData = {
     body?: never;

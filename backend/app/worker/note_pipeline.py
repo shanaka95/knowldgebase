@@ -17,6 +17,7 @@ than a minute, and that indexing one costs a single embedding call.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from app.core.content import html_to_blocks
 from app.models import (
@@ -25,7 +26,9 @@ from app.models import (
     JobStage,
     JobStatus,
     NoteEmbeddingJob,
+    NoteKind,
 )
+from app.services.drawings import describe_drawing
 from app.services.embeddings import EmbeddingDimensionError
 from app.services.sparse import encode_document
 from app.services.vectors import Point, build_note_payload, note_point_id
@@ -39,6 +42,8 @@ from app.worker.pipeline import PipelineDeps
 # "chunks" would file the same words twice and let a short note outrank a long
 # one purely by being counted more often.
 CHUNK_FROM_CHARS = 1200
+
+logger = logging.getLogger(__name__)
 
 
 def build_note_points(
@@ -80,6 +85,48 @@ def build_note_points(
     return points
 
 
+async def _describe_drawing(
+    note: queue.NoteSnapshot,
+    doc_version: int,
+    deps: PipelineDeps,
+    ctx: NoteJobContext,
+) -> queue.NoteSnapshot:
+    """Look at the sketch and write down what is in it, once.
+
+    Returns the note as it should now be indexed. Every way this can fail -
+    no storage configured, no picture yet, a description already written, a
+    vision model that is down - returns the note unchanged, because a drawing
+    that is findable only by its title is a worse note, not a failed job.
+    """
+    if deps.storage is None:
+        return note
+    asset = await asyncio.to_thread(queue.note_drawing, note.id)
+    if asset is None or asset.description:
+        return note
+
+    try:
+        obj = await asyncio.to_thread(deps.storage.open, asset.object_key)
+        try:
+            image = b"".join(obj.stream)
+        finally:
+            obj.close()
+    except Exception as exc:  # noqa: BLE001 - the picture is not the note
+        logger.info("note %s: could not read its drawing (%s)", note.id, exc)
+        return note
+
+    description = await describe_drawing(
+        image, content_type=asset.content_type, meter=ctx.meter
+    )
+    if not description:
+        return note
+
+    await asyncio.to_thread(
+        queue.save_drawing_description, asset.id, note.id, doc_version, description
+    )
+    reloaded = await asyncio.to_thread(queue.load_note, note.id)
+    return reloaded if reloaded is not None else note
+
+
 async def run_note_job(job: NoteEmbeddingJob, deps: PipelineDeps) -> JobStatus:
     owner = await asyncio.to_thread(queue.note_owner, job.note_id)
     ctx = NoteJobContext(job, user_id=owner)
@@ -96,6 +143,12 @@ async def run_note_job(job: NoteEmbeddingJob, deps: PipelineDeps) -> JobStatus:
             raise JobSuperseded(
                 f"note at v{note.version}, job wants v{job.doc_version}"
             )
+
+        # A drawing has no words until something looks at it. This runs once
+        # per version, before the text is read, so the description is part of
+        # what gets embedded rather than arriving a version late.
+        if note.kind == str(NoteKind.drawing):
+            note = await _describe_drawing(note, job.doc_version, deps, ctx)
 
         body = note.content_text.strip()
         whole = "\n\n".join(part for part in (note.title.strip(), body) if part)

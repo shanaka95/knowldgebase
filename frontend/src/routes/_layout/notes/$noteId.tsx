@@ -10,6 +10,7 @@ import { Editor } from "@/components/Editor/Editor"
 import { useDocumentEditor } from "@/components/Editor/useDocumentEditor"
 import { PageContainer } from "@/components/Layout/PageContainer"
 import { DictateButton } from "@/components/Notes/DictateButton"
+import { DrawingNote } from "@/components/Notes/DrawingNote"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -48,17 +49,23 @@ function NotePage() {
     typeof useAutosave<SavePayload>
   > | null>(null)
 
+  const archived = note?.archived === true
+  // A drawing saves on a button, so the title rides along with it rather than
+  // autosaving on its own. Two save paths on one note race each other for the
+  // version number, and the loser is a conflict banner nobody caused.
+  const drawing = note?.kind === "drawing"
+  const [titleDirty, setTitleDirty] = useState(false)
+
   const setTitleBoth = (value: string) => {
     titleRef.current = value
     setTitle(value)
-    autosaveRef.current?.markDirty()
+    if (drawing) setTitleDirty(true)
+    else autosaveRef.current?.markDirty()
   }
-
-  const archived = note?.archived === true
 
   const editor = useDocumentEditor({
     content: note?.content_html ?? "",
-    editable: !archived,
+    editable: !archived && !drawing,
     variant: "note",
     className: "min-h-[40vh]",
     placeholder: "Write something down",
@@ -70,7 +77,7 @@ function NotePage() {
 
   const autosave = useAutosave<SavePayload>({
     baseVersion: note?.version ?? 1,
-    enabled: !archived,
+    enabled: !archived && !drawing,
     getPayload: () => ({
       title: titleRef.current,
       content: htmlRef.current,
@@ -129,7 +136,7 @@ function NotePage() {
           className="h-9 min-w-0 flex-1 border-0 px-0 font-semibold text-lg shadow-none focus-visible:ring-0"
           data-testid="notes-title"
         />
-        {!archived && (
+        {!archived && !drawing && (
           <DictateButton
             onText={(text) =>
               // At the caret, not at the end: dictation here is a way of
@@ -138,12 +145,16 @@ function NotePage() {
             }
           />
         )}
-        <SaveIndicator
-          status={autosave.status}
-          lastSavedAt={autosave.lastSavedAt}
-          error={autosave.error}
-          onRetry={() => void autosave.retry()}
-        />
+        {/* A drawing saves on a button, so there is no autosave state to
+            report. See DrawingNote for why. */}
+        {!drawing && (
+          <SaveIndicator
+            status={autosave.status}
+            lastSavedAt={autosave.lastSavedAt}
+            error={autosave.error}
+            onRetry={() => void autosave.retry()}
+          />
+        )}
       </div>
 
       {archived && (
@@ -161,9 +172,21 @@ function NotePage() {
         />
       )}
 
-      <div data-testid="notes-editor">
-        <Editor editor={editor} />
-      </div>
+      {drawing ? (
+        <DrawingNote
+          note={note}
+          title={title}
+          titleDirty={titleDirty}
+          onSaved={() => {
+            setTitleDirty(false)
+            void refetch()
+          }}
+        />
+      ) : (
+        <div data-testid="notes-editor">
+          <Editor editor={editor} />
+        </div>
+      )}
     </PageContainer>
   )
 }

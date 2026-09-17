@@ -133,6 +133,9 @@ class CleanupKind(StrEnum):
     # the rows go with the account and there is nothing left to walk - which is
     # exactly why the vectors have to be swept by owner instead.
     qdrant_notes_of_owner = "qdrant_notes_of_owner"
+    # A note's files. `NoteAsset` rows go with the note by CASCADE, so the
+    # objects behind them have to be swept separately, the same way vectors are.
+    minio_note_assets = "minio_note_assets"
 
 
 ROLE_RANK: dict[str, int] = {
@@ -3055,6 +3058,11 @@ class NoteSummaryPublic(SQLModel):
     updated_at: datetime
     embedding_status: EmbeddingStatus
     chunk_count: int = 0
+    # The picture a drawing note is of, so a card can show it. Null on every
+    # other kind, and on a drawing nobody has drawn on yet. An id rather than a
+    # URL because the file is private: the browser sends no token on an <img>
+    # request, so it is fetched with the rest of the client's credentials.
+    drawing_asset_id: uuid.UUID | None = None
 
 
 class NotePublic(NoteSummaryPublic):
@@ -3065,6 +3073,63 @@ class NotePublic(NoteSummaryPublic):
 
 class NotesPublic(SQLModel):
     data: list[NoteSummaryPublic]
+    count: int
+
+
+class NoteAsset(SQLModel, table=True):
+    """A file belonging to a note. In practice, a drawing.
+
+    Not an `Attachment`, and the reason is specific: `attachments._check_access`
+    falls back to `require_namespace` for a file with no document, so a drawing
+    stored there would be downloadable by every member of the space the note
+    happens to be filed in. That is precisely the leak this feature exists to
+    prevent, and it would not look like a bug from the outside.
+
+    So: its own table, its own routes, and `user_id` denormalised onto the row
+    so the ownership check is one column rather than a join through the note.
+    The object key is visibly different too - `notes/{user}/{note}/{asset}`
+    beside `ns/{namespace}/…` - so a bucket policy or an audit can tell private
+    files from shared ones without consulting the database.
+    """
+
+    __table_args__ = (
+        # "the files of this note", which is the only question asked of it.
+        Index("ix_noteasset_note", "note_id", "created_at"),
+        # And the sweep when an account goes.
+        Index("ix_noteasset_user", "user_id"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    note_id: uuid.UUID = Field(
+        foreign_key="note.id", nullable=False, ondelete="CASCADE"
+    )
+    # Denormalised from the note on purpose. See the class docstring.
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    filename: str = Field(default="drawing.png", max_length=255)
+    content_type: str = Field(default="image/png", max_length=127)
+    size: int = Field(default=0, sa_type=BigInteger)
+    object_key: str = Field(unique=True, max_length=512)
+    # What the vision pass made of it, so a sketch is findable by what is in it
+    # rather than only by what its author called it. Written by the worker.
+    description: str = Field(default="", sa_type=Text)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class NoteAssetPublic(SQLModel):
+    id: uuid.UUID
+    note_id: uuid.UUID
+    filename: str
+    content_type: str
+    size: int
+    download_url: str
+    description: str = ""
+    created_at: datetime
+
+
+class NoteAssetsPublic(SQLModel):
+    data: list[NoteAssetPublic]
     count: int
 
 

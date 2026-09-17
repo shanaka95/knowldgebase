@@ -30,6 +30,7 @@ from app.models import (
     ContentFormat,
     Namespace,
     Note,
+    NoteAsset,
     NoteKind,
     NoteSummaryPublic,
     NoteTag,
@@ -198,11 +199,33 @@ def set_tags(
 # --- serialisation ----------------------------------------------------------
 
 
+def drawing_assets(
+    session: Session, note_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID]:
+    """The newest picture of each of these notes, in one query.
+
+    Newest because redrawing uploads a new file rather than overwriting one:
+    the older rows are what the sketch used to look like.
+    """
+    if not note_ids:
+        return {}
+    rows = session.exec(
+        select(NoteAsset)
+        .where(col(NoteAsset.note_id).in_(list(note_ids)))
+        .order_by(col(NoteAsset.note_id), col(NoteAsset.created_at).desc())
+    ).all()
+    newest: dict[uuid.UUID, uuid.UUID] = {}
+    for row in rows:
+        newest.setdefault(row.note_id, row.id)
+    return newest
+
+
 def summary(
     note: Note,
     *,
     namespace_name: str | None = None,
     tags: Sequence[NoteTag] = (),
+    drawing_asset_id: uuid.UUID | None = None,
 ) -> NoteSummaryPublic:
     """A note as a list shows it: no body, and a plain-text preview.
 
@@ -233,6 +256,7 @@ def summary(
         updated_at=note.updated_at,
         embedding_status=note.embedding_status,
         chunk_count=note.chunk_count,
+        drawing_asset_id=drawing_asset_id,
     )
 
 

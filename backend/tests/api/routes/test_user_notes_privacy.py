@@ -501,3 +501,120 @@ def test_ask_never_reads_another_persons_note(
                 {k: v for k, v in body.items() if k not in {"question", "query"}}
             )
             assert NONCE not in reachable, f"{who} got the note in their context"
+
+
+# --- a note's files ---------------------------------------------------------
+#
+# The reason these exist at all: `attachments._check_access` falls back to
+# `require_namespace` for a file with no document. A drawing stored as an
+# attachment would have been downloadable by every member of the space the
+# note is filed in - which is exactly the arrangement the fixture builds.
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+
+def upload_drawing(
+    client: TestClient, headers: dict[str, str], note_id: str, data: bytes = PNG
+):  # noqa: ANN201
+    return client.post(
+        f"{API}/notes/{note_id}/assets",
+        headers=headers,
+        files={"file": ("drawing.png", data, "image/png")},
+    )
+
+
+def test_a_drawing_is_reachable_only_by_its_author(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    made = upload_drawing(client, world["victim"], world["note_id"])
+    assert made.status_code == 200, made.text
+    asset = made.json()
+
+    # The author can read it back.
+    mine = client.get(asset["download_url"], headers=world["victim"])
+    assert mine.status_code == 200
+    assert mine.content == PNG
+
+    base = f"{API}/notes/{world['note_id']}/assets"
+    for who, headers in strangers(world):
+        assert client.get(base, headers=headers).status_code == 404, (
+            f"{who} listed another person's files"
+        )
+        assert client.get(asset["download_url"], headers=headers).status_code == 404, (
+            f"{who} downloaded another person's drawing"
+        )
+        assert (
+            client.delete(f"{base}/{asset['id']}", headers=headers).status_code == 404
+        ), f"{who} deleted another person's drawing"
+        assert upload_drawing(client, headers, world["note_id"]).status_code == 404, (
+            f"{who} wrote into another person's note"
+        )
+
+
+def test_a_drawing_is_stored_where_shared_files_are_not(
+    client: TestClient, db: Session, world: dict[str, Any]
+) -> None:
+    """The key says which it is, without consulting the database.
+
+    `ns/{namespace}/…` is shared; `notes/{user}/{note}/…` is not. A bucket
+    policy or an audit can tell them apart, and a drawing must never land in
+    the first shape however it was filed.
+    """
+    from sqlmodel import select
+
+    from app.models import NoteAsset
+
+    made = upload_drawing(client, world["victim"], world["note_id"])
+    assert made.status_code == 200
+    row = db.exec(
+        select(NoteAsset).where(NoteAsset.id == uuid.UUID(made.json()["id"]))
+    ).one()
+    assert row.object_key.startswith("notes/")
+    assert not row.object_key.startswith("ns/")
+
+
+def test_a_file_id_cannot_be_fetched_through_another_note(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    """Both halves of the check, not just the note's."""
+    made = upload_drawing(client, world["victim"], world["note_id"])
+    asset_id = made.json()["id"]
+
+    other = client.post(
+        f"{API}/notes/", headers=world["victim"], json={"title": "Another"}
+    )
+    other_id = other.json()["id"]
+
+    wrong = client.get(
+        f"{API}/notes/{other_id}/assets/{asset_id}/download", headers=world["victim"]
+    )
+    assert wrong.status_code == 404
+
+
+def test_only_images_are_accepted(client: TestClient, world: dict[str, Any]) -> None:
+    """A note's files carry a drawing. They are not a private file store."""
+    response = client.post(
+        f"{API}/notes/{world['note_id']}/assets",
+        headers=world["victim"],
+        files={"file": ("payroll.html", b"<script>alert(1)</script>", "text/html")},
+    )
+    assert response.status_code == 415
+
+
+def test_deleting_a_note_schedules_its_files_for_removal(
+    client: TestClient, db: Session, world: dict[str, Any]
+) -> None:
+    """The rows cascade; the objects behind them do not, so they are swept."""
+    from sqlmodel import select
+
+    from app.models import CleanupKind, CleanupTask
+
+    upload_drawing(client, world["victim"], world["note_id"])
+    gone = client.delete(f"{API}/notes/{world['note_id']}", headers=world["victim"])
+    assert gone.status_code == 200
+
+    tasks = db.exec(
+        select(CleanupTask).where(CleanupTask.kind == CleanupKind.minio_note_assets)
+    ).all()
+    keys = [key for task in tasks for key in (task.payload.get("object_keys") or [])]
+    assert any(key.startswith("notes/") for key in keys)

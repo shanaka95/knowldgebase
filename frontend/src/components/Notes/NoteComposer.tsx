@@ -1,4 +1,5 @@
-import { ListChecks, NotebookPen } from "lucide-react"
+import { useNavigate } from "@tanstack/react-router"
+import { ListChecks, NotebookPen, Pencil } from "lucide-react"
 import { useState } from "react"
 
 import type { NoteKind } from "@/client"
@@ -53,6 +54,25 @@ export function NoteComposer({
   const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
   const create = useCreateUserNote()
+  const navigate = useNavigate()
+
+  // A drawing is the one kind that cannot be started here: there is nothing to
+  // type. It is created empty and opened, because the surface needs the room.
+  const startDrawing = () =>
+    create.mutate(
+      {
+        namespace_id: namespaceId,
+        kind: "drawing",
+        title: "",
+        content_json: { caption: "", strokes: [] },
+      },
+      {
+        onSuccess: (note) => {
+          if (note)
+            void navigate({ to: "/notes/$noteId", params: { noteId: note.id } })
+        },
+      },
+    )
 
   const reset = () => {
     setTitle("")
@@ -116,6 +136,15 @@ export function NoteComposer({
           }}
         >
           <ListChecks />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="New drawing"
+          data-testid="notes-new-drawing"
+          onClick={startDrawing}
+        >
+          <Pencil />
         </Button>
         <Button
           variant="ghost"

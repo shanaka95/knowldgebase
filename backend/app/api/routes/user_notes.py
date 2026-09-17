@@ -10,17 +10,32 @@ Every handler starts at `user_notes.owned_note` or carries
 there are no roles: a note has exactly one reader.
 """
 
+import logging
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from io import BytesIO
+from pathlib import PurePosixPath
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from anyio import to_thread
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlmodel import col, select
+from starlette.background import BackgroundTask
 
 from app import crud
 from app.api.deps import AuthDep, SessionDep, WriteAuth
+from app.api.routes.attachments import serve_headers
 from app.core.config import settings
 from app.core.permissions import require_namespace
 from app.models import (
@@ -28,6 +43,9 @@ from app.models import (
     CleanupTask,
     Message,
     Note,
+    NoteAsset,
+    NoteAssetPublic,
+    NoteAssetsPublic,
     NoteCreate,
     NoteKind,
     NoteMove,
@@ -53,7 +71,10 @@ from app.models import (
 from app.services import credits, quota, usage
 from app.services import reminders as reminder_rules
 from app.services import user_notes as notes_service
+from app.services.storage import ObjectStorage
 from app.services.transcription import TranscriptionClient, TranscriptionError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notes", tags=["user-notes"])
 
@@ -87,10 +108,16 @@ def _detail(session: SessionDep, note: Note) -> NotePublic:
     names = notes_service.namespace_names(
         session, [note.namespace_id] if note.namespace_id else []
     )
+    pictures = (
+        notes_service.drawing_assets(session, [note.id])
+        if note.kind == NoteKind.drawing
+        else {}
+    )
     base = notes_service.summary(
         note,
         namespace_name=names.get(note.namespace_id) if note.namespace_id else None,
         tags=tags,
+        drawing_asset_id=pictures.get(note.id),
     )
     return NotePublic(
         **base.model_dump(),
@@ -257,12 +284,17 @@ def _listing(session: SessionDep, rows: Sequence[Note], *, total: int) -> NotesP
     names = notes_service.namespace_names(
         session, [n.namespace_id for n in rows if n.namespace_id]
     )
+    # One query for the whole page, and only when there is a drawing on it.
+    pictures = notes_service.drawing_assets(
+        session, [n.id for n in rows if n.kind == NoteKind.drawing]
+    )
     return NotesPublic(
         data=[
             notes_service.summary(
                 n,
                 namespace_name=names.get(n.namespace_id) if n.namespace_id else None,
                 tags=tags.get(n.id, []),
+                drawing_asset_id=pictures.get(n.id),
             )
             for n in rows
         ],
@@ -614,9 +646,200 @@ def delete_note(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> Any
             payload={"note_id": str(note.id)},
         )
     )
+    # `NoteAsset` rows go with the note by CASCADE, so the object keys have to
+    # be read now - after the delete there is nothing left to read them from.
+    keys = [
+        row.object_key
+        for row in session.exec(
+            select(NoteAsset).where(col(NoteAsset.note_id) == note.id)
+        ).all()
+    ]
+    if keys:
+        session.add(
+            CleanupTask(
+                kind=CleanupKind.minio_note_assets,
+                payload={"object_keys": keys},
+            )
+        )
     session.delete(note)
     session.commit()
     return Message(message="Note deleted")
+
+
+# --- files, which in practice means drawings ---------------------------------
+#
+# Under the note rather than under /attachments, and reached only through
+# `owned_note`. The attachment routes fall back to a namespace check for a file
+# with no document, which would hand a drawing to every member of the space the
+# note happens to be filed in.
+
+
+def _asset_public(asset: NoteAsset) -> NoteAssetPublic:
+    return NoteAssetPublic(
+        id=asset.id,
+        note_id=asset.note_id,
+        filename=asset.filename,
+        content_type=asset.content_type,
+        size=asset.size,
+        download_url=(
+            f"{settings.API_V1_STR}/notes/{asset.note_id}/assets/{asset.id}/download"
+        ),
+        description=asset.description,
+        created_at=asset.created_at,
+    )
+
+
+def _owned_asset(
+    session: SessionDep, user: Any, note_id: uuid.UUID, asset_id: uuid.UUID
+) -> NoteAsset:
+    """The file, if the note is this person's and the file is that note's.
+
+    Both halves matter: without the second, an id from one note could be
+    fetched through another note's URL.
+    """
+    note = notes_service.owned_note(session, user, note_id)
+    asset = session.get(NoteAsset, asset_id)
+    if asset is None or asset.note_id != note.id or asset.user_id != user.id:
+        raise HTTPException(status_code=404, detail="File not found")
+    return asset
+
+
+def _object_storage(request: Request) -> ObjectStorage:
+    storage: ObjectStorage | None = getattr(request.app.state, "storage", None)
+    if storage is None:
+        raise HTTPException(status_code=503, detail="Object storage not configured")
+    return storage
+
+
+@router.get("/{note_id}/assets", response_model=NoteAssetsPublic)
+def read_note_assets(session: SessionDep, auth: AuthDep, note_id: uuid.UUID) -> Any:
+    note = notes_service.owned_note(session, auth.user, note_id)
+    rows = session.exec(
+        select(NoteAsset)
+        .where(col(NoteAsset.note_id) == note.id)
+        .order_by(col(NoteAsset.created_at).desc())
+    ).all()
+    data = [_asset_public(row) for row in rows]
+    return NoteAssetsPublic(data=data, count=len(data))
+
+
+@router.post("/{note_id}/assets", response_model=NoteAssetPublic)
+async def upload_note_asset(
+    request: Request,
+    session: SessionDep,
+    auth: WriteAuth,
+    note_id: uuid.UUID,
+    file: Annotated[UploadFile, File()],
+) -> Any:
+    """Store a file against a note. A drawing, in practice.
+
+    The key is `notes/{user}/{note}/{asset}`, visibly unlike the `ns/…` keys
+    shared files use, so a bucket policy or an audit can tell the two apart
+    without asking the database.
+    """
+    note = notes_service.owned_note(session, auth.user, note_id)
+    if note.archived_at is not None:
+        raise HTTPException(
+            status_code=409, detail="Restore this note before changing it"
+        )
+
+    limit = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    payload = await file.read(limit + 1)
+    if not payload:
+        raise HTTPException(status_code=422, detail="The file was empty")
+    if len(payload) > limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Files are limited to {settings.MAX_UPLOAD_SIZE_MB} MB",
+        )
+
+    declared = (file.content_type or "image/png").split(";")[0].strip().lower()
+    if not declared.startswith("image/"):
+        # Only images, for now. A note's files exist to carry a drawing, and a
+        # general file store under a private note is a different feature with
+        # different questions to answer.
+        raise HTTPException(status_code=415, detail="Only images can be stored here")
+
+    asset_id = uuid.uuid4()
+    suffix = PurePosixPath(file.filename or "drawing.png").suffix.lower()[:16] or ".png"
+    object_key = f"notes/{auth.user.id}/{note.id}/{asset_id}{suffix}"
+    storage = _object_storage(request)
+    await to_thread.run_sync(
+        storage.put, object_key, BytesIO(payload), len(payload), declared
+    )
+
+    asset = NoteAsset(
+        id=asset_id,
+        note_id=note.id,
+        user_id=auth.user.id,
+        filename=PurePosixPath(file.filename or "drawing.png").name[:255],
+        content_type=declared[:127],
+        size=len(payload),
+        object_key=object_key,
+    )
+    session.add(asset)
+    # A new picture is new content, so the note is re-indexed - which is also
+    # what runs the vision pass that makes the drawing findable by what is in
+    # it rather than only by what it was called.
+    note.version += 1
+    note.updated_at = _now()
+    session.add(note)
+    crud.enqueue_note_embedding_job(session=session, note=note)
+    session.commit()
+    session.refresh(asset)
+    return _asset_public(asset)
+
+
+@router.get("/{note_id}/assets/{asset_id}/download")
+async def download_note_asset(
+    request: Request,
+    session: SessionDep,
+    auth: AuthDep,
+    note_id: uuid.UUID,
+    asset_id: uuid.UUID,
+) -> StreamingResponse:
+    asset = _owned_asset(session, auth.user, note_id, asset_id)
+    storage = _object_storage(request)
+    try:
+        obj = await to_thread.run_sync(storage.open, asset.object_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("note asset %s missing in storage: %s", asset.id, exc)
+        raise HTTPException(status_code=404, detail="File not found in storage")
+    media_type, headers = serve_headers(asset.filename, asset.content_type)
+    headers["Cache-Control"] = "private, max-age=3600"
+    if obj.size:
+        headers["Content-Length"] = str(obj.size)
+    return StreamingResponse(
+        obj.stream,
+        media_type=media_type,
+        headers=headers,
+        background=BackgroundTask(obj.close),
+    )
+
+
+@router.delete("/{note_id}/assets/{asset_id}", response_model=Message)
+async def delete_note_asset(
+    request: Request,
+    session: SessionDep,
+    auth: WriteAuth,
+    note_id: uuid.UUID,
+    asset_id: uuid.UUID,
+) -> Any:
+    asset = _owned_asset(session, auth.user, note_id, asset_id)
+    storage = _object_storage(request)
+    try:
+        await to_thread.run_sync(storage.delete, asset.object_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("deferring object delete for %s: %s", asset.object_key, exc)
+        session.add(
+            CleanupTask(
+                kind=CleanupKind.minio_note_assets,
+                payload={"object_keys": [asset.object_key]},
+            )
+        )
+    session.delete(asset)
+    session.commit()
+    return Message(message="File deleted")
 
 
 # --- reminders --------------------------------------------------------------

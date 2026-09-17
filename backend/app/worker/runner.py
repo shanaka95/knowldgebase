@@ -57,6 +57,8 @@ class Worker:
             llm=llm,
             embedder=embedder,
             vectors=vectors,
+            # Only the note pipeline reads this, and only to look at a drawing.
+            storage=storage,
             shutting_down=lambda: self.shutting_down,
         )
         self.running: dict[uuid.UUID, asyncio.Task[object]] = {}
@@ -234,6 +236,13 @@ class Worker:
             await asyncio.to_thread(
                 self.storage.delete, str(task.payload["object_key"])
             )
+        elif task.kind == CleanupKind.minio_note_assets:
+            # Several keys in one task: a note's files go together, and one
+            # task per picture would be a row per stroke somebody redrew.
+            if self.storage is None:
+                raise RuntimeError("no object storage configured")
+            for key in task.payload.get("object_keys") or []:
+                await asyncio.to_thread(self.storage.delete, str(key))
         else:  # pragma: no cover
             raise RuntimeError(f"unknown cleanup kind {task.kind}")
 

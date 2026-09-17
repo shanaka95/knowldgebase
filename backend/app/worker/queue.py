@@ -32,6 +32,7 @@ from app.models import (
     JobStage,
     JobStatus,
     Note,
+    NoteAsset,
     NoteChunk,
     NoteEmbeddingJob,
     NoteReminder,
@@ -1046,6 +1047,62 @@ def load_note(note_id: uuid.UUID) -> NoteSnapshot | None:
             content_text=note.content_text,
             version=note.version,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class DrawingAsset:
+    """The picture a drawing note is of, as the vision pass needs it."""
+
+    id: uuid.UUID
+    object_key: str
+    content_type: str
+    description: str
+
+
+def note_drawing(note_id: uuid.UUID) -> DrawingAsset | None:
+    """The newest picture stored against this note, if there is one.
+
+    Newest rather than all of them: redrawing uploads a new file, and
+    describing the ones it replaced would index a sketch somebody rubbed out.
+    """
+    with Session(engine) as session:
+        row = session.exec(
+            select(NoteAsset)
+            .where(col(NoteAsset.note_id) == note_id)
+            .order_by(col(NoteAsset.created_at).desc())
+        ).first()
+        if row is None:
+            return None
+        return DrawingAsset(
+            id=row.id,
+            object_key=row.object_key,
+            content_type=row.content_type,
+            description=row.description,
+        )
+
+
+def save_drawing_description(
+    asset_id: uuid.UUID, note_id: uuid.UUID, doc_version: int, description: str
+) -> None:
+    """Write what the vision pass saw onto the file and into the note's text.
+
+    **Without bumping the version.** The description is derived from content
+    that is already at this version, so counting it as an edit would enqueue
+    another job, which would describe it again, for ever.
+    """
+    with Session(engine) as session:
+        asset = session.get(NoteAsset, asset_id)
+        note = session.get(Note, note_id)
+        if asset is None or note is None or note.version != doc_version:
+            return
+        asset.description = description
+        caption = ""
+        if isinstance(note.content_json, dict):
+            caption = str(note.content_json.get("caption") or "").strip()
+        note.content_text = "\n\n".join(p for p in (caption, description) if p)
+        session.add(asset)
+        session.add(note)
+        session.commit()
 
 
 def read_note_flags(job_id: uuid.UUID) -> JobFlags:

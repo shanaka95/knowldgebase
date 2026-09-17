@@ -306,3 +306,138 @@ def test_a_note_edited_mid_index_supersedes_the_run(db) -> None:  # noqa: ANN001
     db.delete(note)
     db.delete(db.get(User, user.id))
     db.commit()
+
+
+@pytest.mark.anyio
+async def test_a_drawing_is_indexed_by_what_is_in_it(db, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The vision pass, which is the only thing that makes a sketch findable.
+
+    A drawing carries no words. Without this it is findable by whatever its
+    author typed in the title box, which for most sketches is nothing at all.
+    """
+    from app import crud
+    from app.models import Note, NoteAsset, NoteKind, User, UserCreate
+    from app.worker import note_pipeline
+
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"sketch-{uuid.uuid4().hex[:8]}@example.com", password="x" * 12
+        ),
+    )
+    note = Note(
+        user_id=user.id,
+        kind=NoteKind.drawing,
+        title="Kitchen",
+        content_json={"caption": "Kitchen", "strokes": []},
+        content_text="Kitchen",
+    )
+    db.add(note)
+    db.add(
+        NoteAsset(
+            note_id=note.id,
+            user_id=user.id,
+            object_key=f"notes/{user.id}/{note.id}/pic.png",
+            content_type="image/png",
+            size=8,
+        )
+    )
+    crud.enqueue_note_embedding_job(session=db, note=note, force=True)
+    db.commit()
+    db.refresh(note)
+
+    class OneObject:
+        size = 8
+        stream = iter([b"\x89PNG\r\n\x1a\n"])
+
+        def close(self) -> None:
+            pass
+
+    class Storage:
+        def open(self, key: str):  # type: ignore[no-untyped-def]
+            assert key.startswith("notes/"), "read from the shared prefix"
+            return OneObject()
+
+    seen: list[bytes] = []
+
+    async def fake_describe(image, **_):  # type: ignore[no-untyped-def]
+        seen.append(image)
+        return "A floor plan of a kitchen. Labels: sink, fridge, worktop."
+
+    monkeypatch.setattr(note_pipeline, "describe_drawing", fake_describe)
+
+    embedder = StubEmbedder()
+    deps = PipelineDeps(
+        llm=None,  # type: ignore[arg-type]
+        embedder=embedder,  # type: ignore[arg-type]
+        vectors=InMemoryVectorStore(),
+        storage=Storage(),  # type: ignore[arg-type]
+        shutting_down=lambda: False,
+    )
+
+    outcome = await run_note_job(claim_mine(note.id), deps)
+    assert outcome == JobStatus.succeeded
+    assert seen, "the picture was never looked at"
+
+    # The words are what was embedded, not just the title.
+    embedded = "\n".join(embedder.calls[0])
+    assert "worktop" in embedded
+    assert "Kitchen" in embedded
+
+    # And they are on the note, which is what the keyword index reads.
+    db.refresh(note)
+    assert "worktop" in note.content_text
+    # Written without bumping the version: otherwise the description would
+    # enqueue a job that would describe it again, for ever.
+    assert note.version == 1
+
+    db.delete(note)
+    db.delete(db.get(User, user.id))
+    db.commit()
+
+
+@pytest.mark.anyio
+async def test_a_drawing_indexes_anyway_when_nobody_can_look_at_it(db) -> None:  # type: ignore[no-untyped-def]
+    """No storage, no vision model, no picture yet: still a note, still indexed.
+
+    A description is an improvement to a drawing. An improvement that fails is
+    not a reason to leave the note unfindable by the title it does have.
+    """
+    from app import crud
+    from app.models import EmbeddingStatus, Note, NoteKind, User, UserCreate
+
+    user = crud.create_user(
+        session=db,
+        user_create=UserCreate(
+            email=f"nosketch-{uuid.uuid4().hex[:8]}@example.com", password="x" * 12
+        ),
+    )
+    note = Note(
+        user_id=user.id,
+        kind=NoteKind.drawing,
+        title="Wiring",
+        content_json={"caption": "Wiring"},
+        content_text="Wiring",
+    )
+    db.add(note)
+    crud.enqueue_note_embedding_job(session=db, note=note, force=True)
+    db.commit()
+    db.refresh(note)
+
+    store = InMemoryVectorStore()
+    deps = PipelineDeps(
+        llm=None,  # type: ignore[arg-type]
+        embedder=StubEmbedder(),  # type: ignore[arg-type]
+        vectors=store,
+        storage=None,
+        shutting_down=lambda: False,
+    )
+
+    assert await run_note_job(claim_mine(note.id), deps) == JobStatus.succeeded
+    assert await store.count_note(note.id) == 1
+    db.refresh(note)
+    assert note.embedding_status == EmbeddingStatus.ready
+
+    db.delete(note)
+    db.delete(db.get(User, user.id))
+    db.commit()

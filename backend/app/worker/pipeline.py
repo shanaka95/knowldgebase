@@ -33,6 +33,7 @@ from app.services import usage
 from app.services.embeddings import EmbeddingClient, EmbeddingDimensionError
 from app.services.llm import LLMClient
 from app.services.sparse import encode_document
+from app.services.storage import ObjectStorage
 from app.services.suggestions import question_for_document
 from app.services.vectors import Point, VectorStore, build_payload, point_id
 from app.worker import queue
@@ -53,6 +54,10 @@ class PipelineDeps:
     llm: LLMClient
     embedder: EmbeddingClient
     vectors: VectorStore
+    # Only the note pipeline uses this, and only to read a drawing back so the
+    # vision pass can say what is in it. None is an ordinary state: a worker
+    # with no object storage indexes text notes perfectly well.
+    storage: ObjectStorage | None = None
     shutting_down: Callable[[], bool] = field(default=lambda: False)
 
 

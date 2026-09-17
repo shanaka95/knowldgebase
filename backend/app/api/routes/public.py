@@ -111,7 +111,7 @@ def read_public_attachment(
         raise HTTPException(status_code=404, detail="Not found")
 
     stored = storage.open(attachment.object_key)
-    media_type, headers = serve_headers(attachment)
+    media_type, headers = serve_headers(attachment.filename, attachment.content_type)
     # Public, but not indexed: a shared link is meant for the people it was sent
     # to, not for a search engine.
     headers["Cache-Control"] = "public, max-age=300"

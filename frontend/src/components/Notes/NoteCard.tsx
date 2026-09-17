@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import type { NoteSummaryPublic } from "@/client"
+import { DrawingThumbnail } from "@/components/Notes/DrawingThumbnail"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -83,8 +84,19 @@ export function NoteCard({
         <NoteMenu note={note} actions={actions} />
       </div>
 
+      {note.drawing_asset_id && (
+        <DrawingThumbnail noteId={note.id} assetId={note.drawing_asset_id} />
+      )}
+
       {note.preview && (
-        <p className="line-clamp-5 wrap-anywhere text-muted-foreground text-sm">
+        // On a drawing this is what the vision pass saw, which is also what
+        // makes the sketch findable. Short, because the picture is above it.
+        <p
+          className={cn(
+            "wrap-anywhere text-muted-foreground text-sm",
+            note.drawing_asset_id ? "line-clamp-2" : "line-clamp-5",
+          )}
+        >
           {note.preview}
         </p>
       )}
