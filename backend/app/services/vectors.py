@@ -61,6 +61,12 @@ def build_payload(
     char_count: int | None = None,
 ) -> dict[str, Any]:
     return {
+        # Which kind of thing this point is about. One collection holds more
+        # than pages now, and `kind` cannot say so: it is the *level* a point
+        # describes (whole, summary, chunk), which every entity has its own
+        # version of. See `_access_filter` for why this field is the thing that
+        # keeps the two corpora apart.
+        "entity_type": "document",
         "document_id": str(document_id),
         "namespace_id": str(namespace_id),
         "kind": str(kind),
@@ -168,6 +174,11 @@ class QdrantStore:
             ("namespace_id", qm.PayloadSchemaType.KEYWORD),
             ("kind", qm.PayloadSchemaType.KEYWORD),
             ("doc_version", qm.PayloadSchemaType.INTEGER),
+            # Indexed ahead of anything writing them, so the filters that read
+            # them are fast from the first point rather than after a backfill.
+            ("entity_type", qm.PayloadSchemaType.KEYWORD),
+            ("owner_id", qm.PayloadSchemaType.KEYWORD),
+            ("note_id", qm.PayloadSchemaType.KEYWORD),
         ):
             try:
                 await self.client.create_payload_index(
@@ -264,7 +275,22 @@ class QdrantStore:
     ) -> Any:
         from qdrant_client import models as qm
 
-        must: list[Any] = []
+        # A document search never returns a note, whatever else is asked for.
+        #
+        # Written as an exclusion rather than `entity_type == "document"` on
+        # purpose: points written before notes existed carry no `entity_type`
+        # at all, and `must_not` against a field a point does not have passes.
+        # That is what lets notes ship without re-indexing the corpus, and
+        # without a window where document search is quietly wrong.
+        must: list[Any] = [
+            qm.Filter(
+                must_not=[
+                    qm.FieldCondition(
+                        key="entity_type", match=qm.MatchValue(value="note")
+                    )
+                ]
+            )
+        ]
         if kind is not None:
             must.append(qm.FieldCondition(key="kind", match=qm.MatchValue(value=kind)))
         # ``None`` means unrestricted (superuser); an empty list means no access.
@@ -409,6 +435,11 @@ class InMemoryVectorStore:
     ) -> list[Point]:
         out = []
         for p in self.points.values():
+            # Mirrors the `must_not` in `QdrantStore._access_filter`. A fake
+            # that is more permissive than the real store would make every
+            # privacy test pass without testing anything.
+            if p.payload.get("entity_type") == "note":
+                continue
             if kind is not None and p.payload.get("kind") != kind:
                 continue
             if namespace_ids is not None or document_ids is not None:

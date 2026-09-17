@@ -66,7 +66,8 @@ Details:
 * Collection: `QDRANT_COLLECTION` (default `kb_documents`), dense `size=1024`,
   `distance=Cosine`.
 * Payload indexes: `document_id` (keyword), `namespace_id` (keyword), `kind` (keyword),
-  `doc_version` (integer).
+  `doc_version` (integer), `entity_type` (keyword), `owner_id` (keyword), `note_id` (keyword).
+  The last three serve personal notes, which share this collection.
 * A collection created before hybrid search has a single unnamed vector and no sparse field.
   There is no in-place migration: the app detects the old schema at startup, recreates the
   collection and the pages must be re-indexed (`POST /documents/embeddings/reindex-all`).
@@ -77,6 +78,7 @@ Details:
 
   ```json
   {
+    "entity_type": "document",
     "document_id": "8c4b…",
     "namespace_id": "1f2e…",
     "kind": "document | summary | chunk",
@@ -86,6 +88,16 @@ Details:
     "char_count": 1834
   }
   ```
+
+  `entity_type` says which kind of thing the point is about. `kind` cannot: it is
+  the *level* a point describes, and every entity has its own document, summary
+  and chunk levels. Personal notes live in this same collection under
+  `entity_type: "note"`, carrying `note_id` and `owner_id` instead of
+  `document_id`, and a document search excludes them with a `must_not` on this
+  field. That is written as an exclusion rather than a match on `"document"`
+  because points indexed before notes existed carry no `entity_type` at all, and
+  `must_not` against a missing field passes — which is what let notes ship
+  without re-indexing the corpus.
 
 Write order: the new version's points are upserted first, then every point of that document
 with `doc_version < new version` is deleted, then the Postgres transaction that marks the
