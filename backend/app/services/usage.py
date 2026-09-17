@@ -70,6 +70,7 @@ COUNTERS: tuple[str, ...] = (
     "cached_tokens",
     "cache_write_tokens",
     "search_units",
+    "audio_seconds",
     "cost_nanos",
 )
 
@@ -79,6 +80,7 @@ MODEL_KINDS: tuple[UsageKind, ...] = (
     UsageKind.chat,
     UsageKind.embedding,
     UsageKind.rerank,
+    UsageKind.transcribe,
 )
 
 # Counters nobody sees about their own account: what it cost us, rather than
@@ -112,6 +114,7 @@ class Counts:
     cached_tokens: int = 0
     cache_write_tokens: int = 0
     search_units: int = 0
+    audio_seconds: int = 0
     cost_nanos: int = 0
 
     def add(self, other: Counts) -> None:
@@ -143,6 +146,15 @@ def read_usage(body: Any) -> Counts:
     counts.input_tokens = _int(usage.get("prompt_tokens"))
     counts.output_tokens = _int(usage.get("completion_tokens"))
     counts.search_units = _int(usage.get("search_units"))
+    # Speech to text reports duration, not tokens.
+    #
+    # A provider's audio response also carries `input_tokens` / `output_tokens`
+    # - note the names. The two lines above read `prompt_tokens` and
+    # `completion_tokens`, which are different keys, so an audio call bills its
+    # seconds and nothing else. That is the intended reading, and it holds by
+    # the spelling of the keys rather than by a branch: writing it down because
+    # a provider that renamed them would start billing a minute of audio twice.
+    counts.audio_seconds = _int(usage.get("seconds"))
 
     prompt_details = usage.get("prompt_tokens_details")
     if isinstance(prompt_details, dict):

@@ -20,7 +20,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = "../models.toml"
-ROLES = ("llm", "embeddings", "parser")
+ROLES = ("llm", "embeddings", "parser", "transcription")
 
 
 def _config_path() -> Path:

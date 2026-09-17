@@ -81,11 +81,27 @@ MILLI = 1000
 PER_TOKEN = 1
 PER_EMBEDDING_CALL = 100
 PER_RERANK_CALL = 100
+# Speech to text is priced per second of audio, so it is charged that way.
+#
+# Twenty milli-credits a second is 1.2 credits a minute, which at the going
+# rate for a turbo ASR model is within about a tenth of what a credit's worth
+# of tokens costs. That parity is the point: the unit has to mean the same
+# thing whichever way the work was spent, or an allowance stops being a budget.
+# It also rounds to a sentence somebody can hold - about a credit a minute.
+PER_AUDIO_SECOND = 20
 
 # Features grouped the way somebody reading their own balance thinks about it.
 ANSWER_FEATURES = (UsageFeature.ask, UsageFeature.agent)
 SEARCH_FEATURES = (UsageFeature.search,)
 INDEXING_FEATURES = (UsageFeature.import_, UsageFeature.indexing)
+# Everything the three buckets above do not name. Spelled as "the rest" rather
+# than as a list, so a feature added later lands in the balance by itself
+# instead of quietly falling out of the total somebody is shown.
+OTHER_FEATURES = tuple(
+    feature
+    for feature in UsageFeature
+    if feature not in ANSWER_FEATURES + SEARCH_FEATURES + INDEXING_FEATURES
+)
 
 
 class CreditsExhausted(Exception):
@@ -137,6 +153,7 @@ def cost_of(
     output_tokens: int = 0,
     embedding_calls: int = 0,
     rerank_calls: int = 0,
+    audio_seconds: int = 0,
 ) -> int:
     """What that work costs, in milli-credits.
 
@@ -148,6 +165,7 @@ def cost_of(
         (input_tokens + output_tokens) * PER_TOKEN
         + embedding_calls * PER_EMBEDDING_CALL
         + rerank_calls * PER_RERANK_CALL
+        + audio_seconds * PER_AUDIO_SECOND
     )
 
 
@@ -182,8 +200,14 @@ def _spent_expression() -> Any:
         ),
         0,
     )
+    # Summed over every row rather than filtered by kind: only transcription
+    # writes this column, and a sum is cheaper than a CASE that says so.
+    audio = func.coalesce(func.sum(UsageDaily.audio_seconds), 0)
     return (
-        tokens * PER_TOKEN + embeddings * PER_EMBEDDING_CALL + reranks * PER_RERANK_CALL
+        tokens * PER_TOKEN
+        + embeddings * PER_EMBEDDING_CALL
+        + reranks * PER_RERANK_CALL
+        + audio * PER_AUDIO_SECOND
     )
 
 
@@ -334,7 +358,7 @@ def to_public(balance: Balance, session: Session, user: User) -> CreditBalance:
                 session,
                 user.id,
                 period=window,
-                features=(UsageFeature.translation, UsageFeature.suggestions),
+                features=OTHER_FEATURES,
             )
         ),
     )

@@ -2,6 +2,7 @@ import { ListChecks, NotebookPen } from "lucide-react"
 import { useState } from "react"
 
 import type { NoteKind } from "@/client"
+import { DictateButton } from "@/components/Notes/DictateButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
@@ -96,6 +97,14 @@ export function NoteComposer({
         >
           Take a note…
         </button>
+        <DictateButton
+          label="Take a note by speaking"
+          onText={(text) => {
+            setKind("text")
+            setBody(text)
+            setOpen(true)
+          }}
+        />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -171,6 +180,13 @@ export function NoteComposer({
           </Button>
         </div>
         <div className="flex items-center gap-2">
+          <DictateButton
+            onText={(text) =>
+              setBody((current) =>
+                current.trim() ? `${current.trimEnd()}\n${text}` : text,
+              )
+            }
+          />
           <Button variant="ghost" size="sm" onClick={reset}>
             Cancel
           </Button>

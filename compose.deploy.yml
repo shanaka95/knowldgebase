@@ -70,6 +70,15 @@ x-backend-common: &backend-common
     # One provider serves all three models here, so the reranker falls back to
     # the chat model's key rather than asking for the same secret twice.
     RERANK_API_KEY: ${RERANK_API_KEY:-${LLM_API_KEY}}
+    # Optional speech to text, for dictating a note. Leave TRANSCRIPTION_MODEL
+    # empty and the microphone is not offered at all. Audio is never stored.
+    TRANSCRIPTION_MODEL: ${TRANSCRIPTION_MODEL:-}
+    TRANSCRIPTION_BASE_URL: ${TRANSCRIPTION_BASE_URL:-}
+    TRANSCRIPTION_API_KEY: ${TRANSCRIPTION_API_KEY:-${LLM_API_KEY}}
+    # Both a cost control and the memory bound: the recording is held in memory
+    # for one request rather than written anywhere.
+    MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-120}
+    MAX_AUDIO_UPLOAD_MB: ${MAX_AUDIO_UPLOAD_MB:-20}
     # No document-parsing model here: page images go to the chat model instead.
     IMPORT_PARSER: ${IMPORT_PARSER:-llm}
 

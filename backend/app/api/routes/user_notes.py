@@ -13,14 +13,15 @@ there are no roles: a note has exactly one reader.
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func
 from sqlmodel import col, select
 
 from app import crud
 from app.api.deps import AuthDep, SessionDep, WriteAuth
+from app.core.config import settings
 from app.core.permissions import require_namespace
 from app.models import (
     CleanupKind,
@@ -41,14 +42,18 @@ from app.models import (
     NoteTagPublic,
     NoteTagsPublic,
     NoteTagUpdate,
+    NoteTranscript,
     NoteUpdate,
     ReminderEnds,
     ReminderRecurrence,
     ReminderStatus,
+    UsageFeature,
+    VoiceSettings,
 )
-from app.services import quota
+from app.services import credits, quota, usage
 from app.services import reminders as reminder_rules
 from app.services import user_notes as notes_service
+from app.services.transcription import TranscriptionClient, TranscriptionError
 
 router = APIRouter(prefix="/notes", tags=["user-notes"])
 
@@ -262,6 +267,92 @@ def _listing(session: SessionDep, rows: Sequence[Note], *, total: int) -> NotesP
             for n in rows
         ],
         count=total,
+    )
+
+
+@router.get("/voice", response_model=VoiceSettings)
+def read_voice_settings(auth: AuthDep) -> Any:
+    """What the microphone button needs to know before it is drawn.
+
+    A deployment with no transcription model configured says so here, and the
+    button is not offered at all - better than a control that fails on the
+    first recording.
+    """
+    del auth  # signed in, but the answer is the same for everybody
+    return VoiceSettings(
+        enabled=settings.transcription_enabled,
+        max_seconds=settings.MAX_AUDIO_SECONDS,
+        max_upload_mb=settings.MAX_AUDIO_UPLOAD_MB,
+        credits_per_minute=round(60 * credits.PER_AUDIO_SECOND / credits.MILLI, 2),
+    )
+
+
+@router.post("/transcriptions", response_model=NoteTranscript)
+async def transcribe(
+    session: SessionDep,
+    auth: WriteAuth,
+    file: Annotated[UploadFile, File()],
+    language: Annotated[str | None, Form()] = None,
+    seconds: Annotated[int, Form(ge=0, le=36_000)] = 0,
+) -> Any:
+    """Turn a recording into text.
+
+    It returns the words and does not write a note: the client decides where
+    they go, which is what makes this usable for dictating into an existing
+    note, a checklist line or the search box, and what makes a half-succeeded
+    dictation impossible.
+
+    **The audio is not stored.** It is held for the length of this request and
+    then dropped.
+    """
+    if not settings.transcription_enabled:
+        raise HTTPException(
+            status_code=503, detail="Dictation is not set up on this deployment"
+        )
+    try:
+        credits.ensure_credit(session, auth.user)
+    except credits.CreditsExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+
+    # The duration the browser reports is a claim, not a measurement we can
+    # trust, so the byte count is what actually bounds the work.
+    limit = settings.MAX_AUDIO_UPLOAD_MB * 1024 * 1024
+    audio = await file.read(limit + 1)
+    if not audio:
+        raise HTTPException(status_code=422, detail="The recording was empty")
+    if len(audio) > limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Recordings are limited to {settings.MAX_AUDIO_UPLOAD_MB} MB",
+        )
+    if seconds > settings.MAX_AUDIO_SECONDS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Recordings are limited to {settings.MAX_AUDIO_SECONDS} seconds",
+        )
+
+    client = TranscriptionClient()
+    async with usage.ameter(auth.user.id, UsageFeature.voice) as m:
+        m.operation()
+        try:
+            transcript = await client.transcribe(
+                audio,
+                filename=file.filename or "recording.webm",
+                content_type=file.content_type or "audio/webm",
+                language=(language or "").strip() or None,
+                duration_hint=seconds,
+                meter=m,
+            )
+        except TranscriptionError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        finally:
+            await client.close()
+
+    return NoteTranscript(
+        text=transcript.text,
+        seconds=transcript.seconds,
+        model=transcript.model,
+        credits=credits.as_credits(transcript.seconds * credits.PER_AUDIO_SECOND),
     )
 
 

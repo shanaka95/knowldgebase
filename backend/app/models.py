@@ -2533,6 +2533,9 @@ class UsageFeature(StrEnum):
     translation = "translation"
     suggestions = "suggestions"
     agent = "agent"
+    # Dictating a note. Named for what the person did, not for the model that
+    # did it, like every other member here.
+    voice = "voice"
 
 
 class UsageKind(StrEnum):
@@ -2547,6 +2550,11 @@ class UsageKind(StrEnum):
     chat = "chat"
     embedding = "embedding"
     rerank = "rerank"
+    # Speech to text. Abbreviated on purpose: `kind` is String(12), and the
+    # obvious "transcription" is thirteen characters. Over-long values raise
+    # inside `UsageMeter.flush`, which swallows and logs - so the feature would
+    # have appeared to work and silently never billed.
+    transcribe = "transcribe"
 
 
 class UsageDaily(SQLModel, table=True):
@@ -2593,6 +2601,9 @@ class UsageDaily(SQLModel, table=True):
     cache_write_tokens: int = Field(default=0, sa_type=BigInteger)
     # Rerank bills per search unit, not per token.
     search_units: int = Field(default=0, sa_type=BigInteger)
+    # Speech to text bills per second of audio. Rounded up per call, so a run
+    # of one-second recordings costs what it should.
+    audio_seconds: int = Field(default=0, sa_type=BigInteger)
     # US dollars x 1e9. Self-hosted servers report no cost, and 0 is the right
     # answer there.
     cost_nanos: int = Field(default=0, sa_type=BigInteger)
@@ -2625,6 +2636,7 @@ class UsageTotals(SQLModel):
     cached_tokens: int
     cache_write_tokens: int
     search_units: int
+    audio_seconds: int
 
 
 class AdminUsageTotals(UsageTotals):
@@ -3297,3 +3309,31 @@ class NoteReminderPublic(SQLModel):
     last_sent_at: datetime | None = None
     # Why a paused reminder is paused, so the interface can explain itself.
     last_error: str | None = None
+
+
+class NoteTranscript(SQLModel):
+    """What was dictated.
+
+    Text, not a note. Making the endpoint return the words rather than write
+    them means "the transcription worked but the note did not save" cannot
+    happen - which matters here, because the balance is a live function of the
+    usage rows and there is nothing to refund a charge against. It also lets
+    the same endpoint dictate into an existing note, a checklist line or the
+    search box.
+    """
+
+    text: str
+    # Billed seconds, rounded up. Shown so the cost of a recording is visible
+    # before the next one rather than only on the usage page a month later.
+    seconds: int
+    model: str
+    credits: float
+
+
+class VoiceSettings(SQLModel):
+    """Whether this deployment can take dictation at all, and for how long."""
+
+    enabled: bool
+    max_seconds: int
+    max_upload_mb: int
+    credits_per_minute: float

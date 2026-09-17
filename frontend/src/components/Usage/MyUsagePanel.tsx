@@ -221,6 +221,7 @@ function TokenDetail({ totals }: { totals: UsageTotals }) {
     { label: "Output tokens", value: totals.output_tokens },
     { label: "Reused from cache", value: totals.cached_tokens },
     { label: "Reranker calls", value: totals.search_units },
+    { label: "Seconds dictated", value: totals.audio_seconds },
   ]
   return (
     <div className="rounded-lg border bg-muted/20 px-4 py-3">

@@ -9,6 +9,7 @@ import { SaveIndicator } from "@/components/Documents/SaveIndicator"
 import { Editor } from "@/components/Editor/Editor"
 import { useDocumentEditor } from "@/components/Editor/useDocumentEditor"
 import { PageContainer } from "@/components/Layout/PageContainer"
+import { DictateButton } from "@/components/Notes/DictateButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -128,6 +129,15 @@ function NotePage() {
           className="h-9 min-w-0 flex-1 border-0 px-0 font-semibold text-lg shadow-none focus-visible:ring-0"
           data-testid="notes-title"
         />
+        {!archived && (
+          <DictateButton
+            onText={(text) =>
+              // At the caret, not at the end: dictation here is a way of
+              // continuing where you already are.
+              editor?.chain().focus().insertContent(text).run()
+            }
+          />
+        )}
         <SaveIndicator
           status={autosave.status}
           lastSavedAt={autosave.lastSavedAt}
@@ -139,7 +149,7 @@ function NotePage() {
       {archived && (
         <p className="rounded-md border border-dashed px-3 py-2 text-muted-foreground text-sm">
           This note is archived, so it is read-only. Restore it to write in it
-          again — it stays searchable either way.
+          again. It stays searchable either way.
         </p>
       )}
 

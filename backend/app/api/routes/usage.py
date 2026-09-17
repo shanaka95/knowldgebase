@@ -30,6 +30,7 @@ FEATURE_LABELS: dict[str, str] = {
     UsageFeature.translation: "Translations",
     UsageFeature.suggestions: "Example searches",
     UsageFeature.agent: "Agents",
+    UsageFeature.voice: "Dictation",
 }
 
 

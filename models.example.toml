@@ -80,3 +80,19 @@ timeout_seconds = 600
 fallback_to_llm = true
 page_dpi = 200
 max_pages = 100
+
+# --- Speech to text: dictating a note -----------------------------------------
+# OpenAI's /audio/transcriptions, which every provider and every local server
+# implements the same way. Optional: leave `model` empty and the microphone is
+# not offered at all, rather than failing on the first recording.
+#
+# whisper-large-v3-turbo ties the cheapest option on price and is far stronger
+# outside English, which matters here - the app already detects a document's
+# language and offers to translate it. For an English-mostly deployment,
+# qwen/qwen3-asr-0.6b is the cheaper swap.
+#
+# Audio is never stored: it is held for one request and dropped.
+[transcription]
+model = ""
+# base_url = "https://openrouter.ai/api/v1"
+timeout_seconds = 120

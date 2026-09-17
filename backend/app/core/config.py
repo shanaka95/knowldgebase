@@ -210,6 +210,37 @@ class Settings(BaseSettings):
         )
     )
 
+    # --- Speech to text ------------------------------------------------------
+    # Dictation, for notes. Optional in exactly the way reranking is: leave the
+    # model empty and the feature turns itself off rather than failing at the
+    # microphone. The endpoint is OpenAI's `/audio/transcriptions`, which every
+    # hosted provider and every local server implements the same way.
+    TRANSCRIPTION_MODEL: str = Field(
+        default_factory=lambda: str(model_setting("transcription", "model", "") or "")
+    )
+    TRANSCRIPTION_BASE_URL: HttpUrl | None = Field(
+        default_factory=lambda: (
+            HttpUrl(str(model_setting("transcription", "base_url", "")))
+            if str(model_setting("transcription", "base_url", "") or "")
+            else None
+        )
+    )
+    TRANSCRIPTION_API_KEY: str = Field(
+        default_factory=lambda: str(model_setting("transcription", "api_key", "") or "")
+    )
+    TRANSCRIPTION_TIMEOUT_SECONDS: float = Field(
+        default_factory=lambda: float(
+            model_setting("transcription", "timeout_seconds", 120.0)
+        )
+    )
+    # The recording is held in memory for the length of one request and never
+    # stored, so the cap is both a cost control and the memory bound. Two
+    # minutes of Opus at the browser's default bitrate is well under a megabyte;
+    # the size limit is the one that actually stops an abusive upload, and the
+    # duration limit is what the countdown in the UI is set from.
+    MAX_AUDIO_SECONDS: int = 120
+    MAX_AUDIO_UPLOAD_MB: int = 20
+
     # --- LLM used for semantic chunking + summaries -------------------------
     LLM_BASE_URL: HttpUrl = Field(
         default_factory=lambda: HttpUrl(
@@ -435,6 +466,15 @@ class Settings(BaseSettings):
     @property
     def rerank_enabled(self) -> bool:
         return bool(self.RERANK_MODEL and self.RERANK_BASE_URL)
+
+    @property
+    def transcription_enabled(self) -> bool:
+        """Both halves, for the same reason reranking wants both.
+
+        A model name with nowhere to send it would otherwise offer a microphone
+        that fails on the first recording.
+        """
+        return bool(self.TRANSCRIPTION_MODEL and self.TRANSCRIPTION_BASE_URL)
 
     # --- Agents and channels -------------------------------------------------
     # Where each gateway shard's Hermes profiles live. The backend writes a

@@ -98,6 +98,10 @@ export type AdminUsageTotals = {
      */
     search_units: number;
     /**
+     * Audio Seconds
+     */
+    audio_seconds: number;
+    /**
      * Cost Nanos
      */
     cost_nanos: number;
@@ -953,6 +957,24 @@ export type Body_login_login_access_token = {
      * Client Secret
      */
     client_secret?: string | null;
+};
+
+/**
+ * Body_user-notes-transcribe
+ */
+export type Body_user_notes_transcribe = {
+    /**
+     * File
+     */
+    file: Blob | File;
+    /**
+     * Language
+     */
+    language?: string | null;
+    /**
+     * Seconds
+     */
+    seconds?: number;
 };
 
 /**
@@ -3245,6 +3267,37 @@ export type NoteTagsPublic = {
 };
 
 /**
+ * NoteTranscript
+ *
+ * What was dictated.
+ *
+ * Text, not a note. Making the endpoint return the words rather than write
+ * them means "the transcription worked but the note did not save" cannot
+ * happen - which matters here, because the balance is a live function of the
+ * usage rows and there is nothing to refund a charge against. It also lets
+ * the same endpoint dictate into an existing note, a checklist line or the
+ * search box.
+ */
+export type NoteTranscript = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Seconds
+     */
+    seconds: number;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Credits
+     */
+    credits: number;
+};
+
+/**
  * NoteUpdate
  */
 export type NoteUpdate = {
@@ -4035,7 +4088,7 @@ export type UpdatePassword = {
  *
  * What the person was doing when the call happened.
  */
-export type UsageFeature = 'ask' | 'search' | 'import' | 'indexing' | 'translation' | 'suggestions' | 'agent';
+export type UsageFeature = 'ask' | 'search' | 'import' | 'indexing' | 'translation' | 'suggestions' | 'agent' | 'voice';
 
 /**
  * UsagePoint
@@ -4116,6 +4169,10 @@ export type UsageTotals = {
      * Search Units
      */
     search_units: number;
+    /**
+     * Audio Seconds
+     */
+    audio_seconds: number;
 };
 
 /**
@@ -4563,6 +4620,30 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * VoiceSettings
+ *
+ * Whether this deployment can take dictation at all, and for how long.
+ */
+export type VoiceSettings = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Max Seconds
+     */
+    max_seconds: number;
+    /**
+     * Max Upload Mb
+     */
+    max_upload_mb: number;
+    /**
+     * Credits Per Minute
+     */
+    credits_per_minute: number;
 };
 
 /**
@@ -6785,6 +6866,47 @@ export type userNotesSearchNotesResponses = {
 };
 
 export type userNotesSearchNotesResponse = userNotesSearchNotesResponses[keyof userNotesSearchNotesResponses];
+
+export type userNotesReadVoiceSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notes/voice';
+};
+
+export type userNotesReadVoiceSettingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: VoiceSettings;
+};
+
+export type userNotesReadVoiceSettingsResponse = userNotesReadVoiceSettingsResponses[keyof userNotesReadVoiceSettingsResponses];
+
+export type userNotesTranscribeData = {
+    body: Body_user_notes_transcribe;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notes/transcriptions';
+};
+
+export type userNotesTranscribeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesTranscribeError = userNotesTranscribeErrors[keyof userNotesTranscribeErrors];
+
+export type userNotesTranscribeResponses = {
+    /**
+     * Successful Response
+     */
+    200: NoteTranscript;
+};
+
+export type userNotesTranscribeResponse = userNotesTranscribeResponses[keyof userNotesTranscribeResponses];
 
 export type userNotesReadNotesData = {
     body?: never;
