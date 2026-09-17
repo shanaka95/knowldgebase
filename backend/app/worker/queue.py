@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlmodel import Session, col, delete, select
 
 from app import crud
@@ -31,6 +31,9 @@ from app.models import (
     ImportStatus,
     JobStage,
     JobStatus,
+    Note,
+    NoteChunk,
+    NoteEmbeddingJob,
     User,
     WorkerHeartbeat,
 )
@@ -899,3 +902,360 @@ def save_search_suggestion(
             namespace_id=namespace_id,
             question=question,
         )
+
+
+# ---------------------------------------------------------------------------
+# Notes
+#
+# The same protocol as the document queue, against its own tables. Duplicated
+# rather than shared because the document functions are the ones that must not
+# acquire a branch: each of them loads a Document and compares versions before
+# writing, and a missed branch there fails silently. `ImportJob` is duplicated
+# for the same reason.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class NoteSnapshot:
+    """A note, detached from its session, as the pipeline reads it."""
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    namespace_id: uuid.UUID | None
+    kind: str
+    title: str
+    content_text: str
+    version: int
+
+
+def claim_note_jobs(worker_name: str, limit: int) -> list[NoteEmbeddingJob]:
+    if limit <= 0:
+        return []
+    with Session(engine) as session:
+        rows = (
+            session.connection()
+            .execute(
+                text(
+                    """
+                UPDATE noteembeddingjob SET
+                    status = 'running',
+                    stage = 'claimed',
+                    locked_by = :worker,
+                    locked_at = :now,
+                    heartbeat_at = :now,
+                    started_at = COALESCE(started_at, :now)
+                WHERE id IN (
+                    SELECT id FROM noteembeddingjob
+                    WHERE status = 'queued'
+                      AND run_after <= :now
+                      AND cancel_requested = false
+                    ORDER BY run_after, created_at
+                    LIMIT :limit
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING id
+                """
+                ),
+                {"worker": worker_name, "now": _now(), "limit": limit},
+            )
+            .all()
+        )
+        session.commit()
+        ids = [r[0] for r in rows]
+        if not ids:
+            return []
+        jobs = session.exec(
+            select(NoteEmbeddingJob).where(col(NoteEmbeddingJob.id).in_(ids))
+        ).all()
+        for job in jobs:
+            session.expunge(job)
+        return list(jobs)
+
+
+def note_heartbeat(worker_name: str, job_ids: list[uuid.UUID]) -> None:
+    if not job_ids:
+        return
+    with Session(engine) as session:
+        for job in session.exec(
+            select(NoteEmbeddingJob).where(col(NoteEmbeddingJob.id).in_(job_ids))
+        ).all():
+            if job.locked_by == worker_name:
+                job.heartbeat_at = _now()
+                session.add(job)
+        session.commit()
+
+
+def reclaim_stale_note_jobs(lease_seconds: int | None = None) -> int:
+    """Jobs whose worker stopped talking. Requeued, or failed if out of tries."""
+    lease = lease_seconds or settings.WORKER_LEASE_SECONDS
+    cutoff = _now() - timedelta(seconds=lease)
+    reclaimed = 0
+    with Session(engine) as session:
+        for job in session.exec(
+            select(NoteEmbeddingJob).where(
+                col(NoteEmbeddingJob.status) == JobStatus.running,
+                col(NoteEmbeddingJob.heartbeat_at) < cutoff,
+            )
+        ).all():
+            job.attempts += 1
+            if job.attempts >= job.max_attempts:
+                job.status = JobStatus.failed
+                job.finished_at = _now()
+                job.error = "worker stopped responding"
+                note = session.get(Note, job.note_id)
+                if note is not None and note.version == job.doc_version:
+                    note.embedding_status = EmbeddingStatus.failed
+                    note.embedding_error = job.error
+                    session.add(note)
+            else:
+                job.status = JobStatus.queued
+                job.locked_by = None
+                job.run_after = _now()
+            session.add(job)
+            reclaimed += 1
+        session.commit()
+    return reclaimed
+
+
+def release_note_job(job_id: uuid.UUID) -> None:
+    with Session(engine) as session:
+        job = session.get(NoteEmbeddingJob, job_id)
+        if job is not None and job.status == JobStatus.running:
+            job.status = JobStatus.queued
+            job.locked_by = None
+            job.run_after = _now()
+            session.add(job)
+            session.commit()
+
+
+def load_note(note_id: uuid.UUID) -> NoteSnapshot | None:
+    with Session(engine) as session:
+        note = session.get(Note, note_id)
+        if note is None:
+            return None
+        return NoteSnapshot(
+            id=note.id,
+            user_id=note.user_id,
+            namespace_id=note.namespace_id,
+            kind=str(note.kind),
+            title=note.title,
+            content_text=note.content_text,
+            version=note.version,
+        )
+
+
+def read_note_flags(job_id: uuid.UUID) -> JobFlags:
+    with Session(engine) as session:
+        job = session.get(NoteEmbeddingJob, job_id)
+        if job is None:
+            # A job that is gone reads as cancelled, so the pipeline stops
+            # rather than finishing work nothing will record.
+            return JobFlags(False, True, None, None)
+        note = session.get(Note, job.note_id)
+        return JobFlags(
+            True, job.cancel_requested, job.status, note.version if note else None
+        )
+
+
+def cancelled_note_job_ids(job_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    if not job_ids:
+        return []
+    with Session(engine) as session:
+        return [
+            job.id
+            for job in session.exec(
+                select(NoteEmbeddingJob).where(
+                    col(NoteEmbeddingJob.id).in_(job_ids),
+                    col(NoteEmbeddingJob.cancel_requested).is_(True),
+                )
+            ).all()
+        ]
+
+
+def set_note_stage(
+    job_id: uuid.UUID,
+    stage: JobStage,
+    progress: int,
+    note_status: EmbeddingStatus | None = None,
+) -> None:
+    with Session(engine) as session:
+        job = session.get(NoteEmbeddingJob, job_id)
+        if job is None:
+            return
+        job.stage = stage
+        job.progress = progress
+        session.add(job)
+        if note_status is not None:
+            note = session.get(Note, job.note_id)
+            # Only if this job is still about the note as it stands: a newer
+            # edit has its own job, and must not be shown this one's progress.
+            if note is not None and note.version == job.doc_version:
+                note.embedding_status = note_status
+                session.add(note)
+        session.commit()
+
+
+def finish_note_job(
+    job_id: uuid.UUID,
+    status: JobStatus,
+    error: str | None = None,
+    stats: dict[str, Any] | None = None,
+) -> None:
+    with Session(engine) as session:
+        job = session.get(NoteEmbeddingJob, job_id)
+        if job is None:
+            return
+        job.status = status
+        job.finished_at = _now()
+        if error is not None:
+            job.error = error[:2000]
+        if stats is not None:
+            job.stats = stats
+        session.add(job)
+        session.commit()
+
+
+def retry_or_fail_note(
+    job_id: uuid.UUID,
+    error: str,
+    stats: dict[str, Any] | None = None,
+    *,
+    force_fail: bool = False,
+) -> JobStatus:
+    with Session(engine) as session:
+        job = session.get(NoteEmbeddingJob, job_id)
+        if job is None:
+            return JobStatus.failed
+        job.attempts += 1
+        job.error = error[:2000]
+        if stats is not None:
+            job.stats = stats
+        note = session.get(Note, job.note_id)
+
+        if force_fail or job.attempts >= job.max_attempts:
+            job.status = JobStatus.failed
+            job.finished_at = _now()
+            if note is not None and note.version == job.doc_version:
+                note.embedding_status = EmbeddingStatus.failed
+                note.embedding_error = error[:2000]
+                note.embedding_attempts = job.attempts
+                session.add(note)
+            outcome = JobStatus.failed
+        else:
+            backoff = settings.EMBEDDING_RETRY_BACKOFF_SECONDS * (
+                2 ** (job.attempts - 1)
+            )
+            job.status = JobStatus.queued
+            job.locked_by = None
+            job.run_after = _now() + timedelta(seconds=backoff)
+            if note is not None and note.version == job.doc_version:
+                note.embedding_status = EmbeddingStatus.pending
+                note.embedding_attempts = job.attempts
+                session.add(note)
+            outcome = JobStatus.queued
+
+        session.add(job)
+        session.commit()
+        return outcome
+
+
+def commit_note_results(
+    *,
+    job_id: uuid.UUID,
+    note_id: uuid.UUID,
+    doc_version: int,
+    chunks: list[Chunk],
+    stats: dict[str, Any] | None = None,
+) -> None:
+    """One transaction: rewrite the chunks, mark the note ready, finish the job.
+
+    Re-reads the note FOR UPDATE and checks the version, so a note edited while
+    this job was running is never marked ready against the older text.
+    """
+    with Session(engine) as session:
+        note = session.exec(
+            select(Note).where(col(Note.id) == note_id).with_for_update()
+        ).first()
+        if note is None:
+            raise JobSuperseded("note deleted")
+        if note.version != doc_version:
+            raise JobSuperseded(f"note at v{note.version}, job wrote v{doc_version}")
+
+        session.exec(delete(NoteChunk).where(col(NoteChunk.note_id) == note_id))
+        for index, chunk in enumerate(chunks):
+            session.add(
+                NoteChunk(
+                    note_id=note_id,
+                    doc_version=doc_version,
+                    chunk_index=index,
+                    title=chunk.title[:300],
+                    text=chunk.text,
+                    char_count=len(chunk.text),
+                )
+            )
+
+        note.embedding_status = EmbeddingStatus.ready
+        note.embedding_version = doc_version
+        note.embedding_error = None
+        note.chunk_count = len(chunks)
+        note.embedding_updated_at = _now()
+        session.add(note)
+
+        job = session.get(NoteEmbeddingJob, job_id)
+        if job is not None:
+            job.status = JobStatus.succeeded
+            job.stage = JobStage.done
+            job.progress = 100
+            job.finished_at = _now()
+            job.chunk_count = len(chunks)
+            if stats is not None:
+                job.stats = stats
+            session.add(job)
+        session.commit()
+
+
+def note_owner(note_id: uuid.UUID) -> uuid.UUID | None:
+    with Session(engine) as session:
+        note = session.get(Note, note_id)
+        return note.user_id if note is not None else None
+
+
+def enqueue_stale_notes(limit: int = 50) -> int:
+    """Notes whose vectors are behind, with no job already in flight.
+
+    The self-healing half of the pipeline. It means notes written before
+    indexing existed are picked up with no migration step, and that any enqueue
+    missed by a bug is picked up on the next tick rather than never.
+    """
+    if limit <= 0:
+        return 0
+    enqueued = 0
+    with Session(engine) as session:
+        active = select(NoteEmbeddingJob.note_id).where(
+            col(NoteEmbeddingJob.status).in_([JobStatus.queued, JobStatus.running])
+        )
+        stale = session.exec(
+            select(Note)
+            .where(
+                col(Note.embedding_version).is_distinct_from(col(Note.version)),
+                col(Note.embedding_status) != EmbeddingStatus.failed,
+                col(Note.id).not_in(active),
+            )
+            .limit(limit)
+        ).all()
+        for note in stale:
+            crud.enqueue_note_embedding_job(session=session, note=note)
+            enqueued += 1
+        if enqueued:
+            session.commit()
+    return enqueued
+
+
+def note_queue_depth() -> dict[str, int]:
+    with Session(engine) as session:
+        rows = session.exec(
+            select(NoteEmbeddingJob.status, func.count()).group_by(
+                col(NoteEmbeddingJob.status)
+            )
+        ).all()
+        return {str(status): int(count) for status, count in rows}

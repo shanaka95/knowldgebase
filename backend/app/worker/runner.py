@@ -20,6 +20,7 @@ from app.services.storage import MinioStorage, ObjectStorage
 from app.services.vectors import QdrantStore, VectorStore
 from app.worker import healthfile, queue
 from app.worker.imports import run_import
+from app.worker.note_pipeline import run_note_job
 from app.worker.pipeline import PipelineDeps, run_job
 
 logger = logging.getLogger(__name__)
@@ -35,12 +36,18 @@ class Worker:
         embedder: EmbeddingClient,
         concurrency: int | None = None,
         import_concurrency: int | None = None,
+        note_concurrency: int | None = None,
         poll_interval: float | None = None,
         name: str | None = None,
     ) -> None:
         self.name = name or f"{socket.gethostname()}:{os.getpid()}"
         self.concurrency = concurrency or settings.WORKER_CONCURRENCY
         self.import_concurrency = import_concurrency or settings.IMPORT_CONCURRENCY
+        self.note_concurrency = (
+            note_concurrency
+            if note_concurrency is not None
+            else settings.NOTE_WORKER_CONCURRENCY
+        )
         self.poll_interval = poll_interval or settings.WORKER_POLL_INTERVAL_SECONDS
         self.vectors = vectors
         self.storage = storage
@@ -52,6 +59,7 @@ class Worker:
         )
         self.running: dict[uuid.UUID, asyncio.Task[object]] = {}
         self.running_imports: dict[uuid.UUID, asyncio.Task[object]] = {}
+        self.running_notes: dict[uuid.UUID, asyncio.Task[object]] = {}
         self.shutting_down = False
         self._stop = asyncio.Event()
 
@@ -81,6 +89,10 @@ class Worker:
         while not self.shutting_down:
             try:
                 await asyncio.to_thread(queue.heartbeat, self.name, list(self.running))
+                if self.running_notes:
+                    await asyncio.to_thread(
+                        queue.note_heartbeat, self.name, list(self.running_notes)
+                    )
                 healthfile.touch()
             except Exception as exc:  # noqa: BLE001
                 logger.warning("heartbeat failed: %s", exc)
@@ -102,6 +114,17 @@ class Worker:
                                 "cancelling job %s (requested)", str(job_id)[:8]
                             )
                             task.cancel()
+                if self.running_notes:
+                    for note_job_id in await asyncio.to_thread(
+                        queue.cancelled_note_job_ids, list(self.running_notes)
+                    ):
+                        task = self.running_notes.get(note_job_id)
+                        if task is not None and not task.done():
+                            logger.info(
+                                "cancelling note job %s (requested)",
+                                str(note_job_id)[:8],
+                            )
+                            task.cancel()
             except Exception as exc:  # noqa: BLE001
                 logger.warning("cancel watcher failed: %s", exc)
             with contextlib.suppress(asyncio.TimeoutError):
@@ -117,6 +140,17 @@ class Worker:
             self.running.pop(job_id, None)
             if not t.cancelled() and t.exception() is not None:
                 logger.error("job task crashed: %r", t.exception())
+
+        task.add_done_callback(_done)
+
+    def _spawn_note(self, job_id: uuid.UUID, coro: Coroutine[Any, Any, object]) -> None:
+        task: asyncio.Task[object] = asyncio.ensure_future(coro)
+        self.running_notes[job_id] = task
+
+        def _done(t: asyncio.Task[object]) -> None:
+            self.running_notes.pop(job_id, None)
+            if not t.cancelled() and t.exception() is not None:
+                logger.error("note job task crashed: %r", t.exception())
 
         task.add_done_callback(_done)
 
@@ -148,6 +182,14 @@ class Worker:
             await self.vectors.delete_document(
                 uuid.UUID(str(task.payload["document_id"]))
             )
+        elif task.kind == CleanupKind.qdrant_note:
+            await self.vectors.delete_note(uuid.UUID(str(task.payload["note_id"])))
+        elif task.kind == CleanupKind.qdrant_notes_of_owner:
+            # The rows went with the account (Note.user_id is CASCADE), so the
+            # owner on the payload is the only handle left on these points.
+            await self.vectors.delete_notes_of_owner(
+                uuid.UUID(str(task.payload["owner_id"]))
+            )
         elif task.kind == CleanupKind.minio_object:
             if self.storage is None:
                 raise RuntimeError("no object storage configured")
@@ -161,6 +203,8 @@ class Worker:
         """One scheduler iteration; returns the number of jobs started."""
         await asyncio.to_thread(queue.reclaim_stale)
         await asyncio.to_thread(queue.reclaim_stale_imports)
+        if self.note_concurrency > 0:
+            await asyncio.to_thread(queue.reclaim_stale_note_jobs)
         started = 0
 
         free = self.concurrency - len(self.running)
@@ -190,6 +234,27 @@ class Worker:
                 )
                 self._spawn_import(import_job, storage)
                 started += 1
+
+        # Its own budget, so note indexing can never take a slot from the
+        # queue that indexes pages. Zero switches it off without a deploy.
+        note_free = self.note_concurrency - len(self.running_notes)
+        if note_free > 0:
+            for note_job in await asyncio.to_thread(
+                queue.claim_note_jobs, self.name, note_free
+            ):
+                logger.info(
+                    "claimed note job %s for note %s v%s",
+                    str(note_job.id)[:8],
+                    str(note_job.note_id)[:8],
+                    note_job.doc_version,
+                )
+                self._spawn_note(note_job.id, run_note_job(note_job, self.deps))
+                started += 1
+
+            # Anything whose vectors are behind with no job in flight: notes
+            # written before indexing existed, and any enqueue a bug dropped.
+            # Bounded and idempotent, so it is cheap to run every tick.
+            await asyncio.to_thread(queue.enqueue_stale_notes, 20)
 
         await self._process_cleanup_tasks()
         return started
@@ -232,6 +297,15 @@ class Worker:
                 task.cancel()
             if self.running:
                 await asyncio.gather(*self.running.values(), return_exceptions=True)
+            # Note jobs go back to the queue the same way, or a restart leaves
+            # them leased to a worker that no longer exists until the lease
+            # expires.
+            for task in list(self.running_notes.values()):
+                task.cancel()
+            if self.running_notes:
+                await asyncio.gather(
+                    *self.running_notes.values(), return_exceptions=True
+                )
             for task in background:
                 task.cancel()
             await asyncio.gather(*background, return_exceptions=True)

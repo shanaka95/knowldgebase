@@ -125,6 +125,13 @@ class ImportParser(StrEnum):
 class CleanupKind(StrEnum):
     qdrant_document = "qdrant_document"
     minio_object = "minio_object"
+    # One note's points. Enqueued on a real delete, never on an archive: an
+    # archived note has to stay findable.
+    qdrant_note = "qdrant_note"
+    # Everything a departing account left behind. `Note.user_id` is CASCADE, so
+    # the rows go with the account and there is nothing left to walk - which is
+    # exactly why the vectors have to be swept by owner instead.
+    qdrant_notes_of_owner = "qdrant_notes_of_owner"
 
 
 ROLE_RANK: dict[str, int] = {
@@ -3017,3 +3024,70 @@ class NotePublic(NoteSummaryPublic):
 class NotesPublic(SQLModel):
     data: list[NoteSummaryPublic]
     count: int
+
+
+class NoteChunk(SQLModel, table=True):
+    """A slice of a long note, so a passage can be found rather than the whole.
+
+    Its own table rather than a nullable column on `documentchunk`: the FK is
+    what makes a deleted note take its chunks with it, and a polymorphic id
+    cannot have one.
+    """
+
+    __table_args__ = (
+        UniqueConstraint("note_id", "doc_version", "chunk_index", name="uq_note_chunk"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    note_id: uuid.UUID = Field(
+        foreign_key="note.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    doc_version: int
+    chunk_index: int
+    title: str = Field(default="", max_length=NOTE_TITLE_MAX)
+    text: str = Field(sa_type=Text)
+    char_count: int = 0
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class NoteEmbeddingJob(SQLModel, table=True):
+    """One indexing run for one note.
+
+    A parallel table to `embeddingjob` rather than a nullable `note_id` on it.
+    Eight functions in the worker load a Document from `job.document_id` and
+    compare versions; making that column optional puts a branch in every one of
+    them, on the hottest table in the system, where a missed branch fails
+    silently - a note stuck mid-stage, or the wrong entity marked failed.
+    Document indexing is the product and notes are new, so the blast radius is
+    kept at zero. `ImportJob` is the same decision made for the same reason.
+
+    No `chunking_method`: a note is never chunked by the LLM. See
+    app/worker/note_pipeline.py for why that matters.
+    """
+
+    __table_args__ = (
+        Index("ix_noteembeddingjob_status_run_after", "status", "run_after"),
+        Index("ix_noteembeddingjob_note_created", "note_id", "created_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    note_id: uuid.UUID = Field(
+        foreign_key="note.id", nullable=False, ondelete="CASCADE"
+    )
+    doc_version: int
+    status: JobStatus = Field(default=JobStatus.queued, sa_type=String(32))  # type: ignore
+    stage: JobStage | None = Field(default=None, sa_type=String(32))  # type: ignore
+    progress: int = 0
+    attempts: int = 0
+    max_attempts: int = 3
+    run_after: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    cancel_requested: bool = False
+    locked_by: str | None = Field(default=None, max_length=200)
+    locked_at: datetime | None = _tz_datetime(default=None)
+    heartbeat_at: datetime | None = _tz_datetime(default=None)
+    started_at: datetime | None = _tz_datetime(default=None)
+    finished_at: datetime | None = _tz_datetime(default=None)
+    error: str | None = Field(default=None, sa_type=Text)
+    chunk_count: int | None = None
+    stats: dict[str, Any] | None = Field(default=None, sa_type=JSONB)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)

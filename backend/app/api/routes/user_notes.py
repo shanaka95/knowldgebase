@@ -19,9 +19,12 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func
 from sqlmodel import col, select
 
+from app import crud
 from app.api.deps import AuthDep, SessionDep, WriteAuth
 from app.core.permissions import require_namespace
 from app.models import (
+    CleanupKind,
+    CleanupTask,
     Message,
     Note,
     NoteCreate,
@@ -312,6 +315,7 @@ def create_note(session: SessionDep, auth: WriteAuth, body: NoteCreate) -> Any:
         title=body.title,
     )
     session.add(note)
+    crud.enqueue_note_embedding_job(session=session, note=note)
     session.commit()
     session.refresh(note)
     if body.tag_ids:
@@ -359,6 +363,10 @@ def update_note(
 
     if changed:
         note.version += 1
+        # Only when the meaning moved. A ticked checkbox changes the HTML and
+        # not a word of the text, and re-embedding for that is spend for
+        # nothing.
+        crud.enqueue_note_embedding_job(session=session, note=note)
     note.updated_at = _now()
     session.add(note)
     session.commit()
@@ -454,6 +462,7 @@ def clone_note(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> Any:
         color=source.color,
     )
     session.add(clone)
+    crud.enqueue_note_embedding_job(session=session, note=clone)
     session.commit()
     session.refresh(clone)
 
@@ -473,6 +482,14 @@ def delete_note(session: SessionDep, auth: WriteAuth, note_id: uuid.UUID) -> Any
     have to expire on its own.
     """
     note = notes_service.owned_note(session, auth.user, note_id)
+    # The chunks and jobs go with the row; the vectors live in Qdrant and have
+    # to be swept. Archiving enqueues nothing - an archived note stays findable.
+    session.add(
+        CleanupTask(
+            kind=CleanupKind.qdrant_note,
+            payload={"note_id": str(note.id)},
+        )
+    )
     session.delete(note)
     session.commit()
     return Message(message="Note deleted")

@@ -7,7 +7,13 @@ import time
 import uuid
 from typing import Any
 
-from app.models import EmbeddingJob, EmbeddingStatus, JobStage, UsageFeature
+from app.models import (
+    EmbeddingJob,
+    EmbeddingStatus,
+    JobStage,
+    NoteEmbeddingJob,
+    UsageFeature,
+)
 from app.services.usage import UsageMeter
 from app.worker import queue
 from app.worker.errors import JobCancelled, JobSuperseded
@@ -62,6 +68,67 @@ class JobContext:
             return
         await asyncio.to_thread(
             queue.set_stage, self.job_id, self._stage, progress, None
+        )
+
+    def _record_stage_time(self) -> None:
+        now = time.perf_counter()
+        if self._stage is not None:
+            ms = round((now - self._stage_started) * 1000)
+            self.stats.setdefault("stage_ms", {})[str(self._stage)] = ms
+        self._stage_started = now
+
+    def finalize_stats(self) -> dict[str, Any]:
+        self._record_stage_time()
+        return self.stats
+
+
+class NoteJobContext:
+    """The same, for a note.
+
+    A sibling rather than a parameter on `JobContext`: that class reads the
+    document queue, and giving it a branch would put one in the code path every
+    page in the system goes through. A note is cheap to index, so this one never
+    grows the LLM stages.
+    """
+
+    def __init__(self, job: NoteEmbeddingJob, user_id: uuid.UUID | None = None) -> None:
+        self.job_id: uuid.UUID = job.id
+        self.note_id: uuid.UUID = job.note_id
+        self.doc_version: int = job.doc_version
+        self.attempts: int = job.attempts
+        self.stats: dict[str, Any] = {}
+        self.meter = UsageMeter(user_id=user_id, feature=UsageFeature.indexing)
+        self._stage_started = time.perf_counter()
+        self._stage: JobStage | None = None
+
+    async def checkpoint(self) -> None:
+        flags = await asyncio.to_thread(queue.read_note_flags, self.job_id)
+        if not flags.exists or flags.cancel_requested:
+            raise JobCancelled()
+        if flags.status != "running":
+            raise JobCancelled()
+        if flags.document_version is None:
+            raise JobCancelled()  # note deleted
+        if flags.document_version != self.doc_version:
+            raise JobSuperseded()
+
+    async def set_stage(
+        self,
+        stage: JobStage,
+        progress: int,
+        note_status: EmbeddingStatus | None = None,
+    ) -> None:
+        self._record_stage_time()
+        self._stage = stage
+        await asyncio.to_thread(
+            queue.set_note_stage, self.job_id, stage, progress, note_status
+        )
+
+    async def set_progress(self, progress: int) -> None:
+        if self._stage is None:
+            return
+        await asyncio.to_thread(
+            queue.set_note_stage, self.job_id, self._stage, progress, None
         )
 
     def _record_stage_time(self) -> None:

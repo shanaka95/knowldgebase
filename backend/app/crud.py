@@ -17,6 +17,8 @@ from app.models import (
     Folder,
     JobStatus,
     Namespace,
+    Note,
+    NoteEmbeddingJob,
     User,
     UserCreate,
     UserUpdate,
@@ -291,6 +293,67 @@ def enqueue_embedding_job(
     if reset_attempts:
         document.embedding_attempts = 0
     session.add(document)
+    return coalesced
+
+
+def enqueue_note_embedding_job(
+    *,
+    session: Session,
+    note: Note,
+    force: bool = False,
+    reset_attempts: bool = False,
+) -> NoteEmbeddingJob:
+    """Schedule indexing for ``note``'s current version.
+
+    Same contract as `enqueue_embedding_job` - coalesce a queued job, supersede
+    a running one - with a shorter debounce. A note is cheap to index (no LLM
+    call at all, see app/worker/note_pipeline.py) and the product promises it
+    turns up in search almost at once, so waiting ten seconds to batch edits
+    would be paying a latency cost to save nothing.
+
+    Caller is responsible for ``session.commit()``.
+    """
+    now = datetime.now(UTC)
+    debounce = timedelta(
+        seconds=0 if force else settings.NOTE_EMBEDDING_DEBOUNCE_SECONDS
+    )
+
+    active = session.exec(
+        select(NoteEmbeddingJob).where(
+            NoteEmbeddingJob.note_id == note.id,
+            col(NoteEmbeddingJob.status).in_([JobStatus.queued, JobStatus.running]),
+        )
+    ).all()
+
+    coalesced: NoteEmbeddingJob | None = None
+    for job in active:
+        if job.status == JobStatus.queued and not force and not job.cancel_requested:
+            job.doc_version = note.version
+            job.run_after = now + debounce
+            coalesced = job
+            session.add(job)
+        else:
+            job.cancel_requested = True
+            if job.status == JobStatus.queued:
+                job.status = JobStatus.superseded
+                job.finished_at = now
+            session.add(job)
+
+    if coalesced is None:
+        coalesced = NoteEmbeddingJob(
+            note_id=note.id,
+            doc_version=note.version,
+            status=JobStatus.queued,
+            run_after=now + debounce,
+            max_attempts=settings.EMBEDDING_MAX_ATTEMPTS,
+        )
+        session.add(coalesced)
+
+    note.embedding_status = EmbeddingStatus.pending
+    note.embedding_error = None
+    if reset_attempts:
+        note.embedding_attempts = 0
+    session.add(note)
     return coalesced
 
 

@@ -26,6 +26,8 @@ from app.core.security import (
 )
 from app.models import (
     AuthCodePurpose,
+    CleanupKind,
+    CleanupTask,
     Message,
     TokenMessage,
     UpdatePassword,
@@ -234,6 +236,15 @@ def delete_user_me(session: SessionDep, current_user: SessionUser) -> Any:
         raise HTTPException(
             status_code=403, detail="Super users are not allowed to delete themselves"
         )
+    # A note belongs to one account and cascades away with it, which leaves
+    # nothing to walk when the vectors need sweeping. Enqueued before the
+    # delete, while the id is still meaningful.
+    session.add(
+        CleanupTask(
+            kind=CleanupKind.qdrant_notes_of_owner,
+            payload={"owner_id": str(current_user.id)},
+        )
+    )
     session.delete(current_user)
     session.commit()
     return Message(message="User deleted successfully")
@@ -331,6 +342,15 @@ def delete_user(
         raise HTTPException(
             status_code=403, detail="Super users are not allowed to delete themselves"
         )
+    # A note belongs to one account and cascades away with it, which leaves
+    # nothing to walk when the vectors need sweeping. Enqueued before the
+    # delete, while the id is still meaningful.
+    session.add(
+        CleanupTask(
+            kind=CleanupKind.qdrant_notes_of_owner,
+            payload={"owner_id": str(user.id)},
+        )
+    )
     session.delete(user)
     session.commit()
     return Message(message="User deleted successfully")

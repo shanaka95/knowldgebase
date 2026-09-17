@@ -502,6 +502,13 @@ class Settings(BaseSettings):
     WORKER_OFFLINE_AFTER_SECONDS: int = 30
     WORKER_HEARTBEAT_FILE: str = "/tmp/worker-heartbeat"
     EMBEDDING_DEBOUNCE_SECONDS: int = 10
+    # Notes settle faster than pages. Indexing one costs a single embedding
+    # call and no LLM work at all, so batching edits for ten seconds would buy
+    # nothing and cost the promise that a note turns up almost at once.
+    NOTE_EMBEDDING_DEBOUNCE_SECONDS: int = 3
+    # Its own budget, so a misbehaving note pipeline cannot starve the queue
+    # that indexes pages. Set to 0 to switch note indexing off entirely.
+    NOTE_WORKER_CONCURRENCY: int = 2
     EMBEDDING_MAX_ATTEMPTS: int = 3
     EMBEDDING_RETRY_BACKOFF_SECONDS: int = 30
 
