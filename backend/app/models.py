@@ -166,6 +166,7 @@ class UserUpdate(SQLModel):
     # .update_user` uses `exclude_unset=True`, so "absent" and "null" stay
     # different things: leave alone, versus reset to inherit.
     max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
+    max_notes: int | None = Field(default=None, ge=0, le=1_000_000)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
     max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
     monthly_credits: int | None = Field(default=None, ge=0, le=10_000_000)
@@ -213,6 +214,9 @@ class User(UserBase, table=True):
     # Zero is a real answer here ("this account may not create pages"), so every
     # test is `is not None`, never truthiness.
     max_pages: int | None = Field(default=None)
+    # Notes are counted apart from pages: different thing, different volume.
+    # Somebody may well want fifty pages and five thousand notes.
+    max_notes: int | None = Field(default=None)
     # How many people one of this account's pages may be shared with, counting
     # invitations that have not been accepted yet.
     max_shares_per_document: int | None = Field(default=None)
@@ -242,6 +246,8 @@ class UserPublic(UserBase):
     email_verified_at: datetime | None = None
     max_pages: int = 100
     pages_used: int = 0
+    max_notes: int = 1000
+    notes_used: int = 0
     max_shares_per_document: int = 50
     max_members_per_space: int = 50
     monthly_credits: int = 1000
@@ -292,6 +298,7 @@ class UserGroup(SQLModel, table=True):
     is_system: bool = Field(default=False)
 
     max_pages: int | None = Field(default=None)
+    max_notes: int | None = Field(default=None)
     max_shares_per_document: int | None = Field(default=None)
     max_members_per_space: int | None = Field(default=None)
     monthly_credits: int | None = Field(default=None)
@@ -304,6 +311,7 @@ class UserGroupCreate(SQLModel):
     name: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
+    max_notes: int | None = Field(default=None, ge=0, le=1_000_000)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
     max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
     monthly_credits: int | None = Field(default=None, ge=0, le=10_000_000)
@@ -313,6 +321,7 @@ class UserGroupUpdate(SQLModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     max_pages: int | None = Field(default=None, ge=0, le=1_000_000)
+    max_notes: int | None = Field(default=None, ge=0, le=1_000_000)
     max_shares_per_document: int | None = Field(default=None, ge=0, le=10_000)
     max_members_per_space: int | None = Field(default=None, ge=0, le=10_000)
     monthly_credits: int | None = Field(default=None, ge=0, le=10_000_000)
@@ -329,10 +338,12 @@ class UserGroupPublic(SQLModel):
     # What this group sets. None means it inherits from the defaults; the
     # resolved figure a member would actually get is `effective_*`.
     max_pages: int | None = None
+    max_notes: int | None = None
     max_shares_per_document: int | None = None
     max_members_per_space: int | None = None
     monthly_credits: int | None = None
     effective_max_pages: int = 0
+    effective_max_notes: int = 0
     effective_max_shares_per_document: int = 0
     effective_max_members_per_space: int = 0
     effective_monthly_credits: int = 0
@@ -381,6 +392,8 @@ class AdminUserPublic(UserBase):
     email_verified_at: datetime | None = None
     max_pages: int = 100
     pages_used: int = 0
+    max_notes: int = 1000
+    notes_used: int = 0
     max_shares_per_document: int = 50
     max_members_per_space: int = 50
     monthly_credits: int = 1000
@@ -2780,3 +2793,227 @@ class CreditBalance(SQLModel):
     used_on_search: float
     used_on_indexing: float
     used_on_other: float
+
+
+# ---------------------------------------------------------------------------
+# Notes
+#
+# Somebody's own notes: short, private, written fast. Not to be confused with
+# DocumentNote above, which is a remark *about a page* and is read by everyone
+# who can read that page. These belong to one person and to nobody else.
+#
+# A note lives in a space, because that is how this product organises what a
+# thing is about, but the space grants nobody any access to it. There is no
+# share table here and there is no helper in core/permissions.py, both on
+# purpose: every query carries `Note.user_id == user.id`, and a superuser is
+# not an exception. "An administrator can read your notes" is a different
+# product from this one. AskConversation makes the same promise the same way.
+#
+# One table holds all three kinds. A generated tsvector may only reference its
+# own row, so a table per kind would mean a search vector, a lexical source and
+# a hydration branch per kind; instead each kind derives the same `content_text`
+# column, and adding a fourth kind is one function.
+# ---------------------------------------------------------------------------
+
+NOTE_TITLE_MAX = 300
+NOTE_TAG_MAX = 50
+
+# Kept beside the model because the migration must repeat it exactly: a
+# generated column cannot be altered in place, only dropped and rebuilt, so a
+# drift between these two is a rebuild nobody asked for.
+NOTE_SEARCH_VECTOR = (
+    "setweight(to_tsvector('english', coalesce(title, '')), 'A') || "
+    "setweight(to_tsvector('english', left(coalesce(content_text, ''), 100000)), 'B')"
+)
+
+
+class NoteKind(StrEnum):
+    text = "text"
+    checklist = "checklist"
+    drawing = "drawing"
+
+
+class Note(SQLModel, table=True):
+    """One note, belonging to the person who wrote it."""
+
+    __table_args__ = (
+        # "my notes, newest first" - the list, and the only question it asks.
+        Index("ix_note_user_updated", "user_id", "updated_at"),
+        # The same list again, split by whether it has been put away.
+        Index("ix_note_user_archived", "user_id", "archived_at"),
+        Index("ix_note_user_namespace", "user_id", "namespace_id"),
+        Index("ix_note_embedding_status", "embedding_status"),
+        Index("ix_note_search_vector", "search_vector", postgresql_using="gin"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    # Where the note is filed. SET NULL rather than CASCADE: deleting a space
+    # is an act on that space's pages, and it must not reach into other
+    # people's private notes. RESTRICT would be worse still - the delete would
+    # fail with "3 notes are in here", which tells an administrator that
+    # somebody has private notes and is the exact leak this model exists to
+    # prevent. Null reads as "Unfiled", which is a state the interface can show.
+    namespace_id: uuid.UUID | None = Field(
+        default=None, foreign_key="namespace.id", ondelete="SET NULL"
+    )
+    kind: NoteKind = Field(default=NoteKind.text, sa_type=String(16))  # type: ignore
+    title: str = Field(default="", max_length=NOTE_TITLE_MAX)
+    # kind=text and kind=checklist: the editor's HTML, a checklist being a
+    # document whose body is one task list. kind=drawing: empty.
+    content_html: str = Field(default="", sa_type=Text)
+    # kind=drawing: the strokes, so the sketch can be reopened and edited.
+    content_json: Any | None = Field(default=None, sa_type=JSONB)
+    # Whatever the kind above amounts to in words, derived on write by
+    # services/user_notes.py. The search vector and the indexer read this and
+    # nothing else, which is what keeps one pipeline for three kinds.
+    content_text: str = Field(default="", sa_type=Text)
+    color: str | None = Field(default=None, max_length=20)
+    # Timestamps rather than flags. Same storage, and they answer "when", which
+    # orders the pinned group and dates the archive without a second column.
+    pinned_at: datetime | None = _tz_datetime(default=None)
+    archived_at: datetime | None = _tz_datetime(default=None)
+    version: int = 1
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+    # Indexing state, mirroring Document's block so the two read alike.
+    embedding_status: EmbeddingStatus = Field(
+        default=EmbeddingStatus.pending,
+        sa_type=String(32),  # type: ignore
+    )
+    embedding_version: int | None = None
+    embedding_error: str | None = Field(default=None, sa_type=Text)
+    embedding_attempts: int = 0
+    chunk_count: int = 0
+    embedding_updated_at: datetime | None = _tz_datetime(default=None)
+
+    # Written by Postgres on COMMIT, which is what makes a note findable by
+    # keyword the instant it is saved rather than when the worker gets to it.
+    search_vector: Any = Field(
+        default=None,
+        sa_column=Column(
+            TSVECTOR,
+            Computed(NOTE_SEARCH_VECTOR, persisted=True),
+            nullable=True,
+        ),
+    )
+
+
+class NoteTag(SQLModel, table=True):
+    """A label somebody made up, and may put on any number of their notes."""
+
+    __table_args__ = (
+        # Per person, not global: one person's vocabulary must not appear in
+        # another's autocomplete. Folded, so nobody ends up with Work and work.
+        UniqueConstraint("user_id", "name_folded", name="uq_notetag_user_name"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    name: str = Field(max_length=NOTE_TAG_MAX)
+    name_folded: str = Field(max_length=NOTE_TAG_MAX)
+    # Colour belongs to the tag rather than to the note, so a colour has a name
+    # attached to it. A colour on its own is a label nobody can remember.
+    color: str | None = Field(default=None, max_length=20)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class NoteTagLink(SQLModel, table=True):
+    note_id: uuid.UUID = Field(
+        foreign_key="note.id", primary_key=True, ondelete="CASCADE"
+    )
+    tag_id: uuid.UUID = Field(
+        foreign_key="notetag.id", primary_key=True, ondelete="CASCADE"
+    )
+
+
+class NoteTagPublic(SQLModel):
+    id: uuid.UUID
+    name: str
+    color: str | None = None
+
+
+class NoteTagCreate(SQLModel):
+    name: str = Field(min_length=1, max_length=NOTE_TAG_MAX)
+    color: str | None = Field(default=None, max_length=20)
+
+
+class NoteTagUpdate(SQLModel):
+    name: str | None = Field(default=None, min_length=1, max_length=NOTE_TAG_MAX)
+    color: str | None = Field(default=None, max_length=20)
+
+
+class NoteTagsPublic(SQLModel):
+    data: list[NoteTagPublic]
+    count: int
+
+
+class NoteCreate(SQLModel):
+    namespace_id: uuid.UUID | None = None
+    kind: NoteKind = NoteKind.text
+    title: str = Field(default="", max_length=NOTE_TITLE_MAX)
+    content: str = ""
+    content_format: ContentFormat = ContentFormat.html
+    content_json: Any | None = None
+    color: str | None = Field(default=None, max_length=20)
+    tag_ids: list[uuid.UUID] | None = None
+
+
+class NoteUpdate(SQLModel):
+    title: str | None = Field(default=None, max_length=NOTE_TITLE_MAX)
+    content: str | None = None
+    content_format: ContentFormat = ContentFormat.html
+    content_json: Any | None = None
+    # Sent as an empty string to clear it; left out entirely to leave it alone.
+    color: str | None = Field(default=None, max_length=20)
+    tag_ids: list[uuid.UUID] | None = None
+    # Optimistic locking, the same contract documents use, so the editor's
+    # autosave can tell "somebody else changed this" from "the save failed".
+    expected_version: int | None = None
+
+
+class NoteMove(SQLModel):
+    """Refile a note. Null means unfiled, which is a real destination."""
+
+    namespace_id: uuid.UUID | None = None
+
+
+class NoteSummaryPublic(SQLModel):
+    """A note as the list and the search results show it: no body."""
+
+    id: uuid.UUID
+    namespace_id: uuid.UUID | None = None
+    namespace_name: str | None = None
+    kind: NoteKind
+    title: str
+    # Plain text, short. The board renders this rather than mounting an editor
+    # per card, which also keeps server HTML out of the card entirely.
+    preview: str
+    color: str | None = None
+    pinned: bool
+    archived: bool
+    # Only meaningful for kind=checklist; 0/0 otherwise.
+    checklist_done: int = 0
+    checklist_total: int = 0
+    tags: list[NoteTagPublic] = []
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    embedding_status: EmbeddingStatus
+    chunk_count: int = 0
+
+
+class NotePublic(NoteSummaryPublic):
+    content_html: str
+    content_json: Any | None = None
+    content_text: str
+
+
+class NotesPublic(SQLModel):
+    data: list[NoteSummaryPublic]
+    count: int

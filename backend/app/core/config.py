@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     # The values themselves are administered at runtime (see
     # app/services/quota.py); these are the last resort, not the product default.
     MAX_PAGES_PER_USER: int = 100
+    # Notes are limited apart from pages. They are cheaper and far more
+    # numerous, so one number covering both would either starve the notes or
+    # make the page limit meaningless.
+    MAX_NOTES_PER_USER: int = 1000
     # Credits an account may spend on model work each calendar month. One
     # credit buys a thousand tokens, or ten embeddings, or ten rerank calls -
     # see app/services/credits.py for why those three are the same unit.

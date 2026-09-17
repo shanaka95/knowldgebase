@@ -41,6 +41,7 @@ from app.models import (
     ImportJob,
     ImportStatus,
     LimitDefinition,
+    Note,
     ResolvedLimit,
     User,
     UserGroup,
@@ -88,6 +89,16 @@ LIMITS: tuple[LimitSpec, ...] = (
         unit="pages",
     ),
     LimitSpec(
+        key="max_notes",
+        label="Notes",
+        description=(
+            "How many notes an account may keep. Archived notes count, because "
+            "they still hold rows and vectors; deleting one frees its place."
+        ),
+        settings_attr="MAX_NOTES_PER_USER",
+        unit="notes",
+    ),
+    LimitSpec(
         key="max_shares_per_document",
         label="People per page",
         description="How many people one page may be shared with, counting invitations.",
@@ -131,6 +142,7 @@ class QuotaExceeded(Exception):
 @dataclass(frozen=True, slots=True)
 class Limits:
     max_pages: int
+    max_notes: int
     max_shares_per_document: int
     max_members_per_space: int
     monthly_credits: int
@@ -344,6 +356,64 @@ def pages_used(session: Session, user_id: uuid.UUID) -> int:
     return page_count(session, user_id) + pending_page_count(session, user_id)
 
 
+def note_count(session: Session, user_id: uuid.UUID) -> int:
+    """How many notes this account has.
+
+    Archived notes are included. Archiving is "out of my way", not "gone": the
+    row, its chunks and its vectors all remain, which is the cost the limit is
+    counting. A limit somebody could dodge by archiving would not be a limit,
+    and deleting a note - which is real and immediate - is the way to free a
+    place.
+    """
+    return int(
+        session.exec(
+            select(func.count()).select_from(Note).where(Note.user_id == user_id)
+        ).one()
+    )
+
+
+def ensure_note_capacity(
+    session: Session,
+    user_id: uuid.UUID | None,
+    *,
+    wanted: int = 1,
+    groups: dict[uuid.UUID, UserGroup] | None = None,
+) -> None:
+    """Refuse if this account has no room for ``wanted`` more notes."""
+    if user_id is None:
+        return
+    user = session.get(User, user_id)
+    if user is None:
+        return
+
+    limit = resolve_limits(session, user, groups=groups).max_notes
+    used = note_count(session, user_id)
+    if used + wanted <= limit:
+        return
+
+    raise QuotaExceeded(note_limit_message(limit, used, wanted))
+
+
+def note_limit_message(limit: int, used: int, wanted: int) -> str:
+    """Why the refusal happened. Never mentions groups, like its page sibling."""
+    notes = "note" if limit == 1 else "notes"
+    if limit == 0:
+        return (
+            "This account cannot create notes. Ask an administrator to raise the limit."
+        )
+    if wanted > 1:
+        return (
+            f"This would take you past your limit of {limit} {notes} "
+            f"({used} already used, {wanted} more requested). "
+            "Delete some notes you no longer need, or ask an administrator to "
+            "raise the limit."
+        )
+    return (
+        f"You have reached your limit of {limit} {notes}. "
+        "Delete one you no longer need, or ask an administrator to raise the limit."
+    )
+
+
 def pages_used_for(
     session: Session, user_ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, int]:
@@ -470,6 +540,7 @@ def limits_for_owner(session: Session, owner: User | None) -> Limits:
     if owner is None:
         return Limits(
             max_pages=settings.MAX_PAGES_PER_USER,
+            max_notes=settings.MAX_NOTES_PER_USER,
             max_shares_per_document=settings.SHARE_MAX_RECIPIENTS,
             max_members_per_space=settings.SHARE_MAX_RECIPIENTS,
             monthly_credits=settings.MONTHLY_CREDITS,
