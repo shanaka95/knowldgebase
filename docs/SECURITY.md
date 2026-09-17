@@ -23,6 +23,8 @@ user → group → default group → constant:
 
 * **Pages** — `docs/LIMITS.md`
 * **Credits** — `docs/CREDITS.md`
+* **Notes** — `docs/MY_NOTES.md`, which is private data rather than a limit,
+  and is the one place where 404-not-403 is load-bearing against a superuser.
 
 Every path that can reach a model is checked *before* the call: asking,
 searching, uploading, Drive imports, translating, indexing in the worker, and
