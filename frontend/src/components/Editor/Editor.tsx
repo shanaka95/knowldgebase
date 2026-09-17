@@ -18,6 +18,11 @@ interface EditorProps {
  * Renders a Tiptap editor created with `useEditor(...)` (see `useDocumentEditor`).
  * View and edit modes share this component: toggle `editor.setEditable()`.
  */
+/** Is this extension loaded? A menu for one that is not would crash on its commands. */
+function has(editor: TiptapEditor, name: string): boolean {
+  return editor.extensionManager.extensions.some((ext) => ext.name === name)
+}
+
 export function Editor({ editor, className, withMenus = true }: EditorProps) {
   if (!editor) return null
   return (
@@ -27,8 +32,15 @@ export function Editor({ editor, className, withMenus = true }: EditorProps) {
         <>
           <InlineBubbleMenu editor={editor} />
           <LinkBubbleMenu editor={editor} />
-          <TableBubbleMenu editor={editor} />
-          <PanelBubbleMenu editor={editor} />
+          {/*
+            Gated on the extension rather than rendered always. These menus call
+            commands the extension registers - `mergeCells`, and the panel's own
+            - and an editor built without it throws on the first render rather
+            than quietly showing nothing. That is what a note does: it has no
+            tables and no panels.
+          */}
+          {has(editor, "table") && <TableBubbleMenu editor={editor} />}
+          {has(editor, "panel") && <PanelBubbleMenu editor={editor} />}
         </>
       )}
     </div>

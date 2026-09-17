@@ -149,6 +149,14 @@ export type AdminUserPublic = {
      */
     pages_used?: number;
     /**
+     * Max Notes
+     */
+    max_notes?: number;
+    /**
+     * Notes Used
+     */
+    notes_used?: number;
+    /**
      * Max Shares Per Document
      */
     max_shares_per_document?: number;
@@ -2898,6 +2906,310 @@ export type NewPassword = {
 };
 
 /**
+ * NoteCreate
+ */
+export type NoteCreate = {
+    /**
+     * Namespace Id
+     */
+    namespace_id?: string | null;
+    kind?: NoteKind;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Content
+     */
+    content?: string;
+    content_format?: ContentFormat;
+    /**
+     * Content Json
+     */
+    content_json?: unknown | null;
+    /**
+     * Color
+     */
+    color?: string | null;
+    /**
+     * Tag Ids
+     */
+    tag_ids?: Array<string> | null;
+};
+
+/**
+ * NoteKind
+ */
+export type NoteKind = 'text' | 'checklist' | 'drawing';
+
+/**
+ * NoteMove
+ *
+ * Refile a note. Null means unfiled, which is a real destination.
+ */
+export type NoteMove = {
+    /**
+     * Namespace Id
+     */
+    namespace_id?: string | null;
+};
+
+/**
+ * NotePublic
+ */
+export type NotePublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Namespace Id
+     */
+    namespace_id?: string | null;
+    /**
+     * Namespace Name
+     */
+    namespace_name?: string | null;
+    kind: NoteKind;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Preview
+     */
+    preview: string;
+    /**
+     * Color
+     */
+    color?: string | null;
+    /**
+     * Pinned
+     */
+    pinned: boolean;
+    /**
+     * Archived
+     */
+    archived: boolean;
+    /**
+     * Checklist Done
+     */
+    checklist_done?: number;
+    /**
+     * Checklist Total
+     */
+    checklist_total?: number;
+    /**
+     * Tags
+     */
+    tags?: Array<NoteTagPublic>;
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    embedding_status: EmbeddingStatus;
+    /**
+     * Chunk Count
+     */
+    chunk_count?: number;
+    /**
+     * Content Html
+     */
+    content_html: string;
+    /**
+     * Content Json
+     */
+    content_json?: unknown | null;
+    /**
+     * Content Text
+     */
+    content_text: string;
+};
+
+/**
+ * NoteSummaryPublic
+ *
+ * A note as the list and the search results show it: no body.
+ */
+export type NoteSummaryPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Namespace Id
+     */
+    namespace_id?: string | null;
+    /**
+     * Namespace Name
+     */
+    namespace_name?: string | null;
+    kind: NoteKind;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Preview
+     */
+    preview: string;
+    /**
+     * Color
+     */
+    color?: string | null;
+    /**
+     * Pinned
+     */
+    pinned: boolean;
+    /**
+     * Archived
+     */
+    archived: boolean;
+    /**
+     * Checklist Done
+     */
+    checklist_done?: number;
+    /**
+     * Checklist Total
+     */
+    checklist_total?: number;
+    /**
+     * Tags
+     */
+    tags?: Array<NoteTagPublic>;
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    embedding_status: EmbeddingStatus;
+    /**
+     * Chunk Count
+     */
+    chunk_count?: number;
+};
+
+/**
+ * NoteTagCreate
+ */
+export type NoteTagCreate = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Color
+     */
+    color?: string | null;
+};
+
+/**
+ * NoteTagPublic
+ */
+export type NoteTagPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Color
+     */
+    color?: string | null;
+};
+
+/**
+ * NoteTagUpdate
+ */
+export type NoteTagUpdate = {
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Color
+     */
+    color?: string | null;
+};
+
+/**
+ * NoteTagsPublic
+ */
+export type NoteTagsPublic = {
+    /**
+     * Data
+     */
+    data: Array<NoteTagPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * NoteUpdate
+ */
+export type NoteUpdate = {
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Content
+     */
+    content?: string | null;
+    content_format?: ContentFormat;
+    /**
+     * Content Json
+     */
+    content_json?: unknown | null;
+    /**
+     * Color
+     */
+    color?: string | null;
+    /**
+     * Tag Ids
+     */
+    tag_ids?: Array<string> | null;
+    /**
+     * Expected Version
+     */
+    expected_version?: number | null;
+};
+
+/**
+ * NotesPublic
+ */
+export type NotesPublic = {
+    /**
+     * Data
+     */
+    data: Array<NoteSummaryPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * PasswordRecoveryRequest
  */
 export type PasswordRecoveryRequest = {
@@ -3754,6 +4066,10 @@ export type UserGroupCreate = {
      */
     max_pages?: number | null;
     /**
+     * Max Notes
+     */
+    max_notes?: number | null;
+    /**
      * Max Shares Per Document
      */
     max_shares_per_document?: number | null;
@@ -3804,6 +4120,10 @@ export type UserGroupPublic = {
      */
     max_pages?: number | null;
     /**
+     * Max Notes
+     */
+    max_notes?: number | null;
+    /**
      * Max Shares Per Document
      */
     max_shares_per_document?: number | null;
@@ -3819,6 +4139,10 @@ export type UserGroupPublic = {
      * Effective Max Pages
      */
     effective_max_pages?: number;
+    /**
+     * Effective Max Notes
+     */
+    effective_max_notes?: number;
     /**
      * Effective Max Shares Per Document
      */
@@ -3857,6 +4181,10 @@ export type UserGroupUpdate = {
      * Max Pages
      */
     max_pages?: number | null;
+    /**
+     * Max Notes
+     */
+    max_notes?: number | null;
     /**
      * Max Shares Per Document
      */
@@ -3954,6 +4282,14 @@ export type UserPublic = {
      */
     pages_used?: number;
     /**
+     * Max Notes
+     */
+    max_notes?: number;
+    /**
+     * Notes Used
+     */
+    notes_used?: number;
+    /**
      * Max Shares Per Document
      */
     max_shares_per_document?: number;
@@ -4033,6 +4369,10 @@ export type UserUpdate = {
      * Max Pages
      */
     max_pages?: number | null;
+    /**
+     * Max Notes
+     */
+    max_notes?: number | null;
     /**
      * Max Shares Per Document
      */
@@ -6180,6 +6520,502 @@ export type notesUpdateNoteResponses = {
 };
 
 export type notesUpdateNoteResponse = notesUpdateNoteResponses[keyof notesUpdateNoteResponses];
+
+export type userNotesReadTagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notes/tags';
+};
+
+export type userNotesReadTagsResponses = {
+    /**
+     * Successful Response
+     */
+    200: NoteTagsPublic;
+};
+
+export type userNotesReadTagsResponse = userNotesReadTagsResponses[keyof userNotesReadTagsResponses];
+
+export type userNotesCreateTagData = {
+    body: NoteTagCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notes/tags';
+};
+
+export type userNotesCreateTagErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesCreateTagError = userNotesCreateTagErrors[keyof userNotesCreateTagErrors];
+
+export type userNotesCreateTagResponses = {
+    /**
+     * Successful Response
+     */
+    200: NoteTagPublic;
+};
+
+export type userNotesCreateTagResponse = userNotesCreateTagResponses[keyof userNotesCreateTagResponses];
+
+export type userNotesDeleteTagData = {
+    body?: never;
+    path: {
+        /**
+         * Tag Id
+         */
+        tag_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/tags/{tag_id}';
+};
+
+export type userNotesDeleteTagErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesDeleteTagError = userNotesDeleteTagErrors[keyof userNotesDeleteTagErrors];
+
+export type userNotesDeleteTagResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type userNotesDeleteTagResponse = userNotesDeleteTagResponses[keyof userNotesDeleteTagResponses];
+
+export type userNotesUpdateTagData = {
+    body: NoteTagUpdate;
+    path: {
+        /**
+         * Tag Id
+         */
+        tag_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/tags/{tag_id}';
+};
+
+export type userNotesUpdateTagErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesUpdateTagError = userNotesUpdateTagErrors[keyof userNotesUpdateTagErrors];
+
+export type userNotesUpdateTagResponses = {
+    /**
+     * Successful Response
+     */
+    200: NoteTagPublic;
+};
+
+export type userNotesUpdateTagResponse = userNotesUpdateTagResponses[keyof userNotesUpdateTagResponses];
+
+export type userNotesSearchNotesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Q
+         */
+        q: string;
+        /**
+         * Namespace Id
+         */
+        namespace_id?: string | null;
+        /**
+         * Kind
+         */
+        kind?: NoteKind | null;
+        /**
+         * Include Archived
+         */
+        include_archived?: boolean;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/notes/search';
+};
+
+export type userNotesSearchNotesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesSearchNotesError = userNotesSearchNotesErrors[keyof userNotesSearchNotesErrors];
+
+export type userNotesSearchNotesResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotesPublic;
+};
+
+export type userNotesSearchNotesResponse = userNotesSearchNotesResponses[keyof userNotesSearchNotesResponses];
+
+export type userNotesReadNotesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Namespace Id
+         */
+        namespace_id?: string | null;
+        /**
+         * Kind
+         */
+        kind?: NoteKind | null;
+        /**
+         * Tag Id
+         */
+        tag_id?: string | null;
+        /**
+         * Archived
+         */
+        archived?: boolean;
+        /**
+         * Pinned
+         */
+        pinned?: boolean | null;
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/notes/';
+};
+
+export type userNotesReadNotesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesReadNotesError = userNotesReadNotesErrors[keyof userNotesReadNotesErrors];
+
+export type userNotesReadNotesResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotesPublic;
+};
+
+export type userNotesReadNotesResponse = userNotesReadNotesResponses[keyof userNotesReadNotesResponses];
+
+export type userNotesCreateNoteData = {
+    body: NoteCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notes/';
+};
+
+export type userNotesCreateNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesCreateNoteError = userNotesCreateNoteErrors[keyof userNotesCreateNoteErrors];
+
+export type userNotesCreateNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesCreateNoteResponse = userNotesCreateNoteResponses[keyof userNotesCreateNoteResponses];
+
+export type userNotesDeleteNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}';
+};
+
+export type userNotesDeleteNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesDeleteNoteError = userNotesDeleteNoteErrors[keyof userNotesDeleteNoteErrors];
+
+export type userNotesDeleteNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type userNotesDeleteNoteResponse = userNotesDeleteNoteResponses[keyof userNotesDeleteNoteResponses];
+
+export type userNotesReadNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}';
+};
+
+export type userNotesReadNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesReadNoteError = userNotesReadNoteErrors[keyof userNotesReadNoteErrors];
+
+export type userNotesReadNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesReadNoteResponse = userNotesReadNoteResponses[keyof userNotesReadNoteResponses];
+
+export type userNotesUpdateNoteData = {
+    body: NoteUpdate;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}';
+};
+
+export type userNotesUpdateNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesUpdateNoteError = userNotesUpdateNoteErrors[keyof userNotesUpdateNoteErrors];
+
+export type userNotesUpdateNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesUpdateNoteResponse = userNotesUpdateNoteResponses[keyof userNotesUpdateNoteResponses];
+
+export type userNotesPinNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/pin';
+};
+
+export type userNotesPinNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesPinNoteError = userNotesPinNoteErrors[keyof userNotesPinNoteErrors];
+
+export type userNotesPinNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesPinNoteResponse = userNotesPinNoteResponses[keyof userNotesPinNoteResponses];
+
+export type userNotesUnpinNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/unpin';
+};
+
+export type userNotesUnpinNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesUnpinNoteError = userNotesUnpinNoteErrors[keyof userNotesUnpinNoteErrors];
+
+export type userNotesUnpinNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesUnpinNoteResponse = userNotesUnpinNoteResponses[keyof userNotesUnpinNoteResponses];
+
+export type userNotesArchiveNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/archive';
+};
+
+export type userNotesArchiveNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesArchiveNoteError = userNotesArchiveNoteErrors[keyof userNotesArchiveNoteErrors];
+
+export type userNotesArchiveNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesArchiveNoteResponse = userNotesArchiveNoteResponses[keyof userNotesArchiveNoteResponses];
+
+export type userNotesUnarchiveNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/unarchive';
+};
+
+export type userNotesUnarchiveNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesUnarchiveNoteError = userNotesUnarchiveNoteErrors[keyof userNotesUnarchiveNoteErrors];
+
+export type userNotesUnarchiveNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesUnarchiveNoteResponse = userNotesUnarchiveNoteResponses[keyof userNotesUnarchiveNoteResponses];
+
+export type userNotesMoveNoteData = {
+    body: NoteMove;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/move';
+};
+
+export type userNotesMoveNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesMoveNoteError = userNotesMoveNoteErrors[keyof userNotesMoveNoteErrors];
+
+export type userNotesMoveNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesMoveNoteResponse = userNotesMoveNoteResponses[keyof userNotesMoveNoteResponses];
+
+export type userNotesCloneNoteData = {
+    body?: never;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: string;
+    };
+    query?: never;
+    url: '/api/v1/notes/{note_id}/clone';
+};
+
+export type userNotesCloneNoteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type userNotesCloneNoteError = userNotesCloneNoteErrors[keyof userNotesCloneNoteErrors];
+
+export type userNotesCloneNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: NotePublic;
+};
+
+export type userNotesCloneNoteResponse = userNotesCloneNoteResponses[keyof userNotesCloneNoteResponses];
 
 export type attachmentsReadAttachmentsData = {
     body?: never;

@@ -22,6 +22,13 @@ export type Item = {
    * thing and "where my pages live" as another.
    */
   startsGroup?: boolean
+  /**
+   * Light up for children too.
+   *
+   * Only Notes needs it: every other entry is a leaf, and "/" would otherwise
+   * match every page in the application.
+   */
+  matchChildren?: boolean
 }
 
 interface NavMainProps {
@@ -44,7 +51,10 @@ export function NavMain({ items }: NavMainProps) {
       <SidebarGroupContent>
         <SidebarMenu className="gap-1.5">
           {items.map((item) => {
-            const isActive = currentPath === item.path
+            const isActive =
+              currentPath === item.path ||
+              (item.matchChildren === true &&
+                currentPath.startsWith(`${item.path}/`))
 
             return (
               <SidebarMenuItem

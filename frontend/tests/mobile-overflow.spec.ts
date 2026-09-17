@@ -184,6 +184,8 @@ const PAGES: { path: string; name: string }[] = [
   { path: "/ask", name: "ask" },
   { path: "/search", name: "search" },
   { path: "/capture", name: "capture" },
+  { path: "/notes", name: "notes" },
+  { path: "/notes/search", name: "notes · search" },
   { path: "/agents", name: "agents" },
   { path: "/data-sources", name: "data sources" },
   { path: "/shared", name: "shared with me" },

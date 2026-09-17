@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { adminChannelsClearChannelData, adminChannelsClearChannelErrors, adminChannelsClearChannelResponses, adminChannelsReadChannelsData, adminChannelsReadChannelsResponses, adminChannelsReadPairingData, adminChannelsReadPairingResponses, adminChannelsStartPairingData, adminChannelsStartPairingResponses, adminChannelsStopPairingData, adminChannelsStopPairingErrors, adminChannelsStopPairingResponses, adminChannelsUpdateChannelData, adminChannelsUpdateChannelErrors, adminChannelsUpdateChannelResponses, adminCreditsCreateGrantData, adminCreditsCreateGrantErrors, adminCreditsCreateGrantResponses, adminCreditsDeleteGrantData, adminCreditsDeleteGrantErrors, adminCreditsDeleteGrantResponses, adminCreditsReadBalanceData, adminCreditsReadBalanceErrors, adminCreditsReadBalanceResponses, adminCreditsReadGrantsData, adminCreditsReadGrantsErrors, adminCreditsReadGrantsResponses, adminDataSourcesReadDataSourcesData, adminDataSourcesReadDataSourcesResponses, adminDataSourcesUpdateDataSourceData, adminDataSourcesUpdateDataSourceErrors, adminDataSourcesUpdateDataSourceResponses, adminUsageReadModelsSeenData, adminUsageReadModelsSeenErrors, adminUsageReadModelsSeenResponses, adminUsageReadUsageBreakdownData, adminUsageReadUsageBreakdownErrors, adminUsageReadUsageBreakdownResponses, adminUsageReadUsageSummaryData, adminUsageReadUsageSummaryErrors, adminUsageReadUsageSummaryResponses, adminUserGroupsAddGroupMembersData, adminUserGroupsAddGroupMembersErrors, adminUserGroupsAddGroupMembersResponses, adminUserGroupsCreateUserGroupData, adminUserGroupsCreateUserGroupErrors, adminUserGroupsCreateUserGroupResponses, adminUserGroupsDeleteUserGroupData, adminUserGroupsDeleteUserGroupErrors, adminUserGroupsDeleteUserGroupResponses, adminUserGroupsReadLimitDefinitionsData, adminUserGroupsReadLimitDefinitionsResponses, adminUserGroupsReadUserGroupsData, adminUserGroupsReadUserGroupsResponses, adminUserGroupsRemoveGroupMemberData, adminUserGroupsRemoveGroupMemberErrors, adminUserGroupsRemoveGroupMemberResponses, adminUserGroupsUpdateUserGroupData, adminUserGroupsUpdateUserGroupErrors, adminUserGroupsUpdateUserGroupResponses, adminUsersReadAdminUsersData, adminUsersReadAdminUsersErrors, adminUsersReadAdminUsersResponses, adminUsersSetUserAssignmentData, adminUsersSetUserAssignmentErrors, adminUsersSetUserAssignmentResponses, agentControlControlHealthData, agentControlControlHealthResponses, agentControlResolveRouteData, agentControlResolveRouteErrors, agentControlResolveRouteResponses, agentLlmChatCompletionsData, agentLlmChatCompletionsResponses, agentLlmListModelsData, agentLlmListModelsResponses, agentsCreateAgentData, agentsCreateAgentErrors, agentsCreateAgentResponses, agentsCreateLinkCodeData, agentsCreateLinkCodeErrors, agentsCreateLinkCodeResponses, agentsDeleteAgentData, agentsDeleteAgentErrors, agentsDeleteAgentResponses, agentsDeleteConnectionData, agentsDeleteConnectionErrors, agentsDeleteConnectionResponses, agentsReadAgentChannelsData, agentsReadAgentChannelsErrors, agentsReadAgentChannelsResponses, agentsReadAgentData, agentsReadAgentErrors, agentsReadAgentResponses, agentsReadAgentsData, agentsReadAgentsResponses, agentsUpdateAgentData, agentsUpdateAgentErrors, agentsUpdateAgentResponses, apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskContextData, askAskContextErrors, askAskContextResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, askReadConversationData, askReadConversationErrors, askReadConversationResponses, askReadConversationsData, askReadConversationsErrors, askReadConversationsResponses, askRemoveConversationData, askRemoveConversationErrors, askRemoveConversationResponses, askRenameConversationData, askRenameConversationErrors, askRenameConversationResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, dataSourcesAuthorizeGoogleDriveData, dataSourcesAuthorizeGoogleDriveResponses, dataSourcesDisconnectGoogleDriveData, dataSourcesDisconnectGoogleDriveResponses, dataSourcesGoogleDrivePickerData, dataSourcesGoogleDrivePickerResponses, dataSourcesImportFromGoogleDriveData, dataSourcesImportFromGoogleDriveErrors, dataSourcesImportFromGoogleDriveResponses, dataSourcesReadDataSourcesData, dataSourcesReadDataSourcesResponses, documentsCancelInvitationData, documentsCancelInvitationErrors, documentsCancelInvitationResponses, documentsCloneDocumentData, documentsCloneDocumentErrors, documentsCloneDocumentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsPublishDocumentData, documentsPublishDocumentErrors, documentsPublishDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentInvitationsData, documentsReadDocumentInvitationsErrors, documentsReadDocumentInvitationsResponses, documentsReadDocumentLanguagesData, documentsReadDocumentLanguagesErrors, documentsReadDocumentLanguagesResponses, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadDocumentTypesData, documentsReadDocumentTypesResponses, documentsReadDocumentVersionData, documentsReadDocumentVersionErrors, documentsReadDocumentVersionResponses, documentsReadDocumentVersionsData, documentsReadDocumentVersionsErrors, documentsReadDocumentVersionsResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsShareDocumentWithManyData, documentsShareDocumentWithManyErrors, documentsShareDocumentWithManyResponses, documentsTranslateDocumentData, documentsTranslateDocumentErrors, documentsTranslateDocumentResponses, documentsUnpublishDocumentData, documentsUnpublishDocumentErrors, documentsUnpublishDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsCreateImportsData, importsCreateImportsErrors, importsCreateImportsResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordResponses, loginResendTwoFactorData, loginResendTwoFactorErrors, loginResendTwoFactorResponses, loginResendVerificationData, loginResendVerificationErrors, loginResendVerificationResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginSignOutEverywhereData, loginSignOutEverywhereResponses, loginTestTokenData, loginTestTokenResponses, loginVerifyEmailData, loginVerifyEmailErrors, loginVerifyEmailResponses, loginVerifyTwoFactorData, loginVerifyTwoFactorErrors, loginVerifyTwoFactorResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesAddNamespaceMembersData, namespacesAddNamespaceMembersErrors, namespacesAddNamespaceMembersResponses, namespacesCancelNamespaceInvitationData, namespacesCancelNamespaceInvitationErrors, namespacesCancelNamespaceInvitationResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceInvitationsData, namespacesReadNamespaceInvitationsErrors, namespacesReadNamespaceInvitationsResponses, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, notesCreateNoteData, notesCreateNoteErrors, notesCreateNoteResponses, notesDeleteNoteData, notesDeleteNoteErrors, notesDeleteNoteResponses, notesReadNotesData, notesReadNotesErrors, notesReadNotesResponses, notesUpdateNoteData, notesUpdateNoteErrors, notesUpdateNoteResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, privateReadEmailsData, privateReadEmailsErrors, privateReadEmailsResponses, publicReadInvitationData, publicReadInvitationErrors, publicReadInvitationResponses, publicReadPublicAttachmentData, publicReadPublicAttachmentErrors, publicReadPublicAttachmentResponses, publicReadPublicDocumentData, publicReadPublicDocumentErrors, publicReadPublicDocumentResponses, searchReadSearchSuggestionsData, searchReadSearchSuggestionsErrors, searchReadSearchSuggestionsResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usageReadMyCreditsData, usageReadMyCreditsResponses, usageReadMyUsageData, usageReadMyUsageErrors, usageReadMyUsageResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersLookupUserData, usersLookupUserErrors, usersLookupUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
+import type { adminChannelsClearChannelData, adminChannelsClearChannelErrors, adminChannelsClearChannelResponses, adminChannelsReadChannelsData, adminChannelsReadChannelsResponses, adminChannelsReadPairingData, adminChannelsReadPairingResponses, adminChannelsStartPairingData, adminChannelsStartPairingResponses, adminChannelsStopPairingData, adminChannelsStopPairingErrors, adminChannelsStopPairingResponses, adminChannelsUpdateChannelData, adminChannelsUpdateChannelErrors, adminChannelsUpdateChannelResponses, adminCreditsCreateGrantData, adminCreditsCreateGrantErrors, adminCreditsCreateGrantResponses, adminCreditsDeleteGrantData, adminCreditsDeleteGrantErrors, adminCreditsDeleteGrantResponses, adminCreditsReadBalanceData, adminCreditsReadBalanceErrors, adminCreditsReadBalanceResponses, adminCreditsReadGrantsData, adminCreditsReadGrantsErrors, adminCreditsReadGrantsResponses, adminDataSourcesReadDataSourcesData, adminDataSourcesReadDataSourcesResponses, adminDataSourcesUpdateDataSourceData, adminDataSourcesUpdateDataSourceErrors, adminDataSourcesUpdateDataSourceResponses, adminUsageReadModelsSeenData, adminUsageReadModelsSeenErrors, adminUsageReadModelsSeenResponses, adminUsageReadUsageBreakdownData, adminUsageReadUsageBreakdownErrors, adminUsageReadUsageBreakdownResponses, adminUsageReadUsageSummaryData, adminUsageReadUsageSummaryErrors, adminUsageReadUsageSummaryResponses, adminUserGroupsAddGroupMembersData, adminUserGroupsAddGroupMembersErrors, adminUserGroupsAddGroupMembersResponses, adminUserGroupsCreateUserGroupData, adminUserGroupsCreateUserGroupErrors, adminUserGroupsCreateUserGroupResponses, adminUserGroupsDeleteUserGroupData, adminUserGroupsDeleteUserGroupErrors, adminUserGroupsDeleteUserGroupResponses, adminUserGroupsReadLimitDefinitionsData, adminUserGroupsReadLimitDefinitionsResponses, adminUserGroupsReadUserGroupsData, adminUserGroupsReadUserGroupsResponses, adminUserGroupsRemoveGroupMemberData, adminUserGroupsRemoveGroupMemberErrors, adminUserGroupsRemoveGroupMemberResponses, adminUserGroupsUpdateUserGroupData, adminUserGroupsUpdateUserGroupErrors, adminUserGroupsUpdateUserGroupResponses, adminUsersReadAdminUsersData, adminUsersReadAdminUsersErrors, adminUsersReadAdminUsersResponses, adminUsersSetUserAssignmentData, adminUsersSetUserAssignmentErrors, adminUsersSetUserAssignmentResponses, agentControlControlHealthData, agentControlControlHealthResponses, agentControlResolveRouteData, agentControlResolveRouteErrors, agentControlResolveRouteResponses, agentLlmChatCompletionsData, agentLlmChatCompletionsResponses, agentLlmListModelsData, agentLlmListModelsResponses, agentsCreateAgentData, agentsCreateAgentErrors, agentsCreateAgentResponses, agentsCreateLinkCodeData, agentsCreateLinkCodeErrors, agentsCreateLinkCodeResponses, agentsDeleteAgentData, agentsDeleteAgentErrors, agentsDeleteAgentResponses, agentsDeleteConnectionData, agentsDeleteConnectionErrors, agentsDeleteConnectionResponses, agentsReadAgentChannelsData, agentsReadAgentChannelsErrors, agentsReadAgentChannelsResponses, agentsReadAgentData, agentsReadAgentErrors, agentsReadAgentResponses, agentsReadAgentsData, agentsReadAgentsResponses, agentsUpdateAgentData, agentsUpdateAgentErrors, agentsUpdateAgentResponses, apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskContextData, askAskContextErrors, askAskContextResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, askReadConversationData, askReadConversationErrors, askReadConversationResponses, askReadConversationsData, askReadConversationsErrors, askReadConversationsResponses, askRemoveConversationData, askRemoveConversationErrors, askRemoveConversationResponses, askRenameConversationData, askRenameConversationErrors, askRenameConversationResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, dataSourcesAuthorizeGoogleDriveData, dataSourcesAuthorizeGoogleDriveResponses, dataSourcesDisconnectGoogleDriveData, dataSourcesDisconnectGoogleDriveResponses, dataSourcesGoogleDrivePickerData, dataSourcesGoogleDrivePickerResponses, dataSourcesImportFromGoogleDriveData, dataSourcesImportFromGoogleDriveErrors, dataSourcesImportFromGoogleDriveResponses, dataSourcesReadDataSourcesData, dataSourcesReadDataSourcesResponses, documentsCancelInvitationData, documentsCancelInvitationErrors, documentsCancelInvitationResponses, documentsCloneDocumentData, documentsCloneDocumentErrors, documentsCloneDocumentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsPublishDocumentData, documentsPublishDocumentErrors, documentsPublishDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentInvitationsData, documentsReadDocumentInvitationsErrors, documentsReadDocumentInvitationsResponses, documentsReadDocumentLanguagesData, documentsReadDocumentLanguagesErrors, documentsReadDocumentLanguagesResponses, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadDocumentTypesData, documentsReadDocumentTypesResponses, documentsReadDocumentVersionData, documentsReadDocumentVersionErrors, documentsReadDocumentVersionResponses, documentsReadDocumentVersionsData, documentsReadDocumentVersionsErrors, documentsReadDocumentVersionsResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsShareDocumentWithManyData, documentsShareDocumentWithManyErrors, documentsShareDocumentWithManyResponses, documentsTranslateDocumentData, documentsTranslateDocumentErrors, documentsTranslateDocumentResponses, documentsUnpublishDocumentData, documentsUnpublishDocumentErrors, documentsUnpublishDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsCreateImportsData, importsCreateImportsErrors, importsCreateImportsResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordResponses, loginResendTwoFactorData, loginResendTwoFactorErrors, loginResendTwoFactorResponses, loginResendVerificationData, loginResendVerificationErrors, loginResendVerificationResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginSignOutEverywhereData, loginSignOutEverywhereResponses, loginTestTokenData, loginTestTokenResponses, loginVerifyEmailData, loginVerifyEmailErrors, loginVerifyEmailResponses, loginVerifyTwoFactorData, loginVerifyTwoFactorErrors, loginVerifyTwoFactorResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesAddNamespaceMembersData, namespacesAddNamespaceMembersErrors, namespacesAddNamespaceMembersResponses, namespacesCancelNamespaceInvitationData, namespacesCancelNamespaceInvitationErrors, namespacesCancelNamespaceInvitationResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceInvitationsData, namespacesReadNamespaceInvitationsErrors, namespacesReadNamespaceInvitationsResponses, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, notesCreateNoteData, notesCreateNoteErrors, notesCreateNoteResponses, notesDeleteNoteData, notesDeleteNoteErrors, notesDeleteNoteResponses, notesReadNotesData, notesReadNotesErrors, notesReadNotesResponses, notesUpdateNoteData, notesUpdateNoteErrors, notesUpdateNoteResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, privateReadEmailsData, privateReadEmailsErrors, privateReadEmailsResponses, publicReadInvitationData, publicReadInvitationErrors, publicReadInvitationResponses, publicReadPublicAttachmentData, publicReadPublicAttachmentErrors, publicReadPublicAttachmentResponses, publicReadPublicDocumentData, publicReadPublicDocumentErrors, publicReadPublicDocumentResponses, searchReadSearchSuggestionsData, searchReadSearchSuggestionsErrors, searchReadSearchSuggestionsResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usageReadMyCreditsData, usageReadMyCreditsResponses, usageReadMyUsageData, usageReadMyUsageErrors, usageReadMyUsageResponses, userNotesArchiveNoteData, userNotesArchiveNoteErrors, userNotesArchiveNoteResponses, userNotesCloneNoteData, userNotesCloneNoteErrors, userNotesCloneNoteResponses, userNotesCreateNoteData, userNotesCreateNoteErrors, userNotesCreateNoteResponses, userNotesCreateTagData, userNotesCreateTagErrors, userNotesCreateTagResponses, userNotesDeleteNoteData, userNotesDeleteNoteErrors, userNotesDeleteNoteResponses, userNotesDeleteTagData, userNotesDeleteTagErrors, userNotesDeleteTagResponses, userNotesMoveNoteData, userNotesMoveNoteErrors, userNotesMoveNoteResponses, userNotesPinNoteData, userNotesPinNoteErrors, userNotesPinNoteResponses, userNotesReadNoteData, userNotesReadNoteErrors, userNotesReadNoteResponses, userNotesReadNotesData, userNotesReadNotesErrors, userNotesReadNotesResponses, userNotesReadTagsData, userNotesReadTagsResponses, userNotesSearchNotesData, userNotesSearchNotesErrors, userNotesSearchNotesResponses, userNotesUnarchiveNoteData, userNotesUnarchiveNoteErrors, userNotesUnarchiveNoteResponses, userNotesUnpinNoteData, userNotesUnpinNoteErrors, userNotesUnpinNoteResponses, userNotesUpdateNoteData, userNotesUpdateNoteErrors, userNotesUpdateNoteResponses, userNotesUpdateTagData, userNotesUpdateTagErrors, userNotesUpdateTagResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersLookupUserData, usersLookupUserErrors, usersLookupUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -1196,6 +1196,260 @@ export class NotesService {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
+        });
+    }
+}
+
+export class UserNotesService {
+    /**
+     * Read Tags
+     *
+     * Every label this person has made, alphabetically.
+     */
+    public static notesReadTags<ThrowOnError extends boolean = true>(options?: Options<userNotesReadTagsData, ThrowOnError>) {
+        return (options?.client ?? client).get<userNotesReadTagsResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/tags',
+            ...options
+        });
+    }
+    
+    /**
+     * Create Tag
+     *
+     * Make a label, or hand back the one that already means this.
+     */
+    public static notesCreateTag<ThrowOnError extends boolean = true>(options: Options<userNotesCreateTagData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesCreateTagResponses, userNotesCreateTagErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/tags',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete Tag
+     *
+     * Remove a label. The notes that carried it are untouched.
+     */
+    public static notesDeleteTag<ThrowOnError extends boolean = true>(options: Options<userNotesDeleteTagData, ThrowOnError>) {
+        return (options.client ?? client).delete<userNotesDeleteTagResponses, userNotesDeleteTagErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/tags/{tag_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Update Tag
+     */
+    public static notesUpdateTag<ThrowOnError extends boolean = true>(options: Options<userNotesUpdateTagData, ThrowOnError>) {
+        return (options.client ?? client).patch<userNotesUpdateTagResponses, userNotesUpdateTagErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/tags/{tag_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Search Notes
+     *
+     * Find your own notes, and nobody else's.
+     *
+     * Archived notes are included by default. Archiving means "out of my way",
+     * not "forgotten": the whole point of putting something away is that search
+     * can still get it back.
+     *
+     * Keyword only for now. The note is in this index the moment it is saved,
+     * because Postgres writes the search vector at COMMIT; meaning-based search
+     * joins in once the indexer is wired up and needs no change here.
+     */
+    public static notesSearchNotes<ThrowOnError extends boolean = true>(options: Options<userNotesSearchNotesData, ThrowOnError>) {
+        return (options.client ?? client).get<userNotesSearchNotesResponses, userNotesSearchNotesErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/search',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Notes
+     *
+     * This person's notes, pinned first and newest after.
+     */
+    public static notesReadNotes<ThrowOnError extends boolean = true>(options?: Options<userNotesReadNotesData, ThrowOnError>) {
+        return (options?.client ?? client).get<userNotesReadNotesResponses, userNotesReadNotesErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/',
+            ...options
+        });
+    }
+    
+    /**
+     * Create Note
+     */
+    public static notesCreateNote<ThrowOnError extends boolean = true>(options: Options<userNotesCreateNoteData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesCreateNoteResponses, userNotesCreateNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete Note
+     *
+     * Really delete it. Archive is the reversible one; this is not.
+     *
+     * Deleting is also how a place is freed, which is why the archive does not
+     * have to expire on its own.
+     */
+    public static notesDeleteNote<ThrowOnError extends boolean = true>(options: Options<userNotesDeleteNoteData, ThrowOnError>) {
+        return (options.client ?? client).delete<userNotesDeleteNoteResponses, userNotesDeleteNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Note
+     */
+    public static notesReadNote<ThrowOnError extends boolean = true>(options: Options<userNotesReadNoteData, ThrowOnError>) {
+        return (options.client ?? client).get<userNotesReadNoteResponses, userNotesReadNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Update Note
+     *
+     * Save a note, refusing if somebody saved a newer one first.
+     *
+     * The 409 carries the version that is actually stored, which is what lets the
+     * editor offer "reload" or "overwrite" rather than just losing the typing.
+     */
+    public static notesUpdateNote<ThrowOnError extends boolean = true>(options: Options<userNotesUpdateNoteData, ThrowOnError>) {
+        return (options.client ?? client).patch<userNotesUpdateNoteResponses, userNotesUpdateNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Pin Note
+     */
+    public static notesPinNote<ThrowOnError extends boolean = true>(options: Options<userNotesPinNoteData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesPinNoteResponses, userNotesPinNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}/pin',
+            ...options
+        });
+    }
+    
+    /**
+     * Unpin Note
+     */
+    public static notesUnpinNote<ThrowOnError extends boolean = true>(options: Options<userNotesUnpinNoteData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesUnpinNoteResponses, userNotesUnpinNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}/unpin',
+            ...options
+        });
+    }
+    
+    /**
+     * Archive Note
+     *
+     * Put a note away. It stays findable by search; it leaves the list.
+     *
+     * Pinning is cleared, because an archived note that claims to be pinned is a
+     * note somebody will look for at the top of a list it is not in.
+     */
+    public static notesArchiveNote<ThrowOnError extends boolean = true>(options: Options<userNotesArchiveNoteData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesArchiveNoteResponses, userNotesArchiveNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}/archive',
+            ...options
+        });
+    }
+    
+    /**
+     * Unarchive Note
+     */
+    public static notesUnarchiveNote<ThrowOnError extends boolean = true>(options: Options<userNotesUnarchiveNoteData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesUnarchiveNoteResponses, userNotesUnarchiveNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}/unarchive',
+            ...options
+        });
+    }
+    
+    /**
+     * Move Note
+     *
+     * Refile a note. Null is a real destination: it means unfiled.
+     */
+    public static notesMoveNote<ThrowOnError extends boolean = true>(options: Options<userNotesMoveNoteData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesMoveNoteResponses, userNotesMoveNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}/move',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Clone Note
+     *
+     * Copy a note. The copy is charged to whoever made it, like a page clone.
+     *
+     * The copy arrives neither pinned nor archived: it is new, and it should not
+     * turn up already put away or already at the top.
+     */
+    public static notesCloneNote<ThrowOnError extends boolean = true>(options: Options<userNotesCloneNoteData, ThrowOnError>) {
+        return (options.client ?? client).post<userNotesCloneNoteResponses, userNotesCloneNoteErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/notes/{note_id}/clone',
+            ...options
         });
     }
 }

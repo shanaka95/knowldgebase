@@ -33,6 +33,9 @@ import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
 import { Route as LayoutAgentsIndexRouteImport } from './routes/_layout/agents.index'
 import { Route as LayoutAgentsAgentIdRouteImport } from './routes/_layout/agents.$agentId'
+import { Route as LayoutNotesIndexRouteImport } from './routes/_layout/notes/index'
+import { Route as LayoutNotesNoteIdRouteImport } from './routes/_layout/notes/$noteId'
+import { Route as LayoutNotesSearchRouteImport } from './routes/_layout/notes/search'
 import { Route as LayoutSNamespaceSlugRouteImport } from './routes/_layout/s/$namespaceSlug'
 import { Route as LayoutSNamespaceSlugIndexRouteImport } from './routes/_layout/s/$namespaceSlug/index'
 import { Route as LayoutSNamespaceSlugSettingsRouteImport } from './routes/_layout/s/$namespaceSlug/settings'
@@ -158,6 +161,21 @@ const LayoutAgentsAgentIdRoute = LayoutAgentsAgentIdRouteImport.update({
   path: '/agents/$agentId',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutNotesIndexRoute = LayoutNotesIndexRouteImport.update({
+  id: '/notes/',
+  path: '/notes/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutNotesNoteIdRoute = LayoutNotesNoteIdRouteImport.update({
+  id: '/notes/$noteId',
+  path: '/notes/$noteId',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutNotesSearchRoute = LayoutNotesSearchRouteImport.update({
+  id: '/notes/search',
+  path: '/notes/search',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSNamespaceSlugRoute = LayoutSNamespaceSlugRouteImport.update({
   id: '/s/$namespaceSlug',
   path: '/s/$namespaceSlug',
@@ -211,8 +229,11 @@ export interface FileRoutesByFullPath {
   '/usage': typeof LayoutUsageRoute
   '/p/$slug': typeof PSlugRoute
   '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
+  '/notes/$noteId': typeof LayoutNotesNoteIdRoute
+  '/notes/search': typeof LayoutNotesSearchRoute
   '/s/$namespaceSlug': typeof LayoutSNamespaceSlugRouteWithChildren
   '/agents/': typeof LayoutAgentsIndexRoute
+  '/notes/': typeof LayoutNotesIndexRoute
   '/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/s/$namespaceSlug/': typeof LayoutSNamespaceSlugIndexRoute
   '/s/$namespaceSlug/d/$documentId': typeof LayoutSNamespaceSlugDDocumentIdRoute
@@ -241,7 +262,10 @@ export interface FileRoutesByTo {
   '/p/$slug': typeof PSlugRoute
   '/': typeof LayoutIndexRoute
   '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
+  '/notes/$noteId': typeof LayoutNotesNoteIdRoute
+  '/notes/search': typeof LayoutNotesSearchRoute
   '/agents': typeof LayoutAgentsIndexRoute
+  '/notes': typeof LayoutNotesIndexRoute
   '/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/s/$namespaceSlug': typeof LayoutSNamespaceSlugIndexRoute
   '/s/$namespaceSlug/d/$documentId': typeof LayoutSNamespaceSlugDDocumentIdRoute
@@ -272,8 +296,11 @@ export interface FileRoutesById {
   '/p/$slug': typeof PSlugRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/agents/$agentId': typeof LayoutAgentsAgentIdRoute
+  '/_layout/notes/$noteId': typeof LayoutNotesNoteIdRoute
+  '/_layout/notes/search': typeof LayoutNotesSearchRoute
   '/_layout/s/$namespaceSlug': typeof LayoutSNamespaceSlugRouteWithChildren
   '/_layout/agents/': typeof LayoutAgentsIndexRoute
+  '/_layout/notes/': typeof LayoutNotesIndexRoute
   '/_layout/s/$namespaceSlug/settings': typeof LayoutSNamespaceSlugSettingsRoute
   '/_layout/s/$namespaceSlug/': typeof LayoutSNamespaceSlugIndexRoute
   '/_layout/s/$namespaceSlug/d/$documentId': typeof LayoutSNamespaceSlugDDocumentIdRoute
@@ -304,8 +331,11 @@ export interface FileRouteTypes {
     | '/usage'
     | '/p/$slug'
     | '/agents/$agentId'
+    | '/notes/$noteId'
+    | '/notes/search'
     | '/s/$namespaceSlug'
     | '/agents/'
+    | '/notes/'
     | '/s/$namespaceSlug/settings'
     | '/s/$namespaceSlug/'
     | '/s/$namespaceSlug/d/$documentId'
@@ -334,7 +364,10 @@ export interface FileRouteTypes {
     | '/p/$slug'
     | '/'
     | '/agents/$agentId'
+    | '/notes/$noteId'
+    | '/notes/search'
     | '/agents'
+    | '/notes'
     | '/s/$namespaceSlug/settings'
     | '/s/$namespaceSlug'
     | '/s/$namespaceSlug/d/$documentId'
@@ -364,8 +397,11 @@ export interface FileRouteTypes {
     | '/p/$slug'
     | '/_layout/'
     | '/_layout/agents/$agentId'
+    | '/_layout/notes/$noteId'
+    | '/_layout/notes/search'
     | '/_layout/s/$namespaceSlug'
     | '/_layout/agents/'
+    | '/_layout/notes/'
     | '/_layout/s/$namespaceSlug/settings'
     | '/_layout/s/$namespaceSlug/'
     | '/_layout/s/$namespaceSlug/d/$documentId'
@@ -556,6 +592,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAgentsAgentIdRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/notes/': {
+      id: '/_layout/notes/'
+      path: '/notes'
+      fullPath: '/notes/'
+      preLoaderRoute: typeof LayoutNotesIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/notes/$noteId': {
+      id: '/_layout/notes/$noteId'
+      path: '/notes/$noteId'
+      fullPath: '/notes/$noteId'
+      preLoaderRoute: typeof LayoutNotesNoteIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/notes/search': {
+      id: '/_layout/notes/search'
+      path: '/notes/search'
+      fullPath: '/notes/search'
+      preLoaderRoute: typeof LayoutNotesSearchRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/s/$namespaceSlug': {
       id: '/_layout/s/$namespaceSlug'
       path: '/s/$namespaceSlug'
@@ -624,8 +681,11 @@ interface LayoutRouteChildren {
   LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
   LayoutAgentsAgentIdRoute: typeof LayoutAgentsAgentIdRoute
+  LayoutNotesNoteIdRoute: typeof LayoutNotesNoteIdRoute
+  LayoutNotesSearchRoute: typeof LayoutNotesSearchRoute
   LayoutSNamespaceSlugRoute: typeof LayoutSNamespaceSlugRouteWithChildren
   LayoutAgentsIndexRoute: typeof LayoutAgentsIndexRoute
+  LayoutNotesIndexRoute: typeof LayoutNotesIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -641,8 +701,11 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutUsageRoute: LayoutUsageRoute,
   LayoutIndexRoute: LayoutIndexRoute,
   LayoutAgentsAgentIdRoute: LayoutAgentsAgentIdRoute,
+  LayoutNotesNoteIdRoute: LayoutNotesNoteIdRoute,
+  LayoutNotesSearchRoute: LayoutNotesSearchRoute,
   LayoutSNamespaceSlugRoute: LayoutSNamespaceSlugRouteWithChildren,
   LayoutAgentsIndexRoute: LayoutAgentsIndexRoute,
+  LayoutNotesIndexRoute: LayoutNotesIndexRoute,
 }
 
 const LayoutRouteWithChildren =

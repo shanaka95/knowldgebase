@@ -3,6 +3,7 @@ import {
   ChartColumn,
   Database,
   LayoutDashboard,
+  NotebookPen,
   Search,
   Share2,
   Sparkles,
@@ -39,6 +40,9 @@ const baseItems: Item[] = [
   { icon: Sparkles, title: "Ask", path: "/ask" },
   { icon: Search, title: "Search", path: "/search" },
   { icon: Upload, title: "Upload documents", path: "/capture" },
+  // Capture belongs with the daily loop above rather than with the places
+  // things are stored: a note is written far more often than it is filed.
+  { icon: NotebookPen, title: "Notes", path: "/notes", matchChildren: true },
 
   // Not Home: "home" is one of the icons a space can choose, and the most
   // likely choice for a personal one, so the two were identical in the

@@ -8,6 +8,7 @@ import { TableKit } from "@tiptap/extension-table"
 import TextAlign from "@tiptap/extension-text-align"
 import Typography from "@tiptap/extension-typography"
 import { CharacterCount, Placeholder } from "@tiptap/extensions"
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model"
 import StarterKit from "@tiptap/starter-kit"
 
 import { lowlight } from "./lowlight"
@@ -22,13 +23,29 @@ export interface CreateExtensionsOptions {
   uploadImage?: UploadImageFn | null
   /** Fetch an attachment's bytes with credentials (for rendering stored images). */
   fetchAttachmentBlob?: ((attachmentId: string) => Promise<Blob>) | null
+  /**
+   * Which editor this is. "document" is the full set and the default, so a page
+   * keeps exactly what it has today. A note is a card rather than a page:
+   * tables, panels, alignment and sub/superscript are furniture it never uses
+   * and a toolbar it has no room for on a phone.
+   */
+  variant?: "document" | "note"
+  /**
+   * Let a checkbox be ticked while the editor is read-only. That is what lets a
+   * checklist be crossed off from its card in the list without opening it.
+   * Returning true tells Tiptap the change was handled.
+   */
+  onTaskChecked?: (node: ProseMirrorNode, checked: boolean) => boolean
 }
 
 export function createExtensions({
   placeholder = "Type '/' for commands…",
   uploadImage = null,
   fetchAttachmentBlob = null,
+  variant = "document",
+  onTaskChecked,
 }: CreateExtensionsOptions = {}) {
+  const full = variant === "document"
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4] },
@@ -45,23 +62,30 @@ export function createExtensions({
       lowlight,
       defaultLanguage: "plaintext",
     }),
-    TableKit.configure({
-      table: { resizable: false, HTMLAttributes: { class: "kb-table" } },
-    }),
+    ...(full
+      ? [
+          TableKit.configure({
+            table: { resizable: false, HTMLAttributes: { class: "kb-table" } },
+          }),
+          TextAlign.configure({ types: ["heading", "paragraph"] }),
+          Subscript,
+          Superscript,
+        ]
+      : []),
     TaskList,
-    TaskItem.configure({ nested: true }),
-    TextAlign.configure({ types: ["heading", "paragraph"] }),
+    TaskItem.configure({
+      nested: true,
+      ...(onTaskChecked ? { onReadOnlyChecked: onTaskChecked } : {}),
+    }),
     Highlight,
     Typography,
-    Subscript,
-    Superscript,
     Placeholder.configure({
       placeholder: ({ node }) =>
         node.type.name === "heading" ? "Heading" : placeholder,
       includeChildren: false,
     }),
     CharacterCount,
-    Panel,
+    ...(full ? [Panel] : []),
     AuthImage.configure({ fetchAttachmentBlob }),
     SlashCommand.configure({ uploadImage }),
     FileHandler.configure({
