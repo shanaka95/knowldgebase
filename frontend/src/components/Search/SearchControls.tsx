@@ -25,10 +25,14 @@ import {
 } from "@/components/ui/tooltip"
 import { useNamespaces } from "@/hooks/useNamespaces"
 import {
+  CORPUS_HINTS,
+  CORPUS_LABELS,
   DEFAULT_CANDIDATES,
   DEFAULT_RRF_K,
   METHOD_META,
+  SEARCH_CORPORA,
   SEARCH_TARGETS,
+  type SearchCorpus,
   type SearchTarget,
   TARGET_HINTS,
   TARGET_LABELS,
@@ -46,6 +50,9 @@ interface SearchControlsProps {
   onMethodChange: (method: "bm25" | "vector", enabled: boolean) => void
   targets: SearchTarget[]
   onTargetsChange: (targets: SearchTarget[]) => void
+  pages: boolean
+  notes: boolean
+  onCorpusChange: (corpus: SearchCorpus, enabled: boolean) => void
   space: string | undefined
   onSpaceChange: (space: string | undefined) => void
   rrfK: number
@@ -64,6 +71,9 @@ export function SearchControls({
   onMethodChange,
   targets,
   onTargetsChange,
+  pages,
+  notes,
+  onCorpusChange,
   space,
   onSpaceChange,
   rrfK,
@@ -195,6 +205,59 @@ export function SearchControls({
         <Separator orientation="vertical" className="hidden h-6 sm:block" />
 
         <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <legend className="sr-only">Which corpus to search</legend>
+          <span className="text-xs font-medium text-muted-foreground">
+            Look in
+          </span>
+          {SEARCH_CORPORA.map((corpus) => {
+            const checked = corpus === "pages" ? pages : notes
+            // The last one checked cannot be unchecked: searching neither is a
+            // 422, and the interface should say so rather than send it.
+            const isLast = checked && !(corpus === "pages" ? notes : pages)
+            return (
+              <Tooltip key={corpus}>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`corpus-${corpus}`}
+                      checked={checked}
+                      disabled={isLast}
+                      onCheckedChange={(c) =>
+                        onCorpusChange(corpus, c === true)
+                      }
+                      data-testid={`notes-corpus-${corpus}`}
+                    />
+                    <Label
+                      htmlFor={`corpus-${corpus}`}
+                      className={cn(
+                        "cursor-pointer text-sm font-normal",
+                        isLast && "cursor-not-allowed opacity-70",
+                      )}
+                    >
+                      {CORPUS_LABELS[corpus]}
+                    </Label>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-64">
+                  {isLast
+                    ? "Search pages, notes, or both - not neither."
+                    : CORPUS_HINTS[corpus]}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </fieldset>
+
+        <Separator orientation="vertical" className="hidden h-6 sm:block" />
+
+        <fieldset
+          className={cn(
+            "flex flex-wrap items-center gap-x-4 gap-y-2",
+            // Targets describe a page. With pages switched off they decide
+            // nothing, and saying so is better than leaving them live.
+            !pages && "pointer-events-none opacity-60",
+          )}
+        >
           <legend className="sr-only">Where to search</legend>
           <span className="text-xs font-medium text-muted-foreground">
             Search in

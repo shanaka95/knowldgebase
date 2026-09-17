@@ -28,6 +28,8 @@ export const Route = createFileRoute("/_layout/search")({
     bm25: z.boolean().optional().catch(undefined),
     vector: z.boolean().optional().catch(undefined),
     targets: z.string().optional().catch(undefined),
+    pages: z.boolean().optional().catch(undefined),
+    notes: z.boolean().optional().catch(undefined),
     k: z.number().optional().catch(undefined),
     depth: z.number().optional().catch(undefined),
   }),
@@ -50,6 +52,10 @@ function SearchPage() {
   const vector = bm25 || vectorRaw ? vectorRaw : true
   const targets =
     search.targets !== undefined ? parseTargets(search.targets) : stored.targets
+  const pagesRaw = search.pages ?? stored.pages
+  const notes = search.notes ?? stored.notes
+  // The same guard the methods get: searching neither corpus is a 422.
+  const pages = pagesRaw || notes ? pagesRaw : true
   const rrfK = search.k !== undefined ? clampK(search.k) : stored.rrfK
   const candidates =
     search.depth !== undefined
@@ -59,8 +65,8 @@ function SearchPage() {
   useEffect(() => setValue(q), [q])
 
   useEffect(() => {
-    writeSearchPrefs({ bm25, vector, targets, rrfK, candidates })
-  }, [bm25, vector, targets, rrfK, candidates])
+    writeSearchPrefs({ bm25, vector, targets, pages, notes, rrfK, candidates })
+  }, [bm25, vector, targets, pages, notes, rrfK, candidates])
 
   // Keep the query in the URL so results are shareable and the back button works.
   useEffect(() => {
@@ -78,6 +84,8 @@ function SearchPage() {
     useHybridSearch({
       q: value,
       bm25,
+      pages,
+      notes,
       vector,
       targets,
       namespaceId: space,
@@ -104,6 +112,11 @@ function SearchPage() {
         targets={targets}
         onTargetsChange={(next: SearchTarget[]) =>
           patch({ targets: serializeTargets(next) })
+        }
+        pages={pages}
+        notes={notes}
+        onCorpusChange={(corpus, enabled) =>
+          patch(corpus === "pages" ? { pages: enabled } : { notes: enabled })
         }
         space={space}
         onSpaceChange={(next) => patch({ space: next })}

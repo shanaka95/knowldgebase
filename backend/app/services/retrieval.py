@@ -67,13 +67,19 @@ class SourceHit:
     contribution: float
     chunk_index: int | None = None
     chunk_title: str | None = None
+    # Which corpus this source searched. Defaulted, so every existing caller
+    # and every existing test reads unchanged.
+    entity: str = "document"
 
 
 @dataclass(slots=True)
 class FusedHit:
+    # The id of whatever matched. Named for the common case and kept that way
+    # deliberately: renaming it would churn every caller to say the same thing.
     document_id: uuid.UUID
     score: float
     sources: list[SourceHit] = field(default_factory=list)
+    entity_type: str = "document"
 
     @property
     def best_chunk_index(self) -> int | None:
@@ -92,6 +98,7 @@ class SourceReport:
     hits: int
     took_ms: float
     error: str | None = None
+    entity: str = "document"
 
 
 @dataclass(slots=True)
@@ -113,34 +120,60 @@ DEFAULT_TARGETS: tuple[str, ...] = (
 
 FULLTEXT_METHOD = "fulltext"
 FULLTEXT_TARGET = "page"
+NOTE_FULLTEXT_TARGET = "note"
+
+
+@dataclass(slots=True, frozen=True)
+class NoteScope:
+    """Whose notes may be searched, and where.
+
+    There is no "everybody" here and no `None` owner: a note has exactly one
+    reader, so a scope that could mean "all notes" is a shape this type simply
+    does not have.
+    """
+
+    owner_id: str
+    namespace_ids: list[str] | None = None
+    note_ids: list[str] | None = None
 
 
 def reciprocal_rank_fusion(
-    rankings: dict[tuple[SearchMethod, str], list[ScoredPoint]],
+    rankings: dict[tuple[SearchMethod, str, str], list[ScoredPoint]],
     *,
     k: int | None = None,
 ) -> list[FusedHit]:
-    """Fuse per-source point rankings into a single document ranking."""
-    k = settings.RRF_K if k is None else k
-    fused: dict[uuid.UUID, FusedHit] = {}
+    """Fuse per-source point rankings into one ranking.
 
-    for (method, target), points in rankings.items():
+    Keyed on (entity, id): a note and a page are different things and may share
+    a uuid. The entity comes from the source the query was issued on, never
+    from the payload - so a point that somehow escaped its filter is read as
+    the entity we asked for, fails to resolve when the row is fetched, and is
+    dropped. Wrong in the safe direction.
+    """
+    k = settings.RRF_K if k is None else k
+    fused: dict[tuple[str, uuid.UUID], FusedHit] = {}
+
+    for (method, target, entity), points in rankings.items():
+        id_key = "note_id" if entity == "note" else "document_id"
         seen_in_source: set[uuid.UUID] = set()
         for position, point in enumerate(points, start=1):
-            raw_id = point.payload.get("document_id")
+            raw_id = point.payload.get(id_key)
             if not raw_id:
                 continue
             try:
                 document_id = uuid.UUID(str(raw_id))
             except ValueError:
                 continue
-            # Several chunks of one document may hit; only its best rank counts.
+            # Several chunks of one thing may hit; only its best rank counts.
             if document_id in seen_in_source:
                 continue
             seen_in_source.add(document_id)
 
             contribution = 1.0 / (k + position)
-            hit = fused.setdefault(document_id, FusedHit(document_id, 0.0))
+            hit = fused.setdefault(
+                (entity, document_id),
+                FusedHit(document_id, 0.0, entity_type=entity),
+            )
             hit.score += contribution
             hit.sources.append(
                 SourceHit(
@@ -151,6 +184,7 @@ def reciprocal_rank_fusion(
                     contribution=contribution,
                     chunk_index=point.payload.get("chunk_index"),
                     chunk_title=point.payload.get("title"),
+                    entity=entity,
                 )
             )
 
@@ -174,6 +208,9 @@ async def retrieve(
     rrf_k: int | None = None,
     vector_min_score: float | None = None,
     lexical: LexicalSearch | None = None,
+    include_documents: bool = True,
+    notes: NoteScope | None = None,
+    note_lexical: LexicalSearch | None = None,
     meter: UsageMeter | None = None,
 ) -> RetrievalResult:
     """Run every enabled source concurrently and fuse the rankings with RRF."""
@@ -190,7 +227,7 @@ async def retrieve(
 
     async def run_one(
         method: SearchMethod, target: str
-    ) -> tuple[tuple[SearchMethod, str], list[ScoredPoint], SourceReport]:
+    ) -> tuple[tuple[SearchMethod, str, str], list[ScoredPoint], SourceReport]:
         loop = asyncio.get_running_loop()
         started = loop.time()
         try:
@@ -214,24 +251,24 @@ async def retrieve(
                 )
             took = (loop.time() - started) * 1000
             return (
-                (method, target),
+                (method, target, "document"),
                 points,
                 SourceReport(method, target, len(points), took),
             )
         except Exception as exc:  # noqa: BLE001 - one bad source must not kill the search
             took = (loop.time() - started) * 1000
             return (
-                (method, target),
+                (method, target, "document"),
                 [],
                 SourceReport(method, target, 0, took, str(exc)[:200]),
             )
 
     async def run_lexical() -> tuple[
-        tuple[SearchMethod, str], list[ScoredPoint], SourceReport
+        tuple[SearchMethod, str, str], list[ScoredPoint], SourceReport
     ]:
         loop = asyncio.get_running_loop()
         started = loop.time()
-        key = (FULLTEXT_METHOD, FULLTEXT_TARGET)
+        key = (FULLTEXT_METHOD, FULLTEXT_TARGET, "document")
         assert lexical is not None
         try:
             rows = await asyncio.to_thread(lexical, query, per_source)
@@ -262,16 +299,129 @@ async def retrieve(
                 SourceReport(FULLTEXT_METHOD, FULLTEXT_TARGET, 0, took, str(exc)[:200]),
             )
 
+    async def run_note(
+        method: SearchMethod, target: str
+    ) -> tuple[tuple[SearchMethod, str, str], list[ScoredPoint], SourceReport]:
+        """A note source.
+
+        Notes rank among notes rather than being ORed into the document filter.
+        Twelve notes competing against a hundred thousand document chunks never
+        place, so "notes are included" would mean nothing; this way a note
+        ranked first among notes contributes exactly what a page ranked first
+        among pages does.
+        """
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        key = (method, target, "note")
+        assert notes is not None
+        try:
+            if method == "bm25":
+                points = await vectors.search_sparse_notes(
+                    sparse_query,
+                    owner_id=notes.owner_id,
+                    kind=target,
+                    limit=per_source,
+                    namespace_ids=notes.namespace_ids,
+                    note_ids=notes.note_ids,
+                )
+            else:
+                assert dense_query is not None
+                points = await vectors.search_dense_notes(
+                    dense_query,
+                    owner_id=notes.owner_id,
+                    kind=target,
+                    limit=per_source,
+                    namespace_ids=notes.namespace_ids,
+                    note_ids=notes.note_ids,
+                    min_score=floor or None,
+                )
+            took = (loop.time() - started) * 1000
+            return (
+                key,
+                points,
+                SourceReport(method, target, len(points), took, entity="note"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            took = (loop.time() - started) * 1000
+            return (
+                key,
+                [],
+                SourceReport(method, target, 0, took, str(exc)[:200], entity="note"),
+            )
+
+    async def run_note_lexical() -> tuple[
+        tuple[SearchMethod, str, str], list[ScoredPoint], SourceReport
+    ]:
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        key = (FULLTEXT_METHOD, NOTE_FULLTEXT_TARGET, "note")
+        assert note_lexical is not None
+        try:
+            rows = await asyncio.to_thread(note_lexical, query, per_source)
+            points = [
+                ScoredPoint(
+                    id=str(note_id),
+                    score=score,
+                    payload={
+                        "note_id": str(note_id),
+                        "kind": NOTE_FULLTEXT_TARGET,
+                        "chunk_index": None,
+                        "title": None,
+                    },
+                )
+                for note_id, score in rows
+            ]
+            took = (loop.time() - started) * 1000
+            return (
+                key,
+                points,
+                SourceReport(
+                    FULLTEXT_METHOD,
+                    NOTE_FULLTEXT_TARGET,
+                    len(points),
+                    took,
+                    entity="note",
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            took = (loop.time() - started) * 1000
+            return (
+                key,
+                [],
+                SourceReport(
+                    FULLTEXT_METHOD,
+                    NOTE_FULLTEXT_TARGET,
+                    0,
+                    took,
+                    str(exc)[:200],
+                    entity="note",
+                ),
+            )
+
     ran_bm25 = bool(use_bm25 and sparse_query.indices)
     ran_vector = bool(use_vector)
     jobs = []
-    if ran_bm25:
-        jobs += [run_one("bm25", t) for t in targets]
-    if ran_vector:
-        jobs += [run_one("vector", t) for t in targets]
-    # Keyword search also covers pages that are not in the vector store yet.
-    if use_bm25 and lexical is not None:
-        jobs.append(run_lexical())
+    if include_documents:
+        if ran_bm25:
+            jobs += [run_one("bm25", t) for t in targets]
+        if ran_vector:
+            jobs += [run_one("vector", t) for t in targets]
+        # Keyword search also covers pages not in the vector store yet.
+        if use_bm25 and lexical is not None:
+            jobs.append(run_lexical())
+
+    if notes is not None:
+        # Notes have no summary: nothing writes one, so asking for that target
+        # would be a source that can only ever return nothing.
+        note_targets = tuple(t for t in targets if t != EmbeddingKind.summary) or (
+            EmbeddingKind.document,
+        )
+        if ran_bm25:
+            jobs += [run_note("bm25", t) for t in note_targets]
+        if ran_vector:
+            jobs += [run_note("vector", t) for t in note_targets]
+        if use_bm25 and note_lexical is not None:
+            jobs.append(run_note_lexical())
 
     if not jobs:
         return RetrievalResult([], [], tokenize(query), ran_bm25, ran_vector)

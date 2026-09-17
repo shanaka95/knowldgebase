@@ -1471,6 +1471,7 @@ class RetrievalSourceHit(SQLModel):
     contribution: float
     chunk_index: int | None = None
     chunk_title: str | None = None
+    entity: str = "document"
 
 
 class RetrievalSourceReport(SQLModel):
@@ -1479,13 +1480,34 @@ class RetrievalSourceReport(SQLModel):
     hits: int
     took_ms: float
     error: str | None = None
+    # Which corpus this source searched, so the explain panel can say "three
+    # sources found nothing in your notes" rather than leaving it a mystery.
+    entity: str = "document"
+
+
+class SearchEntity(StrEnum):
+    """Which corpus a hit came from.
+
+    Defaulted to `document` everywhere it appears, so a client generated before
+    notes existed can never be handed one and mis-link it to /documents.
+    """
+
+    document = "document"
+    note = "note"
 
 
 class RetrievalHit(SQLModel):
+    # The id of whatever matched: a page, or a note.
     document_id: uuid.UUID
+    entity_type: SearchEntity = SearchEntity.document
+    # Notes only. An archived note still turns up in search and the reader
+    # needs to be told why it is not in their list.
+    archived: bool = False
     title: str
     doc_type: str | None = None
-    namespace_id: uuid.UUID
+    # Null for an unfiled note. A page always has a space; a note is
+    # allowed not to, and that is a real state rather than an error.
+    namespace_id: uuid.UUID | None = None
     namespace_slug: str
     namespace_name: str
     folder_id: uuid.UUID | None = None
@@ -1527,6 +1549,10 @@ class AskRequest(SQLModel):
     document_id: uuid.UUID | None = None
     # Continue an existing thread. Absent, a new one is started.
     conversation_id: uuid.UUID | None = None
+    # Your own notes, alongside the pages. Off by default on the wire so a
+    # client, key or agent written before notes existed cannot start reading
+    # them without saying so; the interface sends true.
+    include_notes: bool = False
 
 
 class AskCitation(SQLModel):
@@ -1534,8 +1560,11 @@ class AskCitation(SQLModel):
 
     index: int
     document_id: uuid.UUID
+    entity_type: SearchEntity = SearchEntity.document
     title: str
-    namespace_id: uuid.UUID
+    # Null for an unfiled note. A page always has a space; a note is
+    # allowed not to, and that is a real state rather than an error.
+    namespace_id: uuid.UUID | None = None
     namespace_slug: str
     namespace_name: str
     folder_id: uuid.UUID | None = None

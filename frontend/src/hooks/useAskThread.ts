@@ -33,6 +33,8 @@ export interface AskThreadOptions {
   conversationId?: string
   namespaceId?: string
   documentId?: string
+  /** Read this person's own notes alongside the pages. Defaults to on. */
+  includeNotes?: boolean
   /** Called with the id the server assigned when a new thread starts. */
   onConversationStarted?: (id: string) => void
 }
@@ -119,6 +121,7 @@ export function useAskThread({
   conversationId,
   namespaceId,
   documentId,
+  includeNotes,
   onConversationStarted,
 }: AskThreadOptions) {
   const queryClient = useQueryClient()
@@ -233,6 +236,7 @@ export function useAskThread({
             namespaceId,
             documentId,
             conversationId,
+            includeNotes,
             signal: controller.signal,
           },
           {
@@ -315,6 +319,9 @@ export function useAskThread({
       abort,
       conversationId,
       documentId,
+      // In the dependency list, not just the closure: without it a toggled
+      // setting is ignored until something else happens to change.
+      includeNotes,
       namespaceId,
       onConversationStarted,
       patchLast,

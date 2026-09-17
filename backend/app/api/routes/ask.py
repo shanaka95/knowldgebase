@@ -35,7 +35,13 @@ from app.api.deps import (
     SessionDep,
     VectorsDep,
 )
-from app.api.routes.search import _access_scope, _lexical_source, rerank_hits
+from app.api.routes.search import (
+    _access_scope,
+    _lexical_source,
+    _note_lexical_source,
+    _note_scope,
+    rerank_hits,
+)
 from app.core.config import settings
 from app.core.db import engine
 from app.core.permissions import accessible_documents_filter, require_document
@@ -57,6 +63,8 @@ from app.models import (
     EmbeddingKind,
     Message,
     Namespace,
+    Note,
+    SearchEntity,
     UsageFeature,
     User,
 )
@@ -178,6 +186,63 @@ async def _matching_chunks(
     return by_document
 
 
+def _note_passages_for(
+    session: Session,
+    user: User,
+    hits: list[FusedHit],
+) -> list[Passage]:
+    """The note half of the context handed to the model.
+
+    A note *is* the note - there is no summary to fall back to and no chunk
+    worth preferring over the whole of something this short, so it goes in
+    entire.
+    """
+    note_hits = [h for h in hits if h.entity_type == "note"]
+    if not note_hits:
+        return []
+    rows = session.exec(
+        select(Note).where(
+            col(Note.id).in_([h.document_id for h in note_hits]),
+            col(Note.user_id) == user.id,
+        )
+    ).all()
+    by_id = {note.id: note for note in rows}
+
+    names: dict[uuid.UUID, str] = {}
+    space_ids = {n.namespace_id for n in rows if n.namespace_id}
+    if space_ids:
+        names = {
+            row[0]: row[1]
+            for row in session.exec(
+                select(Namespace.id, Namespace.name).where(
+                    col(Namespace.id).in_(space_ids)
+                )
+            ).all()
+        }
+
+    passages: list[Passage] = []
+    for hit in note_hits:
+        note = by_id.get(hit.document_id)
+        if note is None:
+            continue
+        passages.append(
+            Passage(
+                index=0,  # renumbered by the caller once both halves are merged
+                document_id=note.id,
+                title=note.title or "Untitled",
+                namespace_name=(
+                    names.get(note.namespace_id, "") if note.namespace_id else "Notes"
+                ),
+                text=note.content_text,
+                chunk_index=None,
+                chunk_title=None,
+                score=hit.score,
+                entity_type="note",
+            )
+        )
+    return passages
+
+
 def _passages_for(
     session: Session,
     user: User,
@@ -275,22 +340,68 @@ def _passages_for(
 
 
 def _citations(
-    session: Session, context: AnswerContext, answer_text: str
+    session: Session, user: User, context: AnswerContext, answer_text: str
 ) -> list[AskCitation]:
     """Attach page metadata to each excerpt and mark the ones the answer cites."""
     if not context.passages:
         return []
-    ids = [p.document_id for p in context.passages]
-    rows = session.exec(
-        select(Document, Namespace)
-        .join(Namespace, col(Namespace.id) == col(Document.namespace_id))
-        .where(col(Document.id).in_(ids))
-    ).all()
+    ids = [p.document_id for p in context.passages if p.entity_type != "note"]
+    rows = (
+        session.exec(
+            select(Document, Namespace)
+            .join(Namespace, col(Namespace.id) == col(Document.namespace_id))
+            .where(col(Document.id).in_(ids))
+        ).all()
+        if ids
+        else []
+    )
     meta = {doc.id: (doc, ns) for doc, ns in rows}
+
+    # Scoped by owner even though the ids came from passages that were already
+    # filtered. It costs nothing, and it makes "no query in this file can read
+    # another person's note" true by inspection rather than by argument.
+    note_ids = [p.document_id for p in context.passages if p.entity_type == "note"]
+    note_meta = {
+        note.id: note
+        for note in (
+            session.exec(
+                select(Note).where(
+                    col(Note.id).in_(note_ids), col(Note.user_id) == user.id
+                )
+            ).all()
+            if note_ids
+            else []
+        )
+    }
     cited = set(cited_indexes(answer_text, len(context.passages)))
 
     citations: list[AskCitation] = []
     for p in context.passages:
+        if p.entity_type == "note":
+            note = note_meta.get(p.document_id)
+            if note is None:
+                continue
+            citations.append(
+                AskCitation(
+                    index=p.index,
+                    document_id=note.id,
+                    entity_type=SearchEntity.note,
+                    title=note.title or "Untitled",
+                    namespace_id=note.namespace_id,
+                    namespace_slug="",
+                    namespace_name=p.namespace_name,
+                    folder_id=None,
+                    text=p.text[: settings.ASK_CITATION_CHARS]
+                    if hasattr(settings, "ASK_CITATION_CHARS")
+                    else p.text[:600],
+                    chunk_index=None,
+                    chunk_title=None,
+                    score=p.score,
+                    cited=p.index in cited,
+                    updated_at=note.updated_at,
+                )
+            )
+            continue
         found = meta.get(p.document_id)
         if found is None:
             continue
@@ -377,6 +488,14 @@ async def _search(
         namespace_ids=namespace_ids,
         document_ids=document_ids,
         lexical=_lexical_source(session, auth.user, body.namespace_id),
+        # Off on the wire, on in the interface. An API key, an MCP caller or a
+        # messaging agent must not silently begin answering from somebody's
+        # private notes - a bot quoting your grocery list back at a colleague
+        # is a decision nobody made.
+        notes=_note_scope(auth.user, body.namespace_id) if body.include_notes else None,
+        note_lexical=_note_lexical_source(session, auth.user, body.namespace_id)
+        if body.include_notes
+        else None,
         meter=meter,
     )
     top_k = body.top_k or settings.ASK_TOP_K
@@ -390,10 +509,18 @@ async def _search(
     else:
         hits = ranked[: settings.ASK_DOCUMENTS_WITHOUT_RERANK]
 
+    # Chunk-level narrowing is a page thing: a note is short enough to go in
+    # whole, and has no chunk worth preferring over the rest of it.
+    page_hits = [h for h in hits if h.entity_type == "document"]
     chunks_by_document = await _matching_chunks(
-        vectors, embeddings, question, [h.document_id for h in hits], meter=meter
+        vectors, embeddings, question, [h.document_id for h in page_hits], meter=meter
     )
-    passages = _passages_for(session, auth.user, hits, chunks_by_document)
+    passages = _passages_for(session, auth.user, page_hits, chunks_by_document)
+    passages += _note_passages_for(session, auth.user, hits)
+    # Renumbered across both halves: the index is what the model cites, so it
+    # has to be unique and contiguous over the merged list.
+    for position, passage in enumerate(passages, start=1):
+        passage.index = position
     return (
         passages,
         (time.perf_counter() - started) * 1000,
@@ -537,7 +664,7 @@ async def ask_question(
         finally:
             await llm.close()
 
-    citations = _citations(session, context, text)
+    citations = _citations(session, auth.user, context, text)
     took_ms = (time.perf_counter() - started) * 1000
     if conversation is not None:
         append_message(session, conversation, role=AskRole.user, content=body.q.strip())
@@ -598,7 +725,7 @@ async def ask_context(
     return AskContext(
         question=body.q.strip(),
         # No answer exists yet, so nothing is marked as cited.
-        documents=_citations(session, context, ""),
+        documents=_citations(session, auth.user, context, ""),
         searched=searched,
         used=len({p.document_id for p in context.passages}),
         passages=len(context.passages),
@@ -652,7 +779,7 @@ async def ask_question_stream(
     context = build_context(passages)
     # Citations are resolved up front so they can be shown while the answer is
     # still being written; `cited` is filled in by the final event.
-    citations = _citations(session, context, "")
+    citations = _citations(session, auth.user, context, "")
     # Detected here rather than inside the generator: it is the reader's own
     # words being read, and doing it before the response starts keeps the
     # first byte as early as it was.

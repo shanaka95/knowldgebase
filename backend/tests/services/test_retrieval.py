@@ -39,9 +39,12 @@ def test_agreement_across_sources_beats_one_strong_source() -> None:
     loved, agreed = uuid.uuid4(), uuid.uuid4()
     fused = reciprocal_rank_fusion(
         {
-            ("bm25", EmbeddingKind.document): [point(loved, 99.0), point(agreed, 1.0)],
-            ("vector", EmbeddingKind.document): [point(agreed, 0.9)],
-            ("vector", EmbeddingKind.chunk): [
+            ("bm25", EmbeddingKind.document, "document"): [
+                point(loved, 99.0),
+                point(agreed, 1.0),
+            ],
+            ("vector", EmbeddingKind.document, "document"): [point(agreed, 0.9)],
+            ("vector", EmbeddingKind.chunk, "document"): [
                 point(agreed, 0.8, EmbeddingKind.chunk, 0)
             ],
         },
@@ -56,7 +59,7 @@ def test_one_document_counts_once_per_source_at_its_best_rank() -> None:
     doc = uuid.uuid4()
     fused = reciprocal_rank_fusion(
         {
-            ("vector", EmbeddingKind.chunk): [
+            ("vector", EmbeddingKind.chunk, "document"): [
                 point(doc, 0.9, EmbeddingKind.chunk, 3),
                 point(doc, 0.8, EmbeddingKind.chunk, 4),
                 point(doc, 0.7, EmbeddingKind.chunk, 5),
@@ -74,7 +77,10 @@ def test_one_document_counts_once_per_source_at_its_best_rank() -> None:
 def test_small_k_sharpens_the_advantage_of_rank_one() -> None:
     first, second = uuid.uuid4(), uuid.uuid4()
     ranking = {
-        ("bm25", EmbeddingKind.document): [point(first, 9.0), point(second, 8.0)]
+        ("bm25", EmbeddingKind.document, "document"): [
+            point(first, 9.0),
+            point(second, 8.0),
+        ]
     }
     sharp = reciprocal_rank_fusion(ranking, k=1)
     flat = reciprocal_rank_fusion(ranking, k=1000)
@@ -87,7 +93,10 @@ def test_empty_and_malformed_rankings() -> None:
     assert reciprocal_rank_fusion({}) == []
     junk = ScoredPoint(id="x", score=1.0, payload={"document_id": "not-a-uuid"})
     missing = ScoredPoint(id="y", score=1.0, payload={})
-    assert reciprocal_rank_fusion({("bm25", "document"): [junk, missing]}) == []
+    assert (
+        reciprocal_rank_fusion({("bm25", "document", "document"): [junk, missing]})
+        == []
+    )
 
 
 class StubEmbeddings:

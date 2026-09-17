@@ -37,6 +37,8 @@ export interface HitSpec {
 export interface RetrieveParams {
   q: string
   bm25: boolean
+  pages: boolean
+  notes: boolean
   vector: boolean
   targets: string[]
   k: number | null
@@ -81,6 +83,10 @@ export function parseRetrieve(request: Request): RetrieveParams {
     q: p.get("q") ?? "",
     // the client omits a param when it equals the API default of true
     bm25: p.get("bm25") !== "false",
+    // Read the way bm25 is: the client omits a parameter that
+    // equals the API default, so absence means the default.
+    pages: p.get("include_pages") !== "false",
+    notes: p.get("include_notes") === "true",
     vector: p.get("vector") !== "false",
     targets: p.getAll("targets"),
     k: k === null ? null : Number(k),

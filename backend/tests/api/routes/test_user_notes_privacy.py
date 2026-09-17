@@ -16,6 +16,7 @@ every endpoint into an oracle for other people's private notes.
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Any
 
@@ -23,6 +24,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.api.deps import get_embedding_client
+from app.main import app
 from app.models import NamespaceRole
 from tests.utils.kb import (
     API,
@@ -31,6 +34,28 @@ from tests.utils.kb import (
     create_user_with_password,
     login,
 )
+
+
+class StubEmbeddings:
+    """Deterministic vectors, so the shared surfaces can be exercised at all.
+
+    Without this the retrieve and ask routes reach for a real embedding server
+    and the test becomes a test of whether one is running.
+    """
+
+    async def embed(self, texts: list[str], **_: object) -> list[list[float]]:
+        return [[0.1, 0.1, 0.1, 0.1] for _ in texts]
+
+    async def embed_query(self, text: str, **_: object) -> list[float]:
+        return [0.1, 0.1, 0.1, 0.1]
+
+
+@pytest.fixture(autouse=True)
+def stub_embeddings():  # noqa: ANN201
+    app.dependency_overrides[get_embedding_client] = lambda: StubEmbeddings()
+    yield
+    app.dependency_overrides.pop(get_embedding_client, None)
+
 
 # A word that appears nowhere else in the corpus, so finding it anywhere is
 # proof the note leaked rather than a coincidence of ranking.
@@ -400,3 +425,79 @@ def test_an_archived_note_still_counts(client: TestClient, db: Session) -> None:
     client.delete(f"{API}/notes/{first.json()['id']}", headers=headers)
     allowed = client.post(f"{API}/notes/", headers=headers, json={"title": "Two"})
     assert allowed.status_code == 200
+
+
+# --- the shared surfaces ----------------------------------------------------
+#
+# The routes above are obviously about notes. These are the ones where a leak
+# would actually happen: a search and an answer are not note endpoints, and
+# nothing about their names suggests they touch private rows at all.
+
+
+def test_the_main_search_never_returns_another_persons_note(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    for who, headers in strangers(world):
+        found = client.get(
+            f"{API}/search/retrieve",
+            headers=headers,
+            params={"q": NONCE, "include_notes": True},
+        )
+        assert found.status_code == 200, found.text
+        body = found.json()
+        # Asserted on the results, not the whole reply: a search echoes the
+        # query back, so the nonce is in the body either way.
+        assert not [hit for hit in body["data"] if hit.get("entity_type") == "note"], (
+            f"{who} got a note hit"
+        )
+        assert NONCE not in json.dumps(body["data"]), f"{who} saw the note's words"
+
+
+def test_notes_are_off_unless_asked_for(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    """The guarantee for every client written before notes existed.
+
+    Asked as the author, so a pass means the default is off rather than that the
+    scoping happened to hide it.
+    """
+    found = client.get(
+        f"{API}/search/retrieve", headers=world["victim"], params={"q": NONCE}
+    )
+    assert found.status_code == 200, found.text
+    assert not [hit for hit in found.json()["data"] if hit.get("entity_type") == "note"]
+
+
+def test_searching_neither_corpus_is_refused(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    refused = client.get(
+        f"{API}/search/retrieve",
+        headers=world["victim"],
+        params={"q": "anything", "include_pages": False, "include_notes": False},
+    )
+    assert refused.status_code == 422
+
+
+def test_ask_never_reads_another_persons_note(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    """`/ask/context` is the bluntest surface: it hands back the raw passages.
+
+    Checked before the model is involved at all, so this is about what would be
+    put in a prompt rather than about what a model happened to say.
+    """
+    for who, headers in strangers(world):
+        got = client.post(
+            f"{API}/ask/context",
+            headers=headers,
+            json={"q": NONCE, "include_notes": True},
+        )
+        assert got.status_code in (200, 402), got.text
+        if got.status_code == 200:
+            body = got.json()
+            # The passages and citations, not the echoed question.
+            reachable = json.dumps(
+                {k: v for k, v in body.items() if k not in {"question", "query"}}
+            )
+            assert NONCE not in reachable, f"{who} got the note in their context"

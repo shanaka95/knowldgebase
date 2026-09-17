@@ -58,6 +58,9 @@ class Passage:
     chunk_index: int | None = None
     chunk_title: str | None = None
     score: float = 0.0
+    # Which corpus this came from. Defaulted, so nothing that builds a Passage
+    # today has to change, and the citation builder can tell the two apart.
+    entity_type: str = "document"
 
 
 @dataclass(slots=True)

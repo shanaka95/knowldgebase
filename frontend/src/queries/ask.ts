@@ -49,6 +49,8 @@ export interface AskStreamRequest {
   /** Continue a thread. Absent, the server starts one and names it. */
   conversationId?: string
   topK?: number
+  /** Read this person's own notes alongside the pages. */
+  includeNotes?: boolean
   signal?: AbortSignal
 }
 
@@ -77,6 +79,7 @@ export async function streamAsk(
     documentId,
     conversationId,
     topK,
+    includeNotes,
     signal,
   }: AskStreamRequest,
   handlers: AskStreamHandlers,
@@ -94,6 +97,9 @@ export async function streamAsk(
       document_id: documentId ?? null,
       conversation_id: conversationId ?? null,
       top_k: topK ?? null,
+      // The server defaults this off so an older client cannot start reading
+      // notes by accident; the interface is the thing that opts in.
+      include_notes: includeNotes ?? true,
     }),
     signal,
   })

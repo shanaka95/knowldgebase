@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { AlertCircle, FileText, Loader2, Puzzle, Search } from "lucide-react"
+import {
+  AlertCircle,
+  FileText,
+  Loader2,
+  NotebookPen,
+  Puzzle,
+  Search,
+} from "lucide-react"
 
 import type { RetrievalResults } from "@/client"
 import { DocumentTypeBadge } from "@/components/Documents/DocumentTypeBadge"
@@ -8,6 +15,7 @@ import { EmbeddingStatusIcon } from "@/components/Embeddings/EmbeddingStatusIcon
 import { EmptyState } from "@/components/Layout/EmptyState"
 import { NamespaceIcon } from "@/components/Namespaces/NamespaceIcon"
 import { PendingList } from "@/components/Pending/PendingList"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useNamespaces } from "@/hooks/useNamespaces"
 import { deriveEmbeddingState } from "@/lib/embeddingState"
@@ -101,9 +109,28 @@ export function HybridSearchResults({
           </p>
           <ul className="divide-y rounded-lg border">
             {results.map((hit) => {
-              const ns = nsById.get(hit.namespace_id)
-              return (
-                <li key={hit.document_id}>
+              // An unfiled note has no space, which is a real state.
+              const ns = hit.namespace_id
+                ? nsById.get(hit.namespace_id)
+                : undefined
+              // A note is a different object with a different address. Its own
+              // link, and no page furniture: it has no doc type, and its AI
+              // index is not something its reader asked about.
+              const isNote = hit.entity_type === "note"
+              const rowClass =
+                "flex items-start gap-3 px-4 py-3 transition hover:bg-muted/50"
+              const Row = ({ children }: { children: React.ReactNode }) =>
+                isNote ? (
+                  <Link
+                    to="/notes/$noteId"
+                    params={{ noteId: hit.document_id }}
+                    className={rowClass}
+                    data-testid="search-result"
+                    data-entity="note"
+                  >
+                    {children}
+                  </Link>
+                ) : (
                   <Link
                     to="/s/$namespaceSlug/d/$documentId"
                     params={{
@@ -111,19 +138,45 @@ export function HybridSearchResults({
                       documentId: hit.document_id,
                     }}
                     search={{ mode: "view" } as never}
-                    className="flex items-start gap-3 px-4 py-3 transition hover:bg-muted/50"
+                    className={rowClass}
                     data-testid="search-result"
+                    data-entity="document"
                   >
-                    <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    {children}
+                  </Link>
+                )
+              return (
+                <li key={`${hit.entity_type ?? "document"}:${hit.document_id}`}>
+                  <Row>
+                    {isNote ? (
+                      <NotebookPen className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    )}
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-medium">
                           {hit.title}
                         </span>
-                        <DocumentTypeBadge type={hit.doc_type} />
-                        <EmbeddingStatusIcon
-                          state={deriveEmbeddingState(hit)}
-                        />
+                        {isNote ? (
+                          <>
+                            <Badge variant="outline" className="shrink-0">
+                              Note
+                            </Badge>
+                            {hit.archived && (
+                              <Badge variant="outline" className="shrink-0">
+                                Archived
+                              </Badge>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <DocumentTypeBadge type={hit.doc_type} />
+                            <EmbeddingStatusIcon
+                              state={deriveEmbeddingState(hit)}
+                            />
+                          </>
+                        )}
                       </span>
 
                       {hit.matched_chunk_title && (
@@ -148,14 +201,14 @@ export function HybridSearchResults({
                           color={ns?.color}
                           size="xs"
                         />
-                        {hit.namespace_name}
+                        {hit.namespace_name || (isNote ? "Notes" : "")}
                         {hit.updated_at && (
                           <> · updated {relativeTime(hit.updated_at)}</>
                         )}
                       </span>
                     </span>
                     <FusedScore score={hit.score} k={data?.rrf_k ?? 60} />
-                  </Link>
+                  </Row>
                 </li>
               )
             })}

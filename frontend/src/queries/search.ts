@@ -37,6 +37,9 @@ export interface RetrieveParams {
   rrfK?: number
   candidates?: number
   limit?: number
+  /** Which corpora to look in. Both by default; the server defaults notes off. */
+  pages?: boolean
+  notes?: boolean
 }
 
 /**
@@ -48,6 +51,8 @@ export function retrieveQuery({
   bm25,
   vector,
   targets,
+  pages = true,
+  notes = true,
   namespaceId,
   rrfK,
   candidates,
@@ -63,6 +68,11 @@ export function retrieveQuery({
       bm25,
       vector,
       serializeTargets(targets),
+      // In the key, not just the request. Without these a result cached for
+      // "pages only" would be served for "pages and notes" - the same query
+      // string, a different answer.
+      pages,
+      notes,
       rrfK ?? null,
       candidates ?? null,
       limit,
@@ -75,6 +85,8 @@ export function retrieveQuery({
             bm25,
             vector,
             targets: toEmbeddingKinds(targets),
+            include_pages: pages,
+            include_notes: notes,
             namespace_id: namespaceId ?? undefined,
             rrf_k: rrfK,
             candidates_per_source: candidates,
@@ -83,7 +95,13 @@ export function retrieveQuery({
         })
       ).data,
     // The server rejects "no method selected"; asking would only 422.
-    enabled: trimmed.length > 0 && (bm25 || vector) && targets.length > 0,
+    enabled:
+      trimmed.length > 0 &&
+      (bm25 || vector) &&
+      (pages || notes) &&
+      // Targets only constrain the page corpus, so a notes-only search does
+      // not need one.
+      (!pages || targets.length > 0),
     staleTime: 30_000,
     placeholderData: (prev) => prev,
     retry: false,

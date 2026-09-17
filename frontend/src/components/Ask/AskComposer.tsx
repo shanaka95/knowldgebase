@@ -1,4 +1,12 @@
-import { FileText, Loader2, Pin, Send, Square, X } from "lucide-react"
+import {
+  FileText,
+  Loader2,
+  NotebookPen,
+  Pin,
+  Send,
+  Square,
+  X,
+} from "lucide-react"
 import { useCallback, useEffect, useRef } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -11,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Toggle } from "@/components/ui/toggle"
 import {
   Tooltip,
   TooltipContent,
@@ -32,6 +41,8 @@ interface AskComposerProps {
   /** The pinned page, if the question is about one page only. */
   page: { id: string; title: string } | null
   onPageChange: (page: PickedPage | null) => void
+  includeNotes: boolean
+  onIncludeNotesChange: (include: boolean) => void
   /** A thread with turns in it: the placeholder invites a follow-up instead. */
   continuing: boolean
 }
@@ -46,6 +57,8 @@ export function AskComposer({
   onSpaceChange,
   page,
   onPageChange,
+  includeNotes,
+  onIncludeNotesChange,
   continuing,
 }: AskComposerProps) {
   const { data: namespaces } = useNamespaces()
@@ -148,6 +161,30 @@ export function AskComposer({
                 ))}
               </SelectContent>
             </Select>
+          )}
+
+          {/* Hidden when a page is pinned, for the same reason the space is:
+              the question already says where to look. */}
+          {!page && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle
+                  size="sm"
+                  variant="outline"
+                  pressed={includeNotes}
+                  onPressedChange={onIncludeNotesChange}
+                  aria-label="Read my notes too"
+                  data-testid="notes-ask-toggle"
+                >
+                  <NotebookPen />
+                  My notes
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-64">
+                Answers can quote the notes you wrote. Nobody else's notes are
+                ever read.
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 

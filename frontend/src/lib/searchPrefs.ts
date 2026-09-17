@@ -21,6 +21,28 @@ export const TARGET_HINTS: Record<SearchTarget, string> = {
   chunk: "Individual sections, for finding the exact passage.",
 }
 
+/**
+ * Which corpus to look in.
+ *
+ * Deliberately not a fourth SEARCH_TARGET. Those are the *representations of
+ * one page* - whole, summary, chunk - and `toEmbeddingKinds` casts them
+ * straight to the API's EmbeddingKind union, so adding "note" there would push
+ * a value the API does not accept. It would also tangle the invariants:
+ * "only notes" would leave the three page checkboxes as dead controls.
+ */
+export const SEARCH_CORPORA = ["pages", "notes"] as const
+export type SearchCorpus = (typeof SEARCH_CORPORA)[number]
+
+export const CORPUS_LABELS: Record<SearchCorpus, string> = {
+  pages: "Pages",
+  notes: "My notes",
+}
+
+export const CORPUS_HINTS: Record<SearchCorpus, string> = {
+  pages: "Everything in the spaces you can read.",
+  notes: "The notes you wrote. Nobody else can see them, or find them here.",
+}
+
 export const DEFAULT_RRF_K = 60
 export const DEFAULT_CANDIDATES = 50
 
@@ -28,6 +50,8 @@ export interface SearchPrefs {
   bm25: boolean
   vector: boolean
   targets: SearchTarget[]
+  pages: boolean
+  notes: boolean
   rrfK: number
   candidates: number
 }
@@ -36,6 +60,10 @@ export const DEFAULT_PREFS: SearchPrefs = {
   bm25: true,
   vector: true,
   targets: [...SEARCH_TARGETS],
+  // Notes are in by default. They are the reader's own words, and leaving them
+  // out of their own search would be the surprising choice.
+  pages: true,
+  notes: true,
   rrfK: DEFAULT_RRF_K,
   candidates: DEFAULT_CANDIDATES,
 }
@@ -76,11 +104,16 @@ export function readSearchPrefs(): SearchPrefs {
       : []
     const bm25 = parsed.bm25 ?? DEFAULT_PREFS.bm25
     const vector = parsed.vector ?? DEFAULT_PREFS.vector
+    const pages = parsed.pages ?? DEFAULT_PREFS.pages
+    const notes = parsed.notes ?? DEFAULT_PREFS.notes
     return {
       // A stored state with both methods off would 422 every query.
       bm25: bm25 || !vector,
       vector,
       targets: targets.length > 0 ? targets : [...DEFAULT_PREFS.targets],
+      // And the same for the corpora, for the same reason.
+      pages: pages || !notes,
+      notes,
       rrfK: clampK(parsed.rrfK),
       candidates: clampCandidates(parsed.candidates),
     }

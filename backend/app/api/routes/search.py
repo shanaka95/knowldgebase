@@ -30,10 +30,12 @@ from app.models import (
     DocumentShare,
     EmbeddingKind,
     Namespace,
+    Note,
     RetrievalHit,
     RetrievalResults,
     RetrievalSourceHit,
     RetrievalSourceReport,
+    SearchEntity,
     SearchResult,
     SearchResults,
     SearchSuggestionPublic,
@@ -41,7 +43,7 @@ from app.models import (
     UsageFeature,
     User,
 )
-from app.services import credits, usage
+from app.services import credits, retrieval, usage
 from app.services.model_client import ModelServerError
 from app.services.reranking import (
     Reranker,
@@ -335,13 +337,40 @@ async def rerank_hits(
     return reordered + tail, scores
 
 
+def _note_candidate_texts(
+    session: Session, user: User, hits: Sequence[FusedHit]
+) -> dict[uuid.UUID, str]:
+    """The note half of the reranker's input.
+
+    Easy to leave out, and the symptom does not look like a bug: without it a
+    note falls through with an empty string, the reranker scores nothing, and
+    every note sinks to the bottom. "Notes are included but never appear" reads
+    as a ranking problem rather than a missing branch.
+    """
+    note_hits = [h for h in hits if h.entity_type == "note"]
+    if not note_hits:
+        return {}
+    rows = session.exec(
+        select(Note).where(
+            col(Note.id).in_([h.document_id for h in note_hits]),
+            col(Note.user_id) == user.id,
+        )
+    ).all()
+    return {
+        note.id: build_candidate_text(note.title or "Untitled", body=note.content_text)
+        for note in rows
+    }
+
+
 def _candidate_texts(
     session: Session, user: User, hits: Sequence[FusedHit]
 ) -> dict[uuid.UUID, str]:
     """What each candidate looks like to the reranker: title plus its best text."""
     if not hits:
         return {}
-    ids = [h.document_id for h in hits]
+    ids = [h.document_id for h in hits if h.entity_type == "document"]
+    if not ids:
+        return _note_candidate_texts(session, user, hits)
     rows = session.exec(
         select(Document).where(
             col(Document.id).in_(ids),
@@ -365,7 +394,7 @@ def _candidate_texts(
         ).all()
         chunks = {(c.document_id, c.doc_version, c.chunk_index): c for c in chunk_rows}
 
-    out: dict[uuid.UUID, str] = {}
+    out: dict[uuid.UUID, str] = _note_candidate_texts(session, user, hits)
     for hit in hits:
         doc = by_id.get(hit.document_id)
         if doc is None:
@@ -378,6 +407,130 @@ def _candidate_texts(
             body=doc.content_text,
             summary=doc.summary,
             passage=chunk.text if chunk else None,
+        )
+    return out
+
+
+def _note_scope(user: User, namespace_id: uuid.UUID | None) -> retrieval.NoteScope:
+    """Whose notes. There is no superuser branch here, and there must not be.
+
+    `_access_scope` above returns `(None, None)` for a superuser, meaning "every
+    page". The equivalent for notes does not exist: an administrator reading
+    somebody's private notes is a different product.
+    """
+    return retrieval.NoteScope(
+        owner_id=str(user.id),
+        namespace_ids=[str(namespace_id)] if namespace_id else None,
+    )
+
+
+def _note_lexical_source(
+    session: Session, user: User, namespace_id: uuid.UUID | None
+) -> Callable[[str, int], list[tuple[uuid.UUID, float]]]:
+    """Postgres full text over this person's notes.
+
+    Archived notes are deliberately not filtered out. Archiving takes a note
+    out of the list, not out of the index - that is the whole point of putting
+    something away rather than deleting it.
+    """
+
+    def run(query: str, limit: int) -> list[tuple[uuid.UUID, float]]:
+        tsquery = func.websearch_to_tsquery("english", query)
+        rank = func.coalesce(
+            func.ts_rank_cd(col(Note.search_vector), tsquery), literal(0.0)
+        ).cast(Float)
+        where: list[Any] = [
+            # Not `accessible_documents_filter`. A note is reachable by exactly
+            # one person and this is the only predicate that says so.
+            col(Note.user_id) == user.id,
+            or_(
+                col(Note.search_vector).op("@@")(tsquery),
+                col(Note.title).ilike(f"%{query}%"),
+            ),
+        ]
+        if namespace_id is not None:
+            where.append(Note.namespace_id == namespace_id)
+        rows = session.exec(
+            select(Note.id, rank.label("rank"))
+            .where(*where)
+            .order_by(desc("rank"), col(Note.updated_at).desc())
+            .limit(limit)
+        ).all()
+        return [(row[0], float(row[1] or 0.0)) for row in rows]
+
+    return run
+
+
+def _hydrate_notes(
+    session: Session,
+    user: User,
+    hits: Sequence[FusedHit],
+    tokens: list[str],
+) -> dict[uuid.UUID, RetrievalHit]:
+    """Load the notes behind the fused hits, keyed by id."""
+    note_hits = [h for h in hits if h.entity_type == "note"]
+    if not note_hits:
+        return {}
+    rows = session.exec(
+        select(Note).where(
+            col(Note.id).in_([h.document_id for h in note_hits]),
+            # Defence in depth, exactly as the document path does it: the vector
+            # filter already scoped this, and the database is the authority.
+            col(Note.user_id) == user.id,
+        )
+    ).all()
+    by_id = {note.id: note for note in rows}
+
+    names: dict[uuid.UUID, str] = {}
+    space_ids = {n.namespace_id for n in rows if n.namespace_id}
+    if space_ids:
+        names = {
+            row[0]: row[1]
+            for row in session.exec(
+                select(Namespace.id, Namespace.name).where(
+                    col(Namespace.id).in_(space_ids)
+                )
+            ).all()
+        }
+
+    out: dict[uuid.UUID, RetrievalHit] = {}
+    for hit in note_hits:
+        note = by_id.get(hit.document_id)
+        if note is None:
+            continue
+        body = f"{note.title}\n\n{note.content_text}".strip()
+        out[note.id] = RetrievalHit(
+            document_id=note.id,
+            entity_type=SearchEntity.note,
+            title=note.title or "Untitled",
+            doc_type=None,
+            namespace_id=note.namespace_id,
+            namespace_slug="",
+            namespace_name=names.get(note.namespace_id, "")
+            if note.namespace_id
+            else "",
+            folder_id=None,
+            score=hit.score,
+            snippet=highlight(body, tokens),
+            summary=None,
+            updated_at=note.updated_at,
+            embedding_status=note.embedding_status,
+            matched_chunk_index=hit.best_chunk_index,
+            matched_chunk_title=None,
+            archived=note.archived_at is not None,
+            sources=[
+                RetrievalSourceHit(
+                    method=src.method,
+                    target=src.target,
+                    rank=src.rank,
+                    score=src.score,
+                    contribution=src.contribution,
+                    chunk_index=src.chunk_index,
+                    chunk_title=src.chunk_title,
+                    entity=src.entity,
+                )
+                for src in hit.sources
+            ],
         )
     return out
 
@@ -434,6 +587,8 @@ async def retrieve_documents(
     rerank: bool = True,
     rrf_k: int | None = Query(default=None, ge=1, le=1000),
     candidates_per_source: int | None = Query(default=None, ge=1, le=500),
+    include_pages: bool = True,
+    include_notes: bool = False,
 ) -> Any:
     """Hybrid search: BM25 and/or vector search over pages, summaries and chunks.
 
@@ -448,6 +603,10 @@ async def retrieve_documents(
         )
     if not targets:
         raise HTTPException(status_code=422, detail="Select at least one search target")
+    if not include_pages and not include_notes:
+        raise HTTPException(
+            status_code=422, detail="Search pages, notes, or both - not neither"
+        )
     # Every (method, target) pair is its own query against the vector store, all
     # fired at once, so a target named a thousand times would turn one cheap
     # request into a thousand expensive ones. Order is kept so the reply names
@@ -475,7 +634,19 @@ async def retrieve_documents(
             document_ids=document_ids,
             candidates_per_source=candidates_per_source,
             rrf_k=rrf_k,
-            lexical=_lexical_source(session, auth.user, namespace_id),
+            lexical=_lexical_source(session, auth.user, namespace_id)
+            if include_pages
+            else None,
+            include_documents=include_pages,
+            # `include_notes` defaults to false on the wire while the interface
+            # sends true. A client generated before notes existed can then never
+            # be handed one and mis-link it, and an API key, an MCP caller or a
+            # messaging agent does not silently start answering from somebody's
+            # private notes - that is a decision, not a default.
+            notes=_note_scope(auth.user, namespace_id) if include_notes else None,
+            note_lexical=_note_lexical_source(session, auth.user, namespace_id)
+            if include_notes
+            else None,
             meter=m,
         )
         # Rerank before trimming to `limit`: the point is to decide which pages
@@ -488,7 +659,24 @@ async def retrieve_documents(
             reranker if rerank else None,
             meter=m,
         )
-    data = _hydrate(session, auth.user, hits[:limit], result.query_tokens)
+    wanted = hits[:limit]
+    pages = {
+        hit.document_id: hit
+        for hit in _hydrate(
+            session,
+            auth.user,
+            [h for h in wanted if h.entity_type == "document"],
+            result.query_tokens,
+        )
+    }
+    notes_by_id = _hydrate_notes(session, auth.user, wanted, result.query_tokens)
+    # Re-merged in the fused order rather than pages-then-notes: the ranking is
+    # the whole point of fusing them into one search.
+    data = [
+        (notes_by_id if h.entity_type == "note" else pages).get(h.document_id)
+        for h in wanted
+    ]
+    data = [hit for hit in data if hit is not None]
     return RetrievalResults(
         data=data,
         count=len(data),
@@ -507,6 +695,7 @@ async def retrieve_documents(
                 hits=s.hits,
                 took_ms=round(s.took_ms, 2),
                 error=s.error,
+                entity=s.entity,
             )
             for s in result.sources
         ],

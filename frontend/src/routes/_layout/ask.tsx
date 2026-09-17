@@ -42,12 +42,22 @@ export const Route = createFileRoute("/_layout/ask")({
     /** The page the thread is pinned to. */
     doc: z.string().optional().catch(undefined),
     space: z.string().optional().catch(undefined),
+    /**
+     * Read this person's own notes too. Undefined means on.
+     *
+     * In the URL because it changes the answer, so a shared /ask link
+     * reproduces the scope it was asked with.
+     */
+    notes: z.boolean().optional().catch(undefined),
   }),
   head: () => ({ meta: [{ title: "Ask - PlusGPT" }] }),
 })
 
 function AskPage() {
-  const { q, c, doc, space } = Route.useSearch()
+  const { q, c, doc, space, notes } = Route.useSearch()
+  // Undefined means on: notes are in by default, and the URL only ever
+  // records a deliberate choice.
+  const includeNotes = notes ?? true
   const navigate = useNavigate({ from: Route.fullPath })
   const [value, setValue] = useState("")
   const [railOpen, setRailOpen] = useState(readRailOpen)
@@ -58,6 +68,7 @@ function AskPage() {
     conversationId: c,
     namespaceId: space,
     documentId: doc,
+    includeNotes,
     onConversationStarted: (id) =>
       // `replace`, so Back leaves Ask rather than stepping through every
       // thread the reader started.
@@ -220,6 +231,13 @@ function AskPage() {
               }
               page={page}
               onPageChange={setPage}
+              includeNotes={includeNotes}
+              onIncludeNotesChange={(include) =>
+                navigate({
+                  search: (prev) => ({ ...prev, notes: include }),
+                  replace: true,
+                })
+              }
               continuing={turns.length > 0}
             />
           </div>

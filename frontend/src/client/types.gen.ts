@@ -465,6 +465,7 @@ export type AskCitation = {
      * Document Id
      */
     document_id: string;
+    entity_type?: SearchEntity;
     /**
      * Title
      */
@@ -472,7 +473,7 @@ export type AskCitation = {
     /**
      * Namespace Id
      */
-    namespace_id: string;
+    namespace_id?: string | null;
     /**
      * Namespace Slug
      */
@@ -732,6 +733,10 @@ export type AskRequest = {
      * Conversation Id
      */
     conversation_id?: string | null;
+    /**
+     * Include Notes
+     */
+    include_notes?: boolean;
 };
 
 /**
@@ -3350,6 +3355,11 @@ export type RetrievalHit = {
      * Document Id
      */
     document_id: string;
+    entity_type?: SearchEntity;
+    /**
+     * Archived
+     */
+    archived?: boolean;
     /**
      * Title
      */
@@ -3361,7 +3371,7 @@ export type RetrievalHit = {
     /**
      * Namespace Id
      */
-    namespace_id: string;
+    namespace_id?: string | null;
     /**
      * Namespace Slug
      */
@@ -3489,6 +3499,10 @@ export type RetrievalSourceHit = {
      * Chunk Title
      */
     chunk_title?: string | null;
+    /**
+     * Entity
+     */
+    entity?: string;
 };
 
 /**
@@ -3515,7 +3529,21 @@ export type RetrievalSourceReport = {
      * Error
      */
     error?: string | null;
+    /**
+     * Entity
+     */
+    entity?: string;
 };
+
+/**
+ * SearchEntity
+ *
+ * Which corpus a hit came from.
+ *
+ * Defaulted to `document` everywhere it appears, so a client generated before
+ * notes existed can never be handed one and mis-link it to /documents.
+ */
+export type SearchEntity = 'document' | 'note';
 
 /**
  * SearchResult
@@ -7559,6 +7587,14 @@ export type searchRetrieveDocumentsData = {
          * Candidates Per Source
          */
         candidates_per_source?: number | null;
+        /**
+         * Include Pages
+         */
+        include_pages?: boolean;
+        /**
+         * Include Notes
+         */
+        include_notes?: boolean;
     };
     url: '/api/v1/search/retrieve';
 };
