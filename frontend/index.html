@@ -3,6 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Google Tag Manager. High in the head because that is where the
+         container has to load to see the first page view; the tag itself is
+         async, so it does not hold up anything below it. This is the only HTML
+         document the app has - every route is the same shell - so one copy
+         covers every page. -->
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-PF2P5NDT');</script>
+    <!-- End Google Tag Manager -->
+
     <title>PlusGPT</title>
     <meta
       name="description"
