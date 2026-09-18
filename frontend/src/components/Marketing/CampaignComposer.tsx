@@ -1,8 +1,17 @@
 import { useQuery } from "@tanstack/react-query"
-import { Eye, Send } from "lucide-react"
+import { Eye, Send, Users } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { EmailPreview } from "@/components/Marketing/EmailPreview"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LoadingButton } from "@/components/ui/loading-button"
@@ -43,7 +52,7 @@ export function CampaignComposer({
   const [from, setFrom] = useState("")
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
-  const [everyone, setEveryone] = useState(false)
+  const [confirming, setConfirming] = useState(false)
 
   // Seeded once from the server's template. Not a controlled default, or
   // typing would be undone the moment the query refetched.
@@ -58,8 +67,21 @@ export function CampaignComposer({
     if (settings.data && !from) setFrom(settings.data.from_addresses[0] ?? "")
   }, [settings.data, from])
 
-  const recipients = everyone ? (settings.data?.subscribed ?? 0) : selected.size
+  // Exactly the people ticked on the Contacts tab. There is no second rule,
+  // and there was one: a checkbox that widened the audience after the number
+  // had been read is the one thing a confirmation screen cannot protect you
+  // from. Sending to everybody is what "Select all" over there is for.
+  const recipients = selected.size
   const ready = Boolean(from && subject.trim() && body.trim() && recipients > 0)
+  // One a second, so the count is also the duration. Worth saying out loud:
+  // six hundred addresses is ten minutes of sending, and somebody who expects
+  // it to be instant closes the tab and assumes it broke.
+  const duration =
+    recipients < 60
+      ? "under a minute"
+      : recipients < 120
+        ? "a minute"
+        : `${Math.round(recipients / 60)} minutes`
 
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
@@ -113,25 +135,32 @@ export function CampaignComposer({
           </p>
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={everyone}
-              onChange={(e) => setEveryone(e.target.checked)}
-              data-testid="marketing-everyone"
-            />
-            Send to everyone still subscribed
-          </label>
+        {/* The count, said plainly and before the button rather than beside
+            it. This is the one number somebody needs to have read: sending is
+            not undoable, and "1" and "617" look identical in a sentence. */}
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2"
+          data-testid="marketing-recipients"
+        >
+          <Users className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 text-sm">
+            {recipients === 0 ? (
+              <>
+                Nobody chosen yet. Pick who this goes to on the{" "}
+                <strong>Contacts</strong> tab.
+              </>
+            ) : (
+              <>
+                This will send{" "}
+                <strong className="tabular-nums">{recipients}</strong>{" "}
+                {recipients === 1 ? "email" : "emails"}, one a second, so about{" "}
+                {duration}.
+              </>
+            )}
+          </span>
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <span
-            className="text-muted-foreground text-sm"
-            data-testid="marketing-recipients"
-          >
-            {recipients} {recipients === 1 ? "recipient" : "recipients"}
-          </span>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <div className="flex items-center gap-2">
             <LoadingButton
               variant="outline"
@@ -151,36 +180,83 @@ export function CampaignComposer({
               <Eye />
               Preview
             </LoadingButton>
+            <Button
+              disabled={!ready}
+              onClick={() => setConfirming(true)}
+              data-testid="marketing-send"
+            >
+              <Send />
+              Send
+            </Button>
+          </div>
+        </div>
+        {!ready && recipients > 0 && (
+          <p className="text-muted-foreground text-xs">
+            Fill in a from address, a subject and a message.
+          </p>
+        )}
+      </div>
+
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent
+          className="sm:max-w-md"
+          data-testid="marketing-confirm-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>
+              Send {recipients} {recipients === 1 ? "email" : "emails"}?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Messages already sent stay sent, though you
+              can stop the rest at any point.
+            </DialogDescription>
+          </DialogHeader>
+          <dl className="flex min-w-0 flex-col gap-2 text-sm">
+            <div className="flex min-w-0 gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground">From</dt>
+              <dd className="min-w-0 wrap-anywhere">{from}</dd>
+            </div>
+            <div className="flex min-w-0 gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground">Subject</dt>
+              <dd className="min-w-0 wrap-anywhere">{subject}</dd>
+            </div>
+            <div className="flex min-w-0 gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground">To</dt>
+              <dd className="min-w-0 tabular-nums">
+                {recipients} chosen {recipients === 1 ? "address" : "addresses"}
+                , over about {duration}
+              </dd>
+            </div>
+          </dl>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
             <LoadingButton
               loading={create.isPending}
-              disabled={!ready}
               onClick={() =>
                 create.mutate(
                   {
                     from_email: from,
                     subject: subject.trim(),
                     body_html: body,
-                    contact_ids: everyone ? [] : Array.from(selected),
-                    all_subscribed: everyone,
+                    contact_ids: Array.from(selected),
                   },
-                  { onSuccess: (campaign) => campaign && onSent(campaign.id) },
+                  {
+                    onSuccess: (campaign) => {
+                      setConfirming(false)
+                      if (campaign) onSent(campaign.id)
+                    },
+                  },
                 )
               }
-              data-testid="marketing-send"
+              data-testid="marketing-confirm-send"
             >
-              <Send />
-              Send
+              Send them
             </LoadingButton>
-          </div>
-        </div>
-        {!ready && (
-          <p className="text-muted-foreground text-xs">
-            {recipients === 0
-              ? "Choose who this goes to on the Contacts tab, or tick everyone."
-              : "Fill in a from address, a subject and a message."}
-          </p>
-        )}
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="min-w-0">
         <EmailPreview

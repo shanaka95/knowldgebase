@@ -168,6 +168,22 @@ export function useImportContacts() {
   )
 }
 
+export function useEditContact() {
+  return useMarketingMutation(
+    async ({ id, ...body }: { id: string; email?: string; name?: string }) =>
+      (
+        await AdminMarketingService.updateContact({
+          path: { contact_id: id },
+          body,
+        })
+      ).data,
+    {
+      success: "Contact updated",
+      failure: "That contact could not be changed",
+    },
+  )
+}
+
 export function useDeleteContact() {
   return useMarketingMutation(
     async (id: string) =>

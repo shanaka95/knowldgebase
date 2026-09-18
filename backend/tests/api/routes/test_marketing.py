@@ -454,3 +454,117 @@ def test_a_new_account_joins_the_list(db: Session) -> None:
     assert row.user_id == user.id
     db.delete(row)
     db.commit()
+
+
+# --- editing a contact -------------------------------------------------------
+
+
+def test_a_typo_in_an_address_can_be_fixed(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    people: list[MarketingContact],
+) -> None:
+    fixed = f"fixed-{uuid.uuid4().hex[:8]}@example.com"
+    response = client.patch(
+        f"{ADMIN}/contacts/{people[0].id}",
+        headers=superuser_token_headers,
+        json={"email": fixed.upper(), "name": "  Gagan Sharma  "},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # Normalised on the way in, like every other address in the system.
+    assert body["email"] == fixed
+    assert body["name"] == "Gagan Sharma"
+
+
+def test_editing_keeps_the_unsubscribe_link_working(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    people: list[MarketingContact],
+) -> None:
+    """A link already sitting in somebody's inbox has to survive a tidy-up."""
+    token = people[0].unsubscribe_token
+    client.patch(
+        f"{ADMIN}/contacts/{people[0].id}",
+        headers=superuser_token_headers,
+        json={"name": "Renamed"},
+    )
+    assert client.post(f"{PUBLIC}/unsubscribe/{token}").status_code == 200
+
+
+def test_editing_cannot_resubscribe_somebody(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    people: list[MarketingContact],
+) -> None:
+    """The one way this could have become a loophole."""
+    marketing.unsubscribe(db, people[0].unsubscribe_token)
+    db.commit()
+    response = client.patch(
+        f"{ADMIN}/contacts/{people[0].id}",
+        headers=superuser_token_headers,
+        json={"email": f"new-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert response.status_code == 200
+    assert response.json()["subscribed"] is False
+
+
+def test_an_edit_cannot_collide_with_somebody_else(
+    client: TestClient,
+    superuser_token_headers: dict[str, str],
+    people: list[MarketingContact],
+) -> None:
+    response = client.patch(
+        f"{ADMIN}/contacts/{people[0].id}",
+        headers=superuser_token_headers,
+        json={"email": people[1].email},
+    )
+    assert response.status_code == 409
+
+
+# --- who a campaign reaches --------------------------------------------------
+
+
+def test_a_campaign_reaches_exactly_who_was_chosen(
+    client: TestClient,
+    db: Session,
+    superuser_token_headers: dict[str, str],
+    people: list[MarketingContact],
+) -> None:
+    """There is no widening. The ids sent are the audience.
+
+    This is asserted against the whole table rather than the three fixtures,
+    because the failure being guarded against is a campaign quietly reaching
+    everybody who was not named.
+    """
+    chosen = people[:1]
+    campaign = make_campaign(client, superuser_token_headers, chosen)
+    assert campaign["total"] == 1
+
+    addresses = {
+        row.to_email
+        for row in db.exec(
+            select(MarketingDelivery).where(
+                MarketingDelivery.campaign_id == uuid.UUID(campaign["id"])
+            )
+        ).all()
+    }
+    assert addresses == {chosen[0].email}
+
+
+def test_a_campaign_naming_nobody_is_refused_by_the_schema(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    """An empty list used to mean "everybody". Now it means nothing at all."""
+    response = client.post(
+        f"{ADMIN}/campaigns",
+        headers=superuser_token_headers,
+        json={
+            "from_email": settings.MARKETING_FROM_ADDRESSES[0],
+            "subject": "s",
+            "body_html": "<p>x</p>",
+            "contact_ids": [],
+        },
+    )
+    assert response.status_code == 422

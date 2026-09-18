@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
-import { Ban, Search, Trash2, Upload, UserPlus } from "lucide-react"
-import { useRef, useState } from "react"
+import { Ban, Pencil, Search, Trash2, Upload, UserPlus } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
+import type { MarketingContactPublic } from "@/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -40,6 +41,7 @@ import {
   contactsQuery,
   useAddContact,
   useDeleteContact,
+  useEditContact,
   useImportContacts,
   useUnsubscribeContact,
 } from "@/queries/adminMarketing"
@@ -66,6 +68,7 @@ export function ContactsTable({
   const [subscribed, setSubscribed] = useState<"all" | "yes" | "no">("yes")
   const [page, setPage] = useState(0)
   const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState<MarketingContactPublic | null>(null)
 
   const filters: ContactFilters = {
     q,
@@ -211,7 +214,7 @@ export function ContactsTable({
               <TableHead>Address</TableHead>
               <TableHead className="hidden sm:table-cell">Name</TableHead>
               <TableHead className="hidden md:table-cell">Added</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-32" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -261,6 +264,15 @@ export function ContactsTable({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Edit ${contact.email}`}
+                      onClick={() => setEditing(contact)}
+                      data-testid="marketing-edit"
+                    >
+                      <Pencil />
+                    </Button>
                     {contact.subscribed && (
                       <Button
                         variant="ghost"
@@ -314,29 +326,79 @@ export function ContactsTable({
         </div>
       )}
 
-      <AddContactDialog open={adding} onOpenChange={setAdding} />
+      <ContactDialog
+        contact={editing}
+        open={adding || editing !== null}
+        onOpenChange={(next) => {
+          if (next) return
+          setAdding(false)
+          setEditing(null)
+        }}
+      />
     </div>
   )
 }
 
-function AddContactDialog({
+/**
+ * Adding and editing, in one dialog.
+ *
+ * They ask for the same two things, and the only difference is which mutation
+ * runs. Two dialogs would have been two places to keep the validation, the
+ * normalisation message and the field order in step.
+ */
+function ContactDialog({
+  contact,
   open,
   onOpenChange,
 }: {
+  /** The contact being edited, or null to add a new one. */
+  contact: MarketingContactPublic | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const [email, setEmail] = useState("")
   const [name, setName] = useState("")
   const add = useAddContact()
+  const edit = useEditContact()
+  const editing = contact !== null
+
+  // Seeded each time it opens, not once: the same dialog is reused for every
+  // row, so it has to forget the last one.
+  useEffect(() => {
+    if (!open) return
+    setEmail(contact?.email ?? "")
+    setName(contact?.name ?? "")
+  }, [open, contact])
+
+  const save = () => {
+    const done = {
+      onSuccess: () => {
+        setEmail("")
+        setName("")
+        onOpenChange(false)
+      },
+    }
+    if (editing) {
+      edit.mutate(
+        { id: contact.id, email: email.trim(), name: name.trim() },
+        done,
+      )
+    } else {
+      add.mutate({ email: email.trim(), name: name.trim() }, done)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md" data-testid="marketing-add-dialog">
         <DialogHeader>
-          <DialogTitle>Add a contact</DialogTitle>
+          <DialogTitle>
+            {editing ? "Edit contact" : "Add a contact"}
+          </DialogTitle>
           <DialogDescription>
-            One address. Use Import CSV for a list.
+            {editing
+              ? "Correcting a typo. The unsubscribe link keeps working, and somebody who has left stays left."
+              : "One address. Use Import CSV for a list."}
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-w-0 flex-col gap-3">
@@ -367,22 +429,12 @@ function AddContactDialog({
             Cancel
           </Button>
           <LoadingButton
-            loading={add.isPending}
-            onClick={() =>
-              add.mutate(
-                { email: email.trim(), name: name.trim() },
-                {
-                  onSuccess: () => {
-                    setEmail("")
-                    setName("")
-                    onOpenChange(false)
-                  },
-                },
-              )
-            }
+            loading={add.isPending || edit.isPending}
+            disabled={!email.trim()}
+            onClick={save}
             data-testid="marketing-new-save"
           >
-            Add
+            {editing ? "Save" : "Add"}
           </LoadingButton>
         </DialogFooter>
       </DialogContent>

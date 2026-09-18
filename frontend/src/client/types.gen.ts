@@ -1020,11 +1020,7 @@ export type CampaignCreate = {
     /**
      * Contact Ids
      */
-    contact_ids?: Array<string>;
-    /**
-     * All Subscribed
-     */
-    all_subscribed?: boolean;
+    contact_ids: Array<string>;
 };
 
 /**
@@ -2980,6 +2976,27 @@ export type MarketingContactPublic = {
      * Created At
      */
     created_at: string;
+};
+
+/**
+ * MarketingContactUpdate
+ *
+ * Fixing a typo, which is the only reason to edit one of these.
+ *
+ * The unsubscribe token and the unsubscribed date are not here and never
+ * will be: correcting a misspelled address must not quietly resubscribe
+ * somebody, and a link already sitting in somebody's inbox has to keep
+ * working after the row behind it is tidied up.
+ */
+export type MarketingContactUpdate = {
+    /**
+     * Email
+     */
+    email?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
 };
 
 /**
@@ -9703,6 +9720,36 @@ export type adminMarketingDeleteContactResponses = {
 };
 
 export type adminMarketingDeleteContactResponse = adminMarketingDeleteContactResponses[keyof adminMarketingDeleteContactResponses];
+
+export type adminMarketingUpdateContactData = {
+    body: MarketingContactUpdate;
+    path: {
+        /**
+         * Contact Id
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/marketing/contacts/{contact_id}';
+};
+
+export type adminMarketingUpdateContactErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingUpdateContactError = adminMarketingUpdateContactErrors[keyof adminMarketingUpdateContactErrors];
+
+export type adminMarketingUpdateContactResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarketingContactPublic;
+};
+
+export type adminMarketingUpdateContactResponse = adminMarketingUpdateContactResponses[keyof adminMarketingUpdateContactResponses];
 
 export type adminMarketingUnsubscribeContactData = {
     body?: never;

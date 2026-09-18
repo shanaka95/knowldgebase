@@ -66,6 +66,29 @@ about eleven minutes, which is long enough for somebody to read the first
 message and leave before the last one is sent. The claim re-checks, and marks
 the rest `skipped`, not `failed`.
 
+## Who a campaign reaches
+
+The ids the composer sends, minus anybody who unsubscribed in between. There is
+no second rule and no widening flag, and there was one for about a day: a
+checkbox that could broaden the audience after the count had been read is the
+one thing a confirmation screen cannot protect anybody from. Sending to
+everybody is what **Select all** on the contacts list is for, and it fills the
+same field.
+
+The count is stated twice before anything goes out: on the composer, as a
+sentence rather than a number beside a button, and again in the confirmation,
+along with the from address, the subject and how long the send will take. One a
+second means the count is also the duration, and six hundred addresses is ten
+minutes of sending.
+
+## Editing a contact
+
+`PATCH /admin/marketing/contacts/{id}` corrects a name or an address. It keeps
+the unsubscribe token, because a link already sitting in somebody's inbox has to
+keep working, and it keeps `unsubscribed_at`, because fixing a misspelling must
+never be a way of putting somebody who left back on the list. A new address that
+already belongs to another contact is a 409.
+
 ## The unsubscribe link, and the trap it avoids
 
 Outlook Safe Links, Gmail's proxy and most corporate scanners fetch every URL in

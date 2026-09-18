@@ -59,10 +59,15 @@ test("a list is uploaded, a message is sent, and it can be unsubscribed from", a
   await expect(frame.locator("body")).toContainText("Hi Gagan")
   await expect(frame.locator("body")).toContainText("Unsubscribe")
 
+  // The count is stated before anything is sent, and again in the confirmation.
   await expect(page.getByTestId("marketing-recipients")).toContainText(
-    "1 recipient",
+    "This will send 1 email",
   )
   await page.getByTestId("marketing-send").click()
+  await expect(page.getByTestId("marketing-confirm-dialog")).toContainText(
+    "Send 1 email?",
+  )
+  await page.getByTestId("marketing-confirm-send").click()
 
   // Sending moves to the status screen, which drains as the worker works.
   await expect(page.getByTestId("marketing-status")).toBeVisible()
@@ -111,4 +116,50 @@ test("the marketing endpoints need a credential", async ({ request }) => {
     headers: { Authorization: "Bearer not-a-token" },
   })
   expect(response.status()).toBe(401)
+})
+
+test("a contact's name and address can be corrected", async ({
+  page,
+  request,
+}) => {
+  const word = `basil${uid()}`
+  const token = await adminToken(request)
+  const made = await request.post(`${API}/admin/marketing/contacts`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { email: `${word}@example.com`, name: "Typo" },
+  })
+  expect(made.ok(), await made.text()).toBeTruthy()
+
+  await page.goto("/admin?tab=marketing")
+  await page.getByTestId("marketing-search").fill(word)
+  const row = page
+    .getByTestId("marketing-contact-row")
+    .filter({ hasText: word })
+  await expect(row).toHaveCount(1)
+
+  await row.getByTestId("marketing-edit").click()
+  await expect(page.getByTestId("marketing-add-dialog")).toContainText(
+    "Edit contact",
+  )
+  // The dialog opens on the row it was asked about, not empty.
+  await expect(page.getByTestId("marketing-new-name")).toHaveValue("Typo")
+  await page.getByTestId("marketing-new-name").fill("Corrected Name")
+  await page.getByTestId("marketing-new-save").click()
+
+  await expect(page.getByTestId("marketing-add-dialog")).toBeHidden()
+  await expect(row).toContainText("Corrected Name")
+})
+
+test("nothing can be sent until somebody is chosen", async ({ page }) => {
+  /**
+   * The composer used to carry a "send to everyone" checkbox, which meant the
+   * number on screen and the number that went out could differ. Now the
+   * selection is the only rule, and with nothing selected there is no send.
+   */
+  await page.goto("/admin?tab=marketing")
+  await page.getByRole("tab", { name: "Compose" }).click()
+  await expect(page.getByTestId("marketing-recipients")).toContainText(
+    "Nobody chosen yet",
+  )
+  await expect(page.getByTestId("marketing-send")).toBeDisabled()
 })

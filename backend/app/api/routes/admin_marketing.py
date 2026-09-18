@@ -39,11 +39,13 @@ from app.models import (
     MarketingContactCreate,
     MarketingContactPublic,
     MarketingContactsPublic,
+    MarketingContactUpdate,
     MarketingDelivery,
     MarketingSettings,
     Message,
 )
 from app.services import marketing
+from app.services.sharing import normalise_email
 
 router = APIRouter(
     prefix="/admin/marketing",
@@ -213,6 +215,42 @@ async def import_contacts(
     return marketing.import_csv(session, payload)
 
 
+@router.patch("/contacts/{contact_id}", response_model=MarketingContactPublic)
+def update_contact(
+    session: SessionDep, contact_id: uuid.UUID, body: MarketingContactUpdate
+) -> Any:
+    """Correct a name or an address.
+
+    Editing keeps the unsubscribe token and the unsubscribed date. A row is
+    being tidied up, not reassigned: the link already sitting in somebody's
+    inbox has to keep working, and fixing a misspelling must never be a way to
+    put somebody who left back on the list.
+    """
+    contact = session.get(MarketingContact, contact_id)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="No such contact")
+
+    if body.email is not None:
+        address = normalise_email(str(body.email))
+        if address != contact.email:
+            taken = session.exec(
+                select(MarketingContact).where(MarketingContact.email == address)
+            ).first()
+            if taken is not None:
+                raise HTTPException(
+                    status_code=409, detail="That address is already on the list"
+                )
+            contact.email = address
+    if body.name is not None:
+        contact.name = body.name.strip()[:255]
+
+    contact.updated_at = marketing.now()
+    session.add(contact)
+    session.commit()
+    session.refresh(contact)
+    return _contact_public(contact)
+
+
 @router.delete("/contacts/{contact_id}", response_model=Message)
 def delete_contact(session: SessionDep, contact_id: uuid.UUID) -> Any:
     """Remove an address entirely.
@@ -298,13 +336,14 @@ def create_campaign(
             detail="That is not one of the addresses this deployment can send from",
         )
 
-    where = [col(MarketingContact.unsubscribed_at).is_(None)]
-    if not body.all_subscribed:
-        if not body.contact_ids:
-            raise HTTPException(status_code=422, detail="Choose who this goes to")
-        where.append(col(MarketingContact.id).in_(body.contact_ids))
-
-    contacts = session.exec(select(MarketingContact).where(*where)).all()
+    # The chosen ids, minus anybody who has since unsubscribed. Both halves
+    # matter: the interface counted the first, and the second is the promise.
+    contacts = session.exec(
+        select(MarketingContact).where(
+            col(MarketingContact.id).in_(body.contact_ids),
+            col(MarketingContact.unsubscribed_at).is_(None),
+        )
+    ).all()
     if not contacts:
         raise HTTPException(
             status_code=422, detail="Nobody on that list is still subscribed"

@@ -3597,6 +3597,19 @@ class MarketingContactCreate(SQLModel):
     name: str = Field(default="", max_length=255)
 
 
+class MarketingContactUpdate(SQLModel):
+    """Fixing a typo, which is the only reason to edit one of these.
+
+    The unsubscribe token and the unsubscribed date are not here and never
+    will be: correcting a misspelled address must not quietly resubscribe
+    somebody, and a link already sitting in somebody's inbox has to keep
+    working after the row behind it is tidied up.
+    """
+
+    email: EmailStr | None = None
+    name: str | None = Field(default=None, max_length=255)
+
+
 class ContactImportResult(SQLModel):
     """What an uploaded file turned into, address by address.
 
@@ -3615,10 +3628,12 @@ class CampaignCreate(SQLModel):
     from_email: EmailStr
     subject: str = Field(min_length=1, max_length=300)
     body_html: str = Field(min_length=1)
-    # The addresses chosen in the interface. Empty means everyone still
-    # subscribed, which is what "select all" sends.
-    contact_ids: list[uuid.UUID] = []
-    all_subscribed: bool = False
+    # Exactly who this goes to. There is no "and everyone else" flag, and
+    # there was one for about a day: a campaign that can widen its own audience
+    # after the recipients were counted is a campaign nobody can check before
+    # sending. Selecting everybody is what "Select all" on the contacts list
+    # is for, and it fills this in.
+    contact_ids: list[uuid.UUID] = Field(min_length=1)
 
 
 class CampaignPublic(SQLModel):
