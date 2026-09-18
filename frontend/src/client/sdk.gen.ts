@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { adminChannelsClearChannelData, adminChannelsClearChannelErrors, adminChannelsClearChannelResponses, adminChannelsReadChannelsData, adminChannelsReadChannelsResponses, adminChannelsReadPairingData, adminChannelsReadPairingResponses, adminChannelsStartPairingData, adminChannelsStartPairingResponses, adminChannelsStopPairingData, adminChannelsStopPairingErrors, adminChannelsStopPairingResponses, adminChannelsUpdateChannelData, adminChannelsUpdateChannelErrors, adminChannelsUpdateChannelResponses, adminCreditsCreateGrantData, adminCreditsCreateGrantErrors, adminCreditsCreateGrantResponses, adminCreditsDeleteGrantData, adminCreditsDeleteGrantErrors, adminCreditsDeleteGrantResponses, adminCreditsReadBalanceData, adminCreditsReadBalanceErrors, adminCreditsReadBalanceResponses, adminCreditsReadGrantsData, adminCreditsReadGrantsErrors, adminCreditsReadGrantsResponses, adminDataSourcesReadDataSourcesData, adminDataSourcesReadDataSourcesResponses, adminDataSourcesUpdateDataSourceData, adminDataSourcesUpdateDataSourceErrors, adminDataSourcesUpdateDataSourceResponses, adminUsageReadModelsSeenData, adminUsageReadModelsSeenErrors, adminUsageReadModelsSeenResponses, adminUsageReadUsageBreakdownData, adminUsageReadUsageBreakdownErrors, adminUsageReadUsageBreakdownResponses, adminUsageReadUsageSummaryData, adminUsageReadUsageSummaryErrors, adminUsageReadUsageSummaryResponses, adminUserGroupsAddGroupMembersData, adminUserGroupsAddGroupMembersErrors, adminUserGroupsAddGroupMembersResponses, adminUserGroupsCreateUserGroupData, adminUserGroupsCreateUserGroupErrors, adminUserGroupsCreateUserGroupResponses, adminUserGroupsDeleteUserGroupData, adminUserGroupsDeleteUserGroupErrors, adminUserGroupsDeleteUserGroupResponses, adminUserGroupsReadLimitDefinitionsData, adminUserGroupsReadLimitDefinitionsResponses, adminUserGroupsReadUserGroupsData, adminUserGroupsReadUserGroupsResponses, adminUserGroupsRemoveGroupMemberData, adminUserGroupsRemoveGroupMemberErrors, adminUserGroupsRemoveGroupMemberResponses, adminUserGroupsUpdateUserGroupData, adminUserGroupsUpdateUserGroupErrors, adminUserGroupsUpdateUserGroupResponses, adminUsersReadAdminUsersData, adminUsersReadAdminUsersErrors, adminUsersReadAdminUsersResponses, adminUsersSetUserAssignmentData, adminUsersSetUserAssignmentErrors, adminUsersSetUserAssignmentResponses, agentControlControlHealthData, agentControlControlHealthResponses, agentControlResolveRouteData, agentControlResolveRouteErrors, agentControlResolveRouteResponses, agentLlmChatCompletionsData, agentLlmChatCompletionsResponses, agentLlmListModelsData, agentLlmListModelsResponses, agentsCreateAgentData, agentsCreateAgentErrors, agentsCreateAgentResponses, agentsCreateLinkCodeData, agentsCreateLinkCodeErrors, agentsCreateLinkCodeResponses, agentsDeleteAgentData, agentsDeleteAgentErrors, agentsDeleteAgentResponses, agentsDeleteConnectionData, agentsDeleteConnectionErrors, agentsDeleteConnectionResponses, agentsReadAgentChannelsData, agentsReadAgentChannelsErrors, agentsReadAgentChannelsResponses, agentsReadAgentData, agentsReadAgentErrors, agentsReadAgentResponses, agentsReadAgentsData, agentsReadAgentsResponses, agentsUpdateAgentData, agentsUpdateAgentErrors, agentsUpdateAgentResponses, apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskContextData, askAskContextErrors, askAskContextResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, askReadConversationData, askReadConversationErrors, askReadConversationResponses, askReadConversationsData, askReadConversationsErrors, askReadConversationsResponses, askRemoveConversationData, askRemoveConversationErrors, askRemoveConversationResponses, askRenameConversationData, askRenameConversationErrors, askRenameConversationResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, dataSourcesAuthorizeGoogleDriveData, dataSourcesAuthorizeGoogleDriveResponses, dataSourcesDisconnectGoogleDriveData, dataSourcesDisconnectGoogleDriveResponses, dataSourcesGoogleDrivePickerData, dataSourcesGoogleDrivePickerResponses, dataSourcesImportFromGoogleDriveData, dataSourcesImportFromGoogleDriveErrors, dataSourcesImportFromGoogleDriveResponses, dataSourcesReadDataSourcesData, dataSourcesReadDataSourcesResponses, documentsCancelInvitationData, documentsCancelInvitationErrors, documentsCancelInvitationResponses, documentsCloneDocumentData, documentsCloneDocumentErrors, documentsCloneDocumentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsPublishDocumentData, documentsPublishDocumentErrors, documentsPublishDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentInvitationsData, documentsReadDocumentInvitationsErrors, documentsReadDocumentInvitationsResponses, documentsReadDocumentLanguagesData, documentsReadDocumentLanguagesErrors, documentsReadDocumentLanguagesResponses, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadDocumentTypesData, documentsReadDocumentTypesResponses, documentsReadDocumentVersionData, documentsReadDocumentVersionErrors, documentsReadDocumentVersionResponses, documentsReadDocumentVersionsData, documentsReadDocumentVersionsErrors, documentsReadDocumentVersionsResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsShareDocumentWithManyData, documentsShareDocumentWithManyErrors, documentsShareDocumentWithManyResponses, documentsTranslateDocumentData, documentsTranslateDocumentErrors, documentsTranslateDocumentResponses, documentsUnpublishDocumentData, documentsUnpublishDocumentErrors, documentsUnpublishDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsCreateImportsData, importsCreateImportsErrors, importsCreateImportsResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordResponses, loginResendTwoFactorData, loginResendTwoFactorErrors, loginResendTwoFactorResponses, loginResendVerificationData, loginResendVerificationErrors, loginResendVerificationResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginSignOutEverywhereData, loginSignOutEverywhereResponses, loginTestTokenData, loginTestTokenResponses, loginVerifyEmailData, loginVerifyEmailErrors, loginVerifyEmailResponses, loginVerifyTwoFactorData, loginVerifyTwoFactorErrors, loginVerifyTwoFactorResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesAddNamespaceMembersData, namespacesAddNamespaceMembersErrors, namespacesAddNamespaceMembersResponses, namespacesCancelNamespaceInvitationData, namespacesCancelNamespaceInvitationErrors, namespacesCancelNamespaceInvitationResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceInvitationsData, namespacesReadNamespaceInvitationsErrors, namespacesReadNamespaceInvitationsResponses, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, notesCreateNoteData, notesCreateNoteErrors, notesCreateNoteResponses, notesDeleteNoteData, notesDeleteNoteErrors, notesDeleteNoteResponses, notesReadNotesData, notesReadNotesErrors, notesReadNotesResponses, notesUpdateNoteData, notesUpdateNoteErrors, notesUpdateNoteResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, privateReadEmailsData, privateReadEmailsErrors, privateReadEmailsResponses, publicReadInvitationData, publicReadInvitationErrors, publicReadInvitationResponses, publicReadPublicAttachmentData, publicReadPublicAttachmentErrors, publicReadPublicAttachmentResponses, publicReadPublicDocumentData, publicReadPublicDocumentErrors, publicReadPublicDocumentResponses, searchReadSearchSuggestionsData, searchReadSearchSuggestionsErrors, searchReadSearchSuggestionsResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usageReadMyCreditsData, usageReadMyCreditsResponses, usageReadMyUsageData, usageReadMyUsageErrors, usageReadMyUsageResponses, userNotesArchiveNoteData, userNotesArchiveNoteErrors, userNotesArchiveNoteResponses, userNotesCancelReminderData, userNotesCancelReminderErrors, userNotesCancelReminderResponses, userNotesCloneNoteData, userNotesCloneNoteErrors, userNotesCloneNoteResponses, userNotesCreateNoteData, userNotesCreateNoteErrors, userNotesCreateNoteResponses, userNotesCreateTagData, userNotesCreateTagErrors, userNotesCreateTagResponses, userNotesDeleteNoteAssetData, userNotesDeleteNoteAssetErrors, userNotesDeleteNoteAssetResponses, userNotesDeleteNoteData, userNotesDeleteNoteErrors, userNotesDeleteNoteResponses, userNotesDeleteTagData, userNotesDeleteTagErrors, userNotesDeleteTagResponses, userNotesDownloadNoteAssetData, userNotesDownloadNoteAssetErrors, userNotesDownloadNoteAssetResponses, userNotesMoveNoteData, userNotesMoveNoteErrors, userNotesMoveNoteResponses, userNotesPinNoteData, userNotesPinNoteErrors, userNotesPinNoteResponses, userNotesReadNoteAssetsData, userNotesReadNoteAssetsErrors, userNotesReadNoteAssetsResponses, userNotesReadNoteData, userNotesReadNoteErrors, userNotesReadNoteResponses, userNotesReadNotesData, userNotesReadNotesErrors, userNotesReadNotesResponses, userNotesReadReminderData, userNotesReadReminderErrors, userNotesReadReminderResponses, userNotesReadTagsData, userNotesReadTagsResponses, userNotesReadVoiceSettingsData, userNotesReadVoiceSettingsResponses, userNotesSearchNotesData, userNotesSearchNotesErrors, userNotesSearchNotesResponses, userNotesSetReminderData, userNotesSetReminderErrors, userNotesSetReminderResponses, userNotesTranscribeData, userNotesTranscribeErrors, userNotesTranscribeResponses, userNotesUnarchiveNoteData, userNotesUnarchiveNoteErrors, userNotesUnarchiveNoteResponses, userNotesUnpinNoteData, userNotesUnpinNoteErrors, userNotesUnpinNoteResponses, userNotesUpdateNoteData, userNotesUpdateNoteErrors, userNotesUpdateNoteResponses, userNotesUpdateTagData, userNotesUpdateTagErrors, userNotesUpdateTagResponses, userNotesUploadNoteAssetData, userNotesUploadNoteAssetErrors, userNotesUploadNoteAssetResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersLookupUserData, usersLookupUserErrors, usersLookupUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
+import type { adminChannelsClearChannelData, adminChannelsClearChannelErrors, adminChannelsClearChannelResponses, adminChannelsReadChannelsData, adminChannelsReadChannelsResponses, adminChannelsReadPairingData, adminChannelsReadPairingResponses, adminChannelsStartPairingData, adminChannelsStartPairingResponses, adminChannelsStopPairingData, adminChannelsStopPairingErrors, adminChannelsStopPairingResponses, adminChannelsUpdateChannelData, adminChannelsUpdateChannelErrors, adminChannelsUpdateChannelResponses, adminCreditsCreateGrantData, adminCreditsCreateGrantErrors, adminCreditsCreateGrantResponses, adminCreditsDeleteGrantData, adminCreditsDeleteGrantErrors, adminCreditsDeleteGrantResponses, adminCreditsReadBalanceData, adminCreditsReadBalanceErrors, adminCreditsReadBalanceResponses, adminCreditsReadGrantsData, adminCreditsReadGrantsErrors, adminCreditsReadGrantsResponses, adminDataSourcesReadDataSourcesData, adminDataSourcesReadDataSourcesResponses, adminDataSourcesUpdateDataSourceData, adminDataSourcesUpdateDataSourceErrors, adminDataSourcesUpdateDataSourceResponses, adminMarketingCancelCampaignData, adminMarketingCancelCampaignErrors, adminMarketingCancelCampaignResponses, adminMarketingCreateCampaignData, adminMarketingCreateCampaignErrors, adminMarketingCreateCampaignResponses, adminMarketingCreateContactData, adminMarketingCreateContactErrors, adminMarketingCreateContactResponses, adminMarketingDeleteContactData, adminMarketingDeleteContactErrors, adminMarketingDeleteContactResponses, adminMarketingImportContactsData, adminMarketingImportContactsErrors, adminMarketingImportContactsResponses, adminMarketingPreviewCampaignData, adminMarketingPreviewCampaignErrors, adminMarketingPreviewCampaignResponses, adminMarketingReadCampaignData, adminMarketingReadCampaignErrors, adminMarketingReadCampaignResponses, adminMarketingReadCampaignsData, adminMarketingReadCampaignsErrors, adminMarketingReadCampaignsResponses, adminMarketingReadContactIdsData, adminMarketingReadContactIdsErrors, adminMarketingReadContactIdsResponses, adminMarketingReadContactsData, adminMarketingReadContactsErrors, adminMarketingReadContactsResponses, adminMarketingReadDefaultTemplateData, adminMarketingReadDefaultTemplateResponses, adminMarketingReadDeliveriesData, adminMarketingReadDeliveriesErrors, adminMarketingReadDeliveriesResponses, adminMarketingReadMarketingSettingsData, adminMarketingReadMarketingSettingsResponses, adminMarketingUnsubscribeContactData, adminMarketingUnsubscribeContactErrors, adminMarketingUnsubscribeContactResponses, adminUsageReadModelsSeenData, adminUsageReadModelsSeenErrors, adminUsageReadModelsSeenResponses, adminUsageReadUsageBreakdownData, adminUsageReadUsageBreakdownErrors, adminUsageReadUsageBreakdownResponses, adminUsageReadUsageSummaryData, adminUsageReadUsageSummaryErrors, adminUsageReadUsageSummaryResponses, adminUserGroupsAddGroupMembersData, adminUserGroupsAddGroupMembersErrors, adminUserGroupsAddGroupMembersResponses, adminUserGroupsCreateUserGroupData, adminUserGroupsCreateUserGroupErrors, adminUserGroupsCreateUserGroupResponses, adminUserGroupsDeleteUserGroupData, adminUserGroupsDeleteUserGroupErrors, adminUserGroupsDeleteUserGroupResponses, adminUserGroupsReadLimitDefinitionsData, adminUserGroupsReadLimitDefinitionsResponses, adminUserGroupsReadUserGroupsData, adminUserGroupsReadUserGroupsResponses, adminUserGroupsRemoveGroupMemberData, adminUserGroupsRemoveGroupMemberErrors, adminUserGroupsRemoveGroupMemberResponses, adminUserGroupsUpdateUserGroupData, adminUserGroupsUpdateUserGroupErrors, adminUserGroupsUpdateUserGroupResponses, adminUsersReadAdminUsersData, adminUsersReadAdminUsersErrors, adminUsersReadAdminUsersResponses, adminUsersSetUserAssignmentData, adminUsersSetUserAssignmentErrors, adminUsersSetUserAssignmentResponses, agentControlControlHealthData, agentControlControlHealthResponses, agentControlResolveRouteData, agentControlResolveRouteErrors, agentControlResolveRouteResponses, agentLlmChatCompletionsData, agentLlmChatCompletionsResponses, agentLlmListModelsData, agentLlmListModelsResponses, agentsCreateAgentData, agentsCreateAgentErrors, agentsCreateAgentResponses, agentsCreateLinkCodeData, agentsCreateLinkCodeErrors, agentsCreateLinkCodeResponses, agentsDeleteAgentData, agentsDeleteAgentErrors, agentsDeleteAgentResponses, agentsDeleteConnectionData, agentsDeleteConnectionErrors, agentsDeleteConnectionResponses, agentsReadAgentChannelsData, agentsReadAgentChannelsErrors, agentsReadAgentChannelsResponses, agentsReadAgentData, agentsReadAgentErrors, agentsReadAgentResponses, agentsReadAgentsData, agentsReadAgentsResponses, agentsUpdateAgentData, agentsUpdateAgentErrors, agentsUpdateAgentResponses, apiKeysCreateApiKeyData, apiKeysCreateApiKeyErrors, apiKeysCreateApiKeyResponses, apiKeysReadApiKeysData, apiKeysReadApiKeysResponses, apiKeysRevokeApiKeyData, apiKeysRevokeApiKeyErrors, apiKeysRevokeApiKeyResponses, apiKeysUpdateApiKeyData, apiKeysUpdateApiKeyErrors, apiKeysUpdateApiKeyResponses, askAskContextData, askAskContextErrors, askAskContextResponses, askAskQuestionData, askAskQuestionErrors, askAskQuestionResponses, askAskQuestionStreamData, askAskQuestionStreamErrors, askAskQuestionStreamResponses, askReadConversationData, askReadConversationErrors, askReadConversationResponses, askReadConversationsData, askReadConversationsErrors, askReadConversationsResponses, askRemoveConversationData, askRemoveConversationErrors, askRemoveConversationResponses, askRenameConversationData, askRenameConversationErrors, askRenameConversationResponses, attachmentsDeleteAttachmentData, attachmentsDeleteAttachmentErrors, attachmentsDeleteAttachmentResponses, attachmentsDownloadAttachmentData, attachmentsDownloadAttachmentErrors, attachmentsDownloadAttachmentResponses, attachmentsReadAttachmentData, attachmentsReadAttachmentErrors, attachmentsReadAttachmentResponses, attachmentsReadAttachmentsData, attachmentsReadAttachmentsErrors, attachmentsReadAttachmentsResponses, attachmentsUploadAttachmentData, attachmentsUploadAttachmentErrors, attachmentsUploadAttachmentResponses, dataSourcesAuthorizeGoogleDriveData, dataSourcesAuthorizeGoogleDriveResponses, dataSourcesDisconnectGoogleDriveData, dataSourcesDisconnectGoogleDriveResponses, dataSourcesGoogleDrivePickerData, dataSourcesGoogleDrivePickerResponses, dataSourcesImportFromGoogleDriveData, dataSourcesImportFromGoogleDriveErrors, dataSourcesImportFromGoogleDriveResponses, dataSourcesReadDataSourcesData, dataSourcesReadDataSourcesResponses, documentsCancelInvitationData, documentsCancelInvitationErrors, documentsCancelInvitationResponses, documentsCloneDocumentData, documentsCloneDocumentErrors, documentsCloneDocumentResponses, documentsCreateDocumentData, documentsCreateDocumentErrors, documentsCreateDocumentResponses, documentsDeleteDocumentData, documentsDeleteDocumentErrors, documentsDeleteDocumentResponses, documentsMoveDocumentData, documentsMoveDocumentErrors, documentsMoveDocumentResponses, documentsPublishDocumentData, documentsPublishDocumentErrors, documentsPublishDocumentResponses, documentsReadDocumentData, documentsReadDocumentEmbeddingsData, documentsReadDocumentEmbeddingsErrors, documentsReadDocumentEmbeddingsResponses, documentsReadDocumentErrors, documentsReadDocumentInvitationsData, documentsReadDocumentInvitationsErrors, documentsReadDocumentInvitationsResponses, documentsReadDocumentLanguagesData, documentsReadDocumentLanguagesErrors, documentsReadDocumentLanguagesResponses, documentsReadDocumentResponses, documentsReadDocumentsData, documentsReadDocumentsErrors, documentsReadDocumentSharesData, documentsReadDocumentSharesErrors, documentsReadDocumentSharesResponses, documentsReadDocumentsResponses, documentsReadDocumentTypesData, documentsReadDocumentTypesResponses, documentsReadDocumentVersionData, documentsReadDocumentVersionErrors, documentsReadDocumentVersionResponses, documentsReadDocumentVersionsData, documentsReadDocumentVersionsErrors, documentsReadDocumentVersionsResponses, documentsReadEmbeddingSummaryData, documentsReadEmbeddingSummaryResponses, documentsReadRecentDocumentsData, documentsReadRecentDocumentsErrors, documentsReadRecentDocumentsResponses, documentsReadSharedWithMeData, documentsReadSharedWithMeResponses, documentsRegenerateDocumentEmbeddingsData, documentsRegenerateDocumentEmbeddingsErrors, documentsRegenerateDocumentEmbeddingsResponses, documentsReindexAllEmbeddingsData, documentsReindexAllEmbeddingsResponses, documentsShareDocumentData, documentsShareDocumentErrors, documentsShareDocumentResponses, documentsShareDocumentWithManyData, documentsShareDocumentWithManyErrors, documentsShareDocumentWithManyResponses, documentsTranslateDocumentData, documentsTranslateDocumentErrors, documentsTranslateDocumentResponses, documentsUnpublishDocumentData, documentsUnpublishDocumentErrors, documentsUnpublishDocumentResponses, documentsUnshareDocumentData, documentsUnshareDocumentErrors, documentsUnshareDocumentResponses, documentsUpdateDocumentData, documentsUpdateDocumentErrors, documentsUpdateDocumentResponses, documentsUpdateDocumentShareData, documentsUpdateDocumentShareErrors, documentsUpdateDocumentShareResponses, foldersCreateFolderData, foldersCreateFolderErrors, foldersCreateFolderResponses, foldersDeleteFolderData, foldersDeleteFolderErrors, foldersDeleteFolderResponses, foldersReadFolderData, foldersReadFolderErrors, foldersReadFolderResponses, foldersUpdateFolderData, foldersUpdateFolderErrors, foldersUpdateFolderResponses, healthReadHealthData, healthReadHealthResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsCreateImportData, importsCreateImportErrors, importsCreateImportResponses, importsCreateImportsData, importsCreateImportsErrors, importsCreateImportsResponses, importsDeleteImportData, importsDeleteImportErrors, importsDeleteImportResponses, importsReadImportData, importsReadImportErrors, importsReadImportResponses, importsReadImportsData, importsReadImportsErrors, importsReadImportsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, loginRecoverPasswordData, loginRecoverPasswordErrors, loginRecoverPasswordResponses, loginResendTwoFactorData, loginResendTwoFactorErrors, loginResendTwoFactorResponses, loginResendVerificationData, loginResendVerificationErrors, loginResendVerificationResponses, loginResetPasswordData, loginResetPasswordErrors, loginResetPasswordResponses, loginSignOutEverywhereData, loginSignOutEverywhereResponses, loginTestTokenData, loginTestTokenResponses, loginVerifyEmailData, loginVerifyEmailErrors, loginVerifyEmailResponses, loginVerifyTwoFactorData, loginVerifyTwoFactorErrors, loginVerifyTwoFactorResponses, namespacesAddNamespaceMemberData, namespacesAddNamespaceMemberErrors, namespacesAddNamespaceMemberResponses, namespacesAddNamespaceMembersData, namespacesAddNamespaceMembersErrors, namespacesAddNamespaceMembersResponses, namespacesCancelNamespaceInvitationData, namespacesCancelNamespaceInvitationErrors, namespacesCancelNamespaceInvitationResponses, namespacesCreateNamespaceData, namespacesCreateNamespaceErrors, namespacesCreateNamespaceResponses, namespacesDeleteNamespaceData, namespacesDeleteNamespaceErrors, namespacesDeleteNamespaceResponses, namespacesReadNamespaceBySlugData, namespacesReadNamespaceBySlugErrors, namespacesReadNamespaceBySlugResponses, namespacesReadNamespaceData, namespacesReadNamespaceErrors, namespacesReadNamespaceInvitationsData, namespacesReadNamespaceInvitationsErrors, namespacesReadNamespaceInvitationsResponses, namespacesReadNamespaceMembersData, namespacesReadNamespaceMembersErrors, namespacesReadNamespaceMembersResponses, namespacesReadNamespaceResponses, namespacesReadNamespacesData, namespacesReadNamespacesResponses, namespacesReadNamespaceTreeData, namespacesReadNamespaceTreeErrors, namespacesReadNamespaceTreeResponses, namespacesRemoveNamespaceMemberData, namespacesRemoveNamespaceMemberErrors, namespacesRemoveNamespaceMemberResponses, namespacesUpdateNamespaceData, namespacesUpdateNamespaceErrors, namespacesUpdateNamespaceMemberData, namespacesUpdateNamespaceMemberErrors, namespacesUpdateNamespaceMemberResponses, namespacesUpdateNamespaceResponses, notesCreateNoteData, notesCreateNoteErrors, notesCreateNoteResponses, notesDeleteNoteData, notesDeleteNoteErrors, notesDeleteNoteResponses, notesReadNotesData, notesReadNotesErrors, notesReadNotesResponses, notesUpdateNoteData, notesUpdateNoteErrors, notesUpdateNoteResponses, privateCreateUserData, privateCreateUserErrors, privateCreateUserResponses, privateReadEmailsData, privateReadEmailsErrors, privateReadEmailsResponses, publicReadInvitationData, publicReadInvitationErrors, publicReadInvitationResponses, publicReadPublicAttachmentData, publicReadPublicAttachmentErrors, publicReadPublicAttachmentResponses, publicReadPublicDocumentData, publicReadPublicDocumentErrors, publicReadPublicDocumentResponses, publicUnsubscribeData, publicUnsubscribeErrors, publicUnsubscribeResponses, searchReadSearchSuggestionsData, searchReadSearchSuggestionsErrors, searchReadSearchSuggestionsResponses, searchRetrieveDocumentsData, searchRetrieveDocumentsErrors, searchRetrieveDocumentsResponses, searchSearchDocumentsData, searchSearchDocumentsErrors, searchSearchDocumentsResponses, usageReadMyCreditsData, usageReadMyCreditsResponses, usageReadMyUsageData, usageReadMyUsageErrors, usageReadMyUsageResponses, userNotesArchiveNoteData, userNotesArchiveNoteErrors, userNotesArchiveNoteResponses, userNotesCancelReminderData, userNotesCancelReminderErrors, userNotesCancelReminderResponses, userNotesCloneNoteData, userNotesCloneNoteErrors, userNotesCloneNoteResponses, userNotesCreateNoteData, userNotesCreateNoteErrors, userNotesCreateNoteResponses, userNotesCreateTagData, userNotesCreateTagErrors, userNotesCreateTagResponses, userNotesDeleteNoteAssetData, userNotesDeleteNoteAssetErrors, userNotesDeleteNoteAssetResponses, userNotesDeleteNoteData, userNotesDeleteNoteErrors, userNotesDeleteNoteResponses, userNotesDeleteTagData, userNotesDeleteTagErrors, userNotesDeleteTagResponses, userNotesDownloadNoteAssetData, userNotesDownloadNoteAssetErrors, userNotesDownloadNoteAssetResponses, userNotesMoveNoteData, userNotesMoveNoteErrors, userNotesMoveNoteResponses, userNotesPinNoteData, userNotesPinNoteErrors, userNotesPinNoteResponses, userNotesReadNoteAssetsData, userNotesReadNoteAssetsErrors, userNotesReadNoteAssetsResponses, userNotesReadNoteData, userNotesReadNoteErrors, userNotesReadNoteResponses, userNotesReadNotesData, userNotesReadNotesErrors, userNotesReadNotesResponses, userNotesReadReminderData, userNotesReadReminderErrors, userNotesReadReminderResponses, userNotesReadTagsData, userNotesReadTagsResponses, userNotesReadVoiceSettingsData, userNotesReadVoiceSettingsResponses, userNotesSearchNotesData, userNotesSearchNotesErrors, userNotesSearchNotesResponses, userNotesSetReminderData, userNotesSetReminderErrors, userNotesSetReminderResponses, userNotesTranscribeData, userNotesTranscribeErrors, userNotesTranscribeResponses, userNotesUnarchiveNoteData, userNotesUnarchiveNoteErrors, userNotesUnarchiveNoteResponses, userNotesUnpinNoteData, userNotesUnpinNoteErrors, userNotesUnpinNoteResponses, userNotesUpdateNoteData, userNotesUpdateNoteErrors, userNotesUpdateNoteResponses, userNotesUpdateTagData, userNotesUpdateTagErrors, userNotesUpdateTagResponses, userNotesUploadNoteAssetData, userNotesUploadNoteAssetErrors, userNotesUploadNoteAssetResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersDeleteUserData, usersDeleteUserErrors, usersDeleteUserMeData, usersDeleteUserMeResponses, usersDeleteUserResponses, usersLookupUserData, usersLookupUserErrors, usersLookupUserResponses, usersReadUserByIdData, usersReadUserByIdErrors, usersReadUserByIdResponses, usersReadUserMeData, usersReadUserMeResponses, usersReadUsersData, usersReadUsersErrors, usersReadUsersResponses, usersRegisterUserData, usersRegisterUserErrors, usersRegisterUserResponses, usersUpdatePasswordMeData, usersUpdatePasswordMeErrors, usersUpdatePasswordMeResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserMeData, usersUpdateUserMeErrors, usersUpdateUserMeResponses, usersUpdateUserResponses, utilsHealthCheckData, utilsHealthCheckResponses, workersReadWorkersData, workersReadWorkersResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -2595,6 +2595,244 @@ export class AdminCreditsService {
     }
 }
 
+export class AdminMarketingService {
+    /**
+     * Read Marketing Settings
+     *
+     * The addresses that may be sent from, and how big the list is.
+     *
+     * The from-addresses are a setting rather than free text because each one has
+     * to be a verified SES identity; an unverified sender fails every message in
+     * the campaign, one at a time, for eleven minutes.
+     */
+    public static readMarketingSettings<ThrowOnError extends boolean = true>(options?: Options<adminMarketingReadMarketingSettingsData, ThrowOnError>) {
+        return (options?.client ?? client).get<adminMarketingReadMarketingSettingsResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/settings',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Default Template
+     *
+     * A starting point for a new campaign, not a fixed message.
+     */
+    public static readDefaultTemplate<ThrowOnError extends boolean = true>(options?: Options<adminMarketingReadDefaultTemplateData, ThrowOnError>) {
+        return (options?.client ?? client).get<adminMarketingReadDefaultTemplateResponses, unknown, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/template',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Contacts
+     *
+     * The list, newest first, filtered the way the screen filters it.
+     */
+    public static readContacts<ThrowOnError extends boolean = true>(options?: Options<adminMarketingReadContactsData, ThrowOnError>) {
+        return (options?.client ?? client).get<adminMarketingReadContactsResponses, adminMarketingReadContactsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/contacts',
+            ...options
+        });
+    }
+    
+    /**
+     * Create Contact
+     */
+    public static createContact<ThrowOnError extends boolean = true>(options: Options<adminMarketingCreateContactData, ThrowOnError>) {
+        return (options.client ?? client).post<adminMarketingCreateContactResponses, adminMarketingCreateContactErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/contacts',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read Contact Ids
+     *
+     * Every id matching the current filter, for "select all".
+     *
+     * Selecting all has to mean everybody, not everybody on this page. The
+     * alternative is a flag on the create call that the server reinterprets, and
+     * then the count in the interface and the count that is sent can disagree.
+     */
+    public static readContactIds<ThrowOnError extends boolean = true>(options?: Options<adminMarketingReadContactIdsData, ThrowOnError>) {
+        return (options?.client ?? client).get<adminMarketingReadContactIdsResponses, adminMarketingReadContactIdsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/contacts/ids',
+            ...options
+        });
+    }
+    
+    /**
+     * Import Contacts
+     *
+     * Upload a list.
+     *
+     * An upload rather than a script reading a checked-in file, because a list of
+     * several hundred real addresses is not something a repository should carry.
+     * Reports every row it could not use instead of refusing the file over one.
+     */
+    public static importContacts<ThrowOnError extends boolean = true>(options: Options<adminMarketingImportContactsData, ThrowOnError>) {
+        return (options.client ?? client).post<adminMarketingImportContactsResponses, adminMarketingImportContactsErrors, ThrowOnError>({
+            ...formDataBodySerializer,
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/contacts/import',
+            ...options,
+            headers: {
+                'Content-Type': null,
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete Contact
+     *
+     * Remove an address entirely.
+     *
+     * Not the same as unsubscribing, and the difference matters: a deleted
+     * address can be imported again tomorrow, an unsubscribed one cannot. Use
+     * this for a typo, never for somebody who asked to be left alone.
+     */
+    public static deleteContact<ThrowOnError extends boolean = true>(options: Options<adminMarketingDeleteContactData, ThrowOnError>) {
+        return (options.client ?? client).delete<adminMarketingDeleteContactResponses, adminMarketingDeleteContactErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/contacts/{contact_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Unsubscribe Contact
+     *
+     * Unsubscribe somebody who asked by replying rather than by clicking.
+     */
+    public static unsubscribeContact<ThrowOnError extends boolean = true>(options: Options<adminMarketingUnsubscribeContactData, ThrowOnError>) {
+        return (options.client ?? client).post<adminMarketingUnsubscribeContactResponses, adminMarketingUnsubscribeContactErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/contacts/{contact_id}/unsubscribe',
+            ...options
+        });
+    }
+    
+    /**
+     * Preview Campaign
+     *
+     * One person's copy of what is currently in the composer.
+     *
+     * Rendered by the same function that sends it, so the preview is the message
+     * rather than an approximation of it. Given nobody in particular, it uses a
+     * stand-in so the greeting is still visible.
+     */
+    public static previewCampaign<ThrowOnError extends boolean = true>(options: Options<adminMarketingPreviewCampaignData, ThrowOnError>) {
+        return (options.client ?? client).post<adminMarketingPreviewCampaignResponses, adminMarketingPreviewCampaignErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/preview',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read Campaigns
+     */
+    public static readCampaigns<ThrowOnError extends boolean = true>(options?: Options<adminMarketingReadCampaignsData, ThrowOnError>) {
+        return (options?.client ?? client).get<adminMarketingReadCampaignsResponses, adminMarketingReadCampaignsErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/campaigns',
+            ...options
+        });
+    }
+    
+    /**
+     * Create Campaign
+     *
+     * Write the campaign and every delivery, then let the worker send them.
+     *
+     * The deliveries are stamped a second apart here rather than paced by the
+     * sender: the schedule is then a fact in the database, so it survives a
+     * restart, a half-sent campaign resumes where it stopped, and nothing
+     * anywhere has to sleep.
+     */
+    public static createCampaign<ThrowOnError extends boolean = true>(options: Options<adminMarketingCreateCampaignData, ThrowOnError>) {
+        return (options.client ?? client).post<adminMarketingCreateCampaignResponses, adminMarketingCreateCampaignErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/campaigns',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read Campaign
+     */
+    public static readCampaign<ThrowOnError extends boolean = true>(options: Options<adminMarketingReadCampaignData, ThrowOnError>) {
+        return (options.client ?? client).get<adminMarketingReadCampaignResponses, adminMarketingReadCampaignErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/campaigns/{campaign_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Read Deliveries
+     *
+     * What happened to each address. Sent first, because that is the progress.
+     */
+    public static readDeliveries<ThrowOnError extends boolean = true>(options: Options<adminMarketingReadDeliveriesData, ThrowOnError>) {
+        return (options.client ?? client).get<adminMarketingReadDeliveriesResponses, adminMarketingReadDeliveriesErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/campaigns/{campaign_id}/deliveries',
+            ...options
+        });
+    }
+    
+    /**
+     * Cancel Campaign
+     *
+     * Stop the rest of it.
+     *
+     * Everything already sent stays sent; there is no unsending. What this buys
+     * is that the remaining messages never go, and the claim loop confirms that
+     * for every row it picks up rather than trusting this to have raced ahead.
+     */
+    public static cancelCampaign<ThrowOnError extends boolean = true>(options: Options<adminMarketingCancelCampaignData, ThrowOnError>) {
+        return (options.client ?? client).post<adminMarketingCancelCampaignResponses, adminMarketingCancelCampaignErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }, { scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/admin/marketing/campaigns/{campaign_id}/cancel',
+            ...options
+        });
+    }
+}
+
 export class AdminUsageService {
     /**
      * Read Usage Summary
@@ -2798,6 +3036,31 @@ export class PublicService {
         return (options.client ?? client).get<publicReadInvitationResponses, publicReadInvitationErrors, ThrowOnError>({
             responseType: 'json',
             url: '/api/v1/public/invitations/{token}',
+            ...options
+        });
+    }
+    
+    /**
+     * Unsubscribe
+     *
+     * Stop emailing whoever holds this token.
+     *
+     * **A POST, and the reason is not REST tidiness.** Outlook Safe Links, Gmail's
+     * proxy and most corporate scanners fetch every URL in a message before a
+     * human sees it. A `GET` that acted would therefore unsubscribe a large part
+     * of any list within minutes of sending to it, and the first anybody would
+     * know is an empty campaign. The page at `/unsubscribe/{token}` issues this
+     * from the browser instead, so a scanner reading the HTML changes nothing and
+     * a person still only has to click once.
+     *
+     * Unsubscribing twice succeeds. Somebody who clicks the link in two different
+     * messages has not made a mistake, and an error is the worst possible reply
+     * at that particular moment.
+     */
+    public static unsubscribe<ThrowOnError extends boolean = true>(options: Options<publicUnsubscribeData, ThrowOnError>) {
+        return (options.client ?? client).post<publicUnsubscribeResponses, publicUnsubscribeErrors, ThrowOnError>({
+            responseType: 'json',
+            url: '/api/v1/public/marketing/unsubscribe/{token}',
             ...options
         });
     }

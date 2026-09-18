@@ -840,6 +840,16 @@ export type AvailableChannelsPublic = {
 };
 
 /**
+ * Body_admin_marketing-import_contacts
+ */
+export type Body_admin_marketing_import_contacts = {
+    /**
+     * File
+     */
+    file: Blob | File;
+};
+
+/**
  * Body_attachments-upload_attachment
  */
 export type Body_attachments_upload_attachment = {
@@ -988,6 +998,146 @@ export type Body_user_notes_upload_note_asset = {
 };
 
 /**
+ * CampaignCreate
+ */
+export type CampaignCreate = {
+    /**
+     * Name
+     */
+    name?: string;
+    /**
+     * From Email
+     */
+    from_email: string;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Body Html
+     */
+    body_html: string;
+    /**
+     * Contact Ids
+     */
+    contact_ids?: Array<string>;
+    /**
+     * All Subscribed
+     */
+    all_subscribed?: boolean;
+};
+
+/**
+ * CampaignPreview
+ */
+export type CampaignPreview = {
+    /**
+     * To Email
+     */
+    to_email: string;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Html
+     */
+    html: string;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * CampaignPreviewRequest
+ */
+export type CampaignPreviewRequest = {
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Body Html
+     */
+    body_html: string;
+    /**
+     * Contact Id
+     */
+    contact_id?: string | null;
+};
+
+/**
+ * CampaignPublic
+ */
+export type CampaignPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * From Email
+     */
+    from_email: string;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Body Html
+     */
+    body_html: string;
+    status: CampaignStatus;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Sent Count
+     */
+    sent_count: number;
+    /**
+     * Failed Count
+     */
+    failed_count: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Started At
+     */
+    started_at?: string | null;
+    /**
+     * Finished At
+     */
+    finished_at?: string | null;
+};
+
+/**
+ * CampaignStatus
+ */
+export type CampaignStatus = 'draft' | 'sending' | 'sent' | 'cancelled';
+
+/**
+ * CampaignsPublic
+ */
+export type CampaignsPublic = {
+    /**
+     * Data
+     */
+    data: Array<CampaignPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * CapturedEmail
  *
  * A message the logging sender kept instead of sending.
@@ -1129,6 +1279,37 @@ export type ChannelLinkCodePublic = {
  * ChannelType
  */
 export type ChannelType = 'whatsapp' | 'telegram' | 'slack' | 'discord';
+
+/**
+ * ContactImportResult
+ *
+ * What an uploaded file turned into, address by address.
+ *
+ * The same shape sharing already uses for a batch of addresses: a count of
+ * what landed, and every one that did not with the reason why. An import that
+ * silently drops a row is an import nobody can trust.
+ */
+export type ContactImportResult = {
+    /**
+     * Added
+     */
+    added?: number;
+    /**
+     * Already Present
+     */
+    already_present?: number;
+    /**
+     * Skipped
+     */
+    skipped?: Array<ShareSkipped>;
+};
+
+/**
+ * ContactSource
+ *
+ * How an address came to be on the list. Kept because it decides tone.
+ */
+export type ContactSource = 'import' | 'signup' | 'manual';
 
 /**
  * ContentFormat
@@ -1349,6 +1530,56 @@ export type DataSourcesPublic = {
      */
     data: Array<DataSourcePublic>;
 };
+
+/**
+ * DeliveriesPublic
+ */
+export type DeliveriesPublic = {
+    /**
+     * Data
+     */
+    data: Array<DeliveryPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * DeliveryPublic
+ */
+export type DeliveryPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * To Email
+     */
+    to_email: string;
+    status: DeliveryStatus;
+    /**
+     * Send After
+     */
+    send_after: string;
+    /**
+     * Sent At
+     */
+    sent_at?: string | null;
+    /**
+     * Attempts
+     */
+    attempts?: number;
+    /**
+     * Error
+     */
+    error?: string | null;
+};
+
+/**
+ * DeliveryStatus
+ */
+export type DeliveryStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 
 /**
  * DocumentChunkPublic
@@ -2704,6 +2935,85 @@ export type LoginChallenge = {
      * Delivered
      */
     delivered?: boolean;
+};
+
+/**
+ * MarketingContactCreate
+ */
+export type MarketingContactCreate = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Name
+     */
+    name?: string;
+};
+
+/**
+ * MarketingContactPublic
+ */
+export type MarketingContactPublic = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Name
+     */
+    name: string;
+    source: ContactSource;
+    /**
+     * Subscribed
+     */
+    subscribed: boolean;
+    /**
+     * Unsubscribed At
+     */
+    unsubscribed_at?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * MarketingContactsPublic
+ */
+export type MarketingContactsPublic = {
+    /**
+     * Data
+     */
+    data: Array<MarketingContactPublic>;
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * MarketingSettings
+ *
+ * What the composer needs before it can be drawn.
+ */
+export type MarketingSettings = {
+    /**
+     * From Addresses
+     */
+    from_addresses: Array<string>;
+    /**
+     * Contacts
+     */
+    contacts: number;
+    /**
+     * Subscribed
+     */
+    subscribed: number;
 };
 
 /**
@@ -9204,6 +9514,409 @@ export type adminCreditsDeleteGrantResponses = {
 
 export type adminCreditsDeleteGrantResponse = adminCreditsDeleteGrantResponses[keyof adminCreditsDeleteGrantResponses];
 
+export type adminMarketingReadMarketingSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/marketing/settings';
+};
+
+export type adminMarketingReadMarketingSettingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarketingSettings;
+};
+
+export type adminMarketingReadMarketingSettingsResponse = adminMarketingReadMarketingSettingsResponses[keyof adminMarketingReadMarketingSettingsResponses];
+
+export type adminMarketingReadDefaultTemplateData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/marketing/template';
+};
+
+export type adminMarketingReadDefaultTemplateResponses = {
+    /**
+     * Successful Response
+     */
+    200: CampaignPreviewRequest;
+};
+
+export type adminMarketingReadDefaultTemplateResponse = adminMarketingReadDefaultTemplateResponses[keyof adminMarketingReadDefaultTemplateResponses];
+
+export type adminMarketingReadContactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Subscribed
+         */
+        subscribed?: boolean | null;
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/marketing/contacts';
+};
+
+export type adminMarketingReadContactsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingReadContactsError = adminMarketingReadContactsErrors[keyof adminMarketingReadContactsErrors];
+
+export type adminMarketingReadContactsResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarketingContactsPublic;
+};
+
+export type adminMarketingReadContactsResponse = adminMarketingReadContactsResponses[keyof adminMarketingReadContactsResponses];
+
+export type adminMarketingCreateContactData = {
+    body: MarketingContactCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/marketing/contacts';
+};
+
+export type adminMarketingCreateContactErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingCreateContactError = adminMarketingCreateContactErrors[keyof adminMarketingCreateContactErrors];
+
+export type adminMarketingCreateContactResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarketingContactPublic;
+};
+
+export type adminMarketingCreateContactResponse = adminMarketingCreateContactResponses[keyof adminMarketingCreateContactResponses];
+
+export type adminMarketingReadContactIdsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Subscribed
+         */
+        subscribed?: boolean | null;
+    };
+    url: '/api/v1/admin/marketing/contacts/ids';
+};
+
+export type adminMarketingReadContactIdsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingReadContactIdsError = adminMarketingReadContactIdsErrors[keyof adminMarketingReadContactIdsErrors];
+
+export type adminMarketingReadContactIdsResponses = {
+    /**
+     * Response Admin Marketing-Read Contact Ids
+     *
+     * Successful Response
+     */
+    200: Array<string>;
+};
+
+export type adminMarketingReadContactIdsResponse = adminMarketingReadContactIdsResponses[keyof adminMarketingReadContactIdsResponses];
+
+export type adminMarketingImportContactsData = {
+    body: Body_admin_marketing_import_contacts;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/marketing/contacts/import';
+};
+
+export type adminMarketingImportContactsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingImportContactsError = adminMarketingImportContactsErrors[keyof adminMarketingImportContactsErrors];
+
+export type adminMarketingImportContactsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ContactImportResult;
+};
+
+export type adminMarketingImportContactsResponse = adminMarketingImportContactsResponses[keyof adminMarketingImportContactsResponses];
+
+export type adminMarketingDeleteContactData = {
+    body?: never;
+    path: {
+        /**
+         * Contact Id
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/marketing/contacts/{contact_id}';
+};
+
+export type adminMarketingDeleteContactErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingDeleteContactError = adminMarketingDeleteContactErrors[keyof adminMarketingDeleteContactErrors];
+
+export type adminMarketingDeleteContactResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type adminMarketingDeleteContactResponse = adminMarketingDeleteContactResponses[keyof adminMarketingDeleteContactResponses];
+
+export type adminMarketingUnsubscribeContactData = {
+    body?: never;
+    path: {
+        /**
+         * Contact Id
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/marketing/contacts/{contact_id}/unsubscribe';
+};
+
+export type adminMarketingUnsubscribeContactErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingUnsubscribeContactError = adminMarketingUnsubscribeContactErrors[keyof adminMarketingUnsubscribeContactErrors];
+
+export type adminMarketingUnsubscribeContactResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarketingContactPublic;
+};
+
+export type adminMarketingUnsubscribeContactResponse = adminMarketingUnsubscribeContactResponses[keyof adminMarketingUnsubscribeContactResponses];
+
+export type adminMarketingPreviewCampaignData = {
+    body: CampaignPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/marketing/preview';
+};
+
+export type adminMarketingPreviewCampaignErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingPreviewCampaignError = adminMarketingPreviewCampaignErrors[keyof adminMarketingPreviewCampaignErrors];
+
+export type adminMarketingPreviewCampaignResponses = {
+    /**
+     * Successful Response
+     */
+    200: CampaignPreview;
+};
+
+export type adminMarketingPreviewCampaignResponse = adminMarketingPreviewCampaignResponses[keyof adminMarketingPreviewCampaignResponses];
+
+export type adminMarketingReadCampaignsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/marketing/campaigns';
+};
+
+export type adminMarketingReadCampaignsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingReadCampaignsError = adminMarketingReadCampaignsErrors[keyof adminMarketingReadCampaignsErrors];
+
+export type adminMarketingReadCampaignsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CampaignsPublic;
+};
+
+export type adminMarketingReadCampaignsResponse = adminMarketingReadCampaignsResponses[keyof adminMarketingReadCampaignsResponses];
+
+export type adminMarketingCreateCampaignData = {
+    body: CampaignCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/marketing/campaigns';
+};
+
+export type adminMarketingCreateCampaignErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingCreateCampaignError = adminMarketingCreateCampaignErrors[keyof adminMarketingCreateCampaignErrors];
+
+export type adminMarketingCreateCampaignResponses = {
+    /**
+     * Successful Response
+     */
+    200: CampaignPublic;
+};
+
+export type adminMarketingCreateCampaignResponse = adminMarketingCreateCampaignResponses[keyof adminMarketingCreateCampaignResponses];
+
+export type adminMarketingReadCampaignData = {
+    body?: never;
+    path: {
+        /**
+         * Campaign Id
+         */
+        campaign_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/marketing/campaigns/{campaign_id}';
+};
+
+export type adminMarketingReadCampaignErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingReadCampaignError = adminMarketingReadCampaignErrors[keyof adminMarketingReadCampaignErrors];
+
+export type adminMarketingReadCampaignResponses = {
+    /**
+     * Successful Response
+     */
+    200: CampaignPublic;
+};
+
+export type adminMarketingReadCampaignResponse = adminMarketingReadCampaignResponses[keyof adminMarketingReadCampaignResponses];
+
+export type adminMarketingReadDeliveriesData = {
+    body?: never;
+    path: {
+        /**
+         * Campaign Id
+         */
+        campaign_id: string;
+    };
+    query?: {
+        /**
+         * Status
+         */
+        status?: DeliveryStatus | null;
+        /**
+         * Skip
+         */
+        skip?: number;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/marketing/campaigns/{campaign_id}/deliveries';
+};
+
+export type adminMarketingReadDeliveriesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingReadDeliveriesError = adminMarketingReadDeliveriesErrors[keyof adminMarketingReadDeliveriesErrors];
+
+export type adminMarketingReadDeliveriesResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeliveriesPublic;
+};
+
+export type adminMarketingReadDeliveriesResponse = adminMarketingReadDeliveriesResponses[keyof adminMarketingReadDeliveriesResponses];
+
+export type adminMarketingCancelCampaignData = {
+    body?: never;
+    path: {
+        /**
+         * Campaign Id
+         */
+        campaign_id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/marketing/campaigns/{campaign_id}/cancel';
+};
+
+export type adminMarketingCancelCampaignErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type adminMarketingCancelCampaignError = adminMarketingCancelCampaignErrors[keyof adminMarketingCancelCampaignErrors];
+
+export type adminMarketingCancelCampaignResponses = {
+    /**
+     * Successful Response
+     */
+    200: CampaignPublic;
+};
+
+export type adminMarketingCancelCampaignResponse = adminMarketingCancelCampaignResponses[keyof adminMarketingCancelCampaignResponses];
+
 export type adminUsageReadUsageSummaryData = {
     body?: never;
     path?: never;
@@ -9599,6 +10312,36 @@ export type publicReadInvitationResponses = {
 };
 
 export type publicReadInvitationResponse = publicReadInvitationResponses[keyof publicReadInvitationResponses];
+
+export type publicUnsubscribeData = {
+    body?: never;
+    path: {
+        /**
+         * Token
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/api/v1/public/marketing/unsubscribe/{token}';
+};
+
+export type publicUnsubscribeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type publicUnsubscribeError = publicUnsubscribeErrors[keyof publicUnsubscribeErrors];
+
+export type publicUnsubscribeResponses = {
+    /**
+     * Successful Response
+     */
+    200: Message;
+};
+
+export type publicUnsubscribeResponse = publicUnsubscribeResponses[keyof publicUnsubscribeResponses];
 
 export type privateCreateUserData = {
     body: PrivateUserCreate;

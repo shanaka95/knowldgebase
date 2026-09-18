@@ -20,7 +20,9 @@ from app.core.config import settings
 from app.core.db import engine
 from app.models import (
     Attachment,
+    CampaignStatus,
     CleanupTask,
+    DeliveryStatus,
     Document,
     DocumentChunk,
     EmbeddingJob,
@@ -31,6 +33,9 @@ from app.models import (
     ImportStatus,
     JobStage,
     JobStatus,
+    MarketingCampaign,
+    MarketingContact,
+    MarketingDelivery,
     Note,
     NoteAsset,
     NoteChunk,
@@ -1508,3 +1513,183 @@ def fail_reminder(
                 )
             session.add(reminder)
         session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Marketing campaigns
+#
+# The same shape as reminders, for the same reason: claim, write, commit, then
+# send. What differs is the pacing, and it is not in this file at all - each
+# delivery carries a `send_after` one second later than the one before it, so
+# exactly one row becomes due per second and the rate is a property of the
+# data. A worker that was down for an hour therefore resumes at one a second
+# rather than emptying an hour of backlog into somebody's inbox.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class MarketingSend:
+    """One message about to go out, detached from its session."""
+
+    delivery_id: uuid.UUID
+    campaign_id: uuid.UUID
+    contact_id: uuid.UUID
+    to_email: str
+    from_email: str
+    subject: str
+    body_html: str
+    name: str
+    unsubscribe_token: str
+
+
+def claim_marketing_sends(limit: int) -> list[MarketingSend]:
+    """Take what is due, lease it, and commit - before anything is sent.
+
+    The unique key on (campaign, contact) means two workers claiming the same
+    row still produce one message, and a crash between this commit and the send
+    loses that message rather than repeating it. A duplicate marketing email is
+    the one people remember, and it is charged against the sending domain.
+    """
+    if limit <= 0:
+        return []
+    now = _now()
+    out: list[MarketingSend] = []
+    with Session(engine) as session:
+        rows = (
+            session.connection()
+            .execute(
+                text(
+                    """
+                SELECT id FROM marketingdelivery
+                WHERE status = 'pending'
+                  AND send_after <= :now
+                  AND (locked_until IS NULL OR locked_until <= :now)
+                ORDER BY send_after
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED
+                """
+                ),
+                {"now": now, "limit": limit},
+            )
+            .all()
+        )
+        ids = [r[0] for r in rows]
+        if not ids:
+            return []
+
+        deliveries = session.exec(
+            select(MarketingDelivery).where(col(MarketingDelivery.id).in_(ids))
+        ).all()
+        for delivery in deliveries:
+            campaign = session.get(MarketingCampaign, delivery.campaign_id)
+            contact = session.get(MarketingContact, delivery.contact_id)
+
+            # A campaign somebody stopped, and a person who unsubscribed while
+            # it was running. Both are the same answer: do not send, and say
+            # why on the row rather than leaving it pending for ever.
+            reason = None
+            if campaign is None or contact is None:
+                reason = "the campaign or the contact is gone"
+            elif campaign.status == CampaignStatus.cancelled:
+                reason = "the campaign was cancelled"
+            elif contact.unsubscribed_at is not None:
+                reason = "unsubscribed"
+            if reason is not None:
+                delivery.status = DeliveryStatus.skipped
+                delivery.error = reason
+                delivery.locked_until = None
+                session.add(delivery)
+                continue
+
+            assert campaign is not None and contact is not None
+            delivery.locked_until = now + timedelta(minutes=5)
+            session.add(delivery)
+            out.append(
+                MarketingSend(
+                    delivery_id=delivery.id,
+                    campaign_id=campaign.id,
+                    contact_id=contact.id,
+                    to_email=delivery.to_email,
+                    from_email=campaign.from_email,
+                    subject=campaign.subject,
+                    body_html=campaign.body_html,
+                    name=contact.name,
+                    unsubscribe_token=contact.unsubscribe_token,
+                )
+            )
+        session.commit()
+    return out
+
+
+def complete_marketing_send(delivery_id: uuid.UUID, campaign_id: uuid.UUID) -> None:
+    """Mark one sent, and close the campaign when it was the last."""
+    with Session(engine) as session:
+        delivery = session.get(MarketingDelivery, delivery_id)
+        if delivery is not None and delivery.status != DeliveryStatus.sent:
+            delivery.status = DeliveryStatus.sent
+            delivery.sent_at = _now()
+            delivery.locked_until = None
+            delivery.error = None
+            session.add(delivery)
+        _refresh_campaign(session, campaign_id)
+        session.commit()
+
+
+def fail_marketing_send(
+    delivery_id: uuid.UUID, campaign_id: uuid.UUID, error: str
+) -> None:
+    """Back off, and give up after enough tries - with the reason kept.
+
+    Linear rather than exponential: the failures worth retrying here are a
+    throttle or a blip, both of which clear in seconds, and a marketing send
+    that takes an hour to retry has missed the moment anyway.
+    """
+    with Session(engine) as session:
+        delivery = session.get(MarketingDelivery, delivery_id)
+        if delivery is not None:
+            delivery.attempts += 1
+            delivery.error = error[:2000]
+            delivery.locked_until = None
+            if delivery.attempts >= settings.MARKETING_MAX_ATTEMPTS:
+                delivery.status = DeliveryStatus.failed
+            else:
+                delivery.send_after = _now() + timedelta(seconds=30 * delivery.attempts)
+            session.add(delivery)
+        _refresh_campaign(session, campaign_id)
+        session.commit()
+
+
+def _refresh_campaign(session: Session, campaign_id: uuid.UUID) -> None:
+    """Recount the campaign from its deliveries, which are the truth.
+
+    Counted rather than incremented, because an increment that runs twice after
+    a retry is a number nobody can explain later.
+    """
+    campaign = session.get(MarketingCampaign, campaign_id)
+    if campaign is None:
+        return
+    rows = session.exec(
+        select(MarketingDelivery.status, func.count())
+        .where(MarketingDelivery.campaign_id == campaign_id)
+        .group_by(col(MarketingDelivery.status))
+    ).all()
+    counts = {str(status): int(n) for status, n in rows}
+    campaign.sent_count = counts.get(DeliveryStatus.sent, 0)
+    campaign.failed_count = counts.get(DeliveryStatus.failed, 0)
+    pending = counts.get(DeliveryStatus.pending, 0)
+    if pending == 0 and campaign.status == CampaignStatus.sending:
+        campaign.status = CampaignStatus.sent
+        campaign.finished_at = _now()
+    session.add(campaign)
+
+
+def marketing_queue_depth() -> int:
+    """How many messages are still waiting, across every campaign."""
+    with Session(engine) as session:
+        return int(
+            session.exec(
+                select(func.count())
+                .select_from(MarketingDelivery)
+                .where(MarketingDelivery.status == DeliveryStatus.pending)
+            ).one()
+        )

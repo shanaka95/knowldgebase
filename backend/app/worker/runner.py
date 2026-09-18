@@ -13,10 +13,11 @@ from collections.abc import Coroutine
 from typing import Any
 
 from app.core.config import settings
-from app.models import CleanupKind, CleanupTask
-from app.services.email import get_email_sender, note_reminder_email
+from app.models import CleanupKind, CleanupTask, MarketingContact
+from app.services.email import Email, get_email_sender, note_reminder_email
 from app.services.embeddings import EmbeddingClient
 from app.services.llm import LLMClient, LLMTask
+from app.services.marketing import render_for
 from app.services.sharing import note_url
 from app.services.storage import MinioStorage, ObjectStorage
 from app.services.vectors import QdrantStore, VectorStore
@@ -217,6 +218,60 @@ class Worker:
                     str(exc),
                 )
 
+    async def _process_marketing(self, limit: int | None = None) -> None:
+        """Send whatever is due, which by construction is about one message.
+
+        The pacing is not here. Each delivery carries a `send_after` one second
+        after the one before it, so only one row is ever due, and the limit
+        exists so that a worker returning from an outage does not deliver an
+        hour of backlog at once - which is what would make a polite invitation
+        look like a blast.
+
+        After reminders and last in the tick, on the same argument: `tick` has
+        no try of its own, and nothing in a marketing campaign is worth
+        starving the indexing queue for. One bad address fails its own row.
+        """
+        due = await asyncio.to_thread(
+            queue.claim_marketing_sends, limit or settings.MARKETING_SEND_PER_TICK
+        )
+        for item in due:
+            try:
+                rendered = render_for(
+                    MarketingContact(
+                        email=item.to_email,
+                        name=item.name,
+                        unsubscribe_token=item.unsubscribe_token,
+                    ),
+                    subject=item.subject,
+                    body_html=item.body_html,
+                )
+                await get_email_sender().send_marketing(
+                    Email(
+                        to=rendered.to,
+                        subject=rendered.subject,
+                        text=rendered.text,
+                        html=rendered.html,
+                    ),
+                    from_email=item.from_email,
+                    unsubscribe_url=rendered.unsubscribe_url,
+                )
+                await asyncio.to_thread(
+                    queue.complete_marketing_send, item.delivery_id, item.campaign_id
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "campaign %s: %s failed: %s",
+                    str(item.campaign_id)[:8],
+                    item.to_email,
+                    exc,
+                )
+                await asyncio.to_thread(
+                    queue.fail_marketing_send,
+                    item.delivery_id,
+                    item.campaign_id,
+                    str(exc),
+                )
+
     async def _run_cleanup(self, task: CleanupTask) -> None:
         if task.kind == CleanupKind.qdrant_document:
             await self.vectors.delete_document(
@@ -305,6 +360,7 @@ class Worker:
 
         await self._process_cleanup_tasks()
         await self._process_reminders()
+        await self._process_marketing()
         return started
 
     # -------------------------------------------------------------------- run

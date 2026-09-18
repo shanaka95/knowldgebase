@@ -4,6 +4,7 @@ from app.api.routes import (
     admin_channels,
     admin_credits,
     admin_data_sources,
+    admin_marketing,
     admin_usage,
     admin_user_groups,
     admin_users,
@@ -55,6 +56,7 @@ api_router.include_router(admin_channels.router)
 api_router.include_router(admin_data_sources.router)
 api_router.include_router(admin_user_groups.router)
 api_router.include_router(admin_credits.router)
+api_router.include_router(admin_marketing.router)
 api_router.include_router(admin_usage.router)
 api_router.include_router(admin_users.router)
 # Machine-to-machine, both of them. The gateway shards authenticate with a

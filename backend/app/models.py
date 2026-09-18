@@ -3402,3 +3402,278 @@ class VoiceSettings(SQLModel):
     max_seconds: int
     max_upload_mb: int
     credits_per_minute: float
+
+
+# ---------------------------------------------------------------------------
+# Marketing
+#
+# Everything else this application sends is transactional: somebody asked for
+# it, it goes to one person, and it needs no unsubscribe link because nobody
+# subscribed. Bulk mail is a different thing with different obligations, and
+# these three tables are that difference.
+# ---------------------------------------------------------------------------
+
+
+class ContactSource(StrEnum):
+    """How an address came to be on the list. Kept because it decides tone."""
+
+    imported = "import"
+    signup = "signup"
+    manual = "manual"
+
+
+class CampaignStatus(StrEnum):
+    draft = "draft"
+    sending = "sending"
+    sent = "sent"
+    cancelled = "cancelled"
+
+
+class DeliveryStatus(StrEnum):
+    pending = "pending"
+    sent = "sent"
+    failed = "failed"
+    # Not sent, and not a failure: the person unsubscribed after the campaign
+    # started, or their address stopped being one.
+    skipped = "skipped"
+
+
+class MarketingContact(SQLModel, table=True):
+    """An address we may write to. Not an account, and deliberately not a `User`.
+
+    Putting these in `user` was the obvious idea and it does not survive contact
+    with the code. `users.register_user` treats an existing unverified row as
+    somebody registering a second time and merely re-sends verification, so a
+    contact row - which has no password anybody knows - would lock every person
+    on this list out of ever signing up. `login.reset_password` sets
+    `email_verified_at`, so a cold contact could promote themselves into a
+    verified account. And `admin_users.read_admin_users` selects every `User`
+    with no filter, so the console, the account count and the per-row quota and
+    credit arithmetic would all be computed over several hundred strangers.
+
+    `ShareInvitation` already established the shape for an address with no
+    account behind it. This follows it, including the nullable `user_id` for the
+    day the address becomes one.
+    """
+
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_marketingcontact_email"),
+        # "who can this campaign go to", which is the only question asked here.
+        Index("ix_marketingcontact_unsubscribed", "unsubscribed_at"),
+        # The unsubscribe link's lookup, and nothing else.
+        Index("ix_marketingcontact_token", "unsubscribe_token"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    # 320 is the full length an address is allowed to be. `user.email` settles
+    # for 255; a list imported from somewhere else does not get to choose.
+    email: str = Field(max_length=320)
+    # As it was given, junk and all. What to actually call somebody is decided
+    # at send time by `marketing.greeting_name`, because this column contains
+    # "asdf", "777" and at least one spam link.
+    name: str = Field(default="", max_length=255)
+    source: ContactSource = Field(default=ContactSource.imported, sa_type=String(16))  # type: ignore
+    # Plaintext and opaque, like `Document.public_slug` rather than a hashed
+    # `AuthCode`. An unsubscribe link has to keep working for years, has to
+    # survive being sent again in a second campaign, and grants nothing except
+    # the right to stop being emailed - so there is nothing to protect by
+    # hashing it, and an expiry would be a broken promise.
+    unsubscribe_token: str = Field(unique=True, max_length=64)
+    # A timestamp rather than a flag: it answers "when", which is the question
+    # asked of it if anybody ever disputes a send.
+    unsubscribed_at: datetime | None = _tz_datetime(default=None)
+    # Set when the address turns into an account. SET NULL, because deleting an
+    # account is not a request to be emailed again.
+    user_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    updated_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+class MarketingCampaign(SQLModel, table=True):
+    """One message, and who it went to."""
+
+    __table_args__ = (Index("ix_marketingcampaign_created", "created_at"),)
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(default="", max_length=200)
+    # Checked against MARKETING_FROM_ADDRESSES on the way in. A send from an
+    # address SES has not verified fails every single message.
+    from_email: str = Field(max_length=320)
+    subject: str = Field(max_length=300)
+    # What the administrator wrote, placeholders and all. Rendered per
+    # recipient at send time rather than stored per recipient.
+    body_html: str = Field(default="", sa_type=Text)
+    status: CampaignStatus = Field(
+        default=CampaignStatus.draft,
+        sa_type=String(12),  # type: ignore
+    )
+    created_by: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
+    # Denormalised counters. The deliveries are the truth; these exist so the
+    # campaign list does not need an aggregate per row.
+    total: int = 0
+    sent_count: int = 0
+    failed_count: int = 0
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+    started_at: datetime | None = _tz_datetime(default=None)
+    finished_at: datetime | None = _tz_datetime(default=None)
+
+
+class MarketingDelivery(SQLModel, table=True):
+    """One row per recipient per campaign. Written and committed before the send.
+
+    The same trade `NoteReminderDelivery` makes, for the same reason: email
+    cannot be made atomic with a commit, so this picks the side where a crash
+    loses a message rather than sending it twice. A duplicate marketing email is
+    the thing people remember.
+    """
+
+    __table_args__ = (
+        # One message per person per campaign. This is the at-most-once guard,
+        # and it holds even if two workers claim the same row.
+        UniqueConstraint("campaign_id", "contact_id", name="uq_marketingdelivery_once"),
+        # The claim query, and nothing else. Partial, so the scan only ever
+        # touches rows that could actually go out.
+        Index(
+            "ix_marketingdelivery_due",
+            "send_after",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        # The status screen: this campaign's rows, in the order they were made.
+        Index("ix_marketingdelivery_campaign", "campaign_id", "created_at"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    campaign_id: uuid.UUID = Field(
+        foreign_key="marketingcampaign.id", nullable=False, ondelete="CASCADE"
+    )
+    contact_id: uuid.UUID = Field(
+        foreign_key="marketingcontact.id", nullable=False, ondelete="CASCADE"
+    )
+    # What was actually written to, kept here so the record survives the
+    # contact being renamed or deleted.
+    to_email: str = Field(max_length=320)
+    status: DeliveryStatus = Field(
+        default=DeliveryStatus.pending,
+        sa_type=String(12),  # type: ignore
+    )
+    # The pacing lives in this column. Each delivery is stamped one second
+    # after the one before it, so exactly one row becomes due per second and
+    # the rate needs no enforcing anywhere. It also survives a restart, which
+    # a sleep in a loop does not.
+    send_after: datetime = _tz_datetime(nullable=False)
+    # The lease, separate from `send_after` so a claim in flight does not
+    # rewrite the schedule.
+    locked_until: datetime | None = _tz_datetime(default=None)
+    attempts: int = 0
+    sent_at: datetime | None = _tz_datetime(default=None)
+    error: str | None = Field(default=None, sa_type=Text)
+    created_at: datetime = _tz_datetime(default_factory=get_datetime_utc)
+
+
+# --- marketing, as it is reported -------------------------------------------
+
+
+class MarketingContactPublic(SQLModel):
+    id: uuid.UUID
+    email: str
+    name: str
+    source: ContactSource
+    subscribed: bool
+    unsubscribed_at: datetime | None = None
+    created_at: datetime
+
+
+class MarketingContactsPublic(SQLModel):
+    data: list[MarketingContactPublic]
+    count: int
+
+
+class MarketingContactCreate(SQLModel):
+    email: EmailStr
+    name: str = Field(default="", max_length=255)
+
+
+class ContactImportResult(SQLModel):
+    """What an uploaded file turned into, address by address.
+
+    The same shape sharing already uses for a batch of addresses: a count of
+    what landed, and every one that did not with the reason why. An import that
+    silently drops a row is an import nobody can trust.
+    """
+
+    added: int = 0
+    already_present: int = 0
+    skipped: list[ShareSkipped] = []
+
+
+class CampaignCreate(SQLModel):
+    name: str = Field(default="", max_length=200)
+    from_email: EmailStr
+    subject: str = Field(min_length=1, max_length=300)
+    body_html: str = Field(min_length=1)
+    # The addresses chosen in the interface. Empty means everyone still
+    # subscribed, which is what "select all" sends.
+    contact_ids: list[uuid.UUID] = []
+    all_subscribed: bool = False
+
+
+class CampaignPublic(SQLModel):
+    id: uuid.UUID
+    name: str
+    from_email: str
+    subject: str
+    body_html: str
+    status: CampaignStatus
+    total: int
+    sent_count: int
+    failed_count: int
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class CampaignsPublic(SQLModel):
+    data: list[CampaignPublic]
+    count: int
+
+
+class DeliveryPublic(SQLModel):
+    id: uuid.UUID
+    to_email: str
+    status: DeliveryStatus
+    send_after: datetime
+    sent_at: datetime | None = None
+    attempts: int = 0
+    error: str | None = None
+
+
+class DeliveriesPublic(SQLModel):
+    data: list[DeliveryPublic]
+    count: int
+
+
+class CampaignPreviewRequest(SQLModel):
+    subject: str = Field(min_length=1, max_length=300)
+    body_html: str = Field(min_length=1)
+    # Whose copy to render. Left out, the preview uses a sample name so the
+    # greeting is still visible.
+    contact_id: uuid.UUID | None = None
+
+
+class CampaignPreview(SQLModel):
+    to_email: str
+    subject: str
+    html: str
+    text: str
+
+
+class MarketingSettings(SQLModel):
+    """What the composer needs before it can be drawn."""
+
+    from_addresses: list[str]
+    contacts: int
+    subscribed: int

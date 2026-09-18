@@ -25,6 +25,9 @@ user → group → default group → constant:
 * **Credits** — `docs/CREDITS.md`
 * **Notes** — `docs/MY_NOTES.md`, which is private data rather than a limit,
   and is the one place where 404-not-403 is load-bearing against a superuser.
+* **Marketing** — `docs/MARKETING.md`. Superuser only, and the one endpoint
+  that answers without a credential is a POST precisely so that a mail scanner
+  cannot spend it.
 
 Every path that can reach a model is checked *before* the call: asking,
 searching, uploading, Drive imports, translating, indexing in the worker, and

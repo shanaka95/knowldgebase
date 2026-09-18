@@ -46,6 +46,17 @@ class Email:
 class EmailSender(Protocol):
     async def send(self, message: Email) -> None: ...
 
+    async def send_marketing(
+        self, message: Email, *, from_email: str, unsubscribe_url: str
+    ) -> None:
+        """Bulk mail: a chosen From address and an unsubscribe header.
+
+        Separate from `send` rather than an argument to it, so no transactional
+        message can accidentally acquire a marketing footer or be sent from an
+        address the product does not speak with.
+        """
+        ...
+
 
 class LoggingEmailSender:
     """Used when email is switched off. Records what would have been sent.
@@ -67,6 +78,12 @@ class LoggingEmailSender:
             message.subject,
             message.text,
         )
+
+    async def send_marketing(
+        self, message: Email, *, from_email: str, unsubscribe_url: str
+    ) -> None:
+        del from_email, unsubscribe_url  # nothing to capture them in
+        await self.send(message)
 
 
 def _capture_for_dev(message: Email) -> None:
@@ -158,6 +175,54 @@ class SesEmailSender:
         except Exception as exc:  # noqa: BLE001 - boto3 raises a wide family
             raise EmailError(f"SES refused the message: {exc}") from exc
 
+    def _send_marketing_sync(
+        self, message: Email, from_email: str, unsubscribe_url: str
+    ) -> None:
+        """Bulk mail, which needs headers `send_email` cannot set.
+
+        `List-Unsubscribe` is what puts the unsubscribe control in Gmail's own
+        interface, beside the sender's name, and the one-click variant is what
+        lets it act without opening anything. Both matter more than they look:
+        a reader who cannot find the unsubscribe link marks the message as spam
+        instead, and that is charged against the sending domain rather than
+        against this message.
+
+        `send_raw_email` is the only SES call that carries custom headers, so
+        the MIME part is built here rather than handed over as fields.
+        """
+        from email.message import EmailMessage as MimeMessage
+
+        mime = MimeMessage()
+        source = from_email
+        if settings.EMAIL_FROM_NAME:
+            source = f"{settings.EMAIL_FROM_NAME} <{from_email}>"
+        mime["From"] = source
+        mime["To"] = message.to
+        mime["Subject"] = message.subject
+        # A reply is the whole point of an invitation, so it goes to a mailbox
+        # somebody reads rather than to whatever the campaign was sent from.
+        mime["Reply-To"] = from_email
+        mime["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+        mime["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+        mime.set_content(message.text)
+        mime.add_alternative(message.html, subtype="html")
+
+        self.client.send_raw_email(
+            Source=source,
+            Destinations=[message.to],
+            RawMessage={"Data": mime.as_bytes()},
+        )
+
+    async def send_marketing(
+        self, message: Email, *, from_email: str, unsubscribe_url: str
+    ) -> None:
+        try:
+            await asyncio.to_thread(
+                self._send_marketing_sync, message, from_email, unsubscribe_url
+            )
+        except Exception as exc:  # noqa: BLE001 - boto3 raises a wide family
+            raise EmailError(f"SES refused the message: {exc}") from exc
+
 
 _sender: EmailSender | None = None
 
@@ -212,6 +277,30 @@ def _button(url: str, label: str) -> str:
         f'<p style="font-size:12px;color:#6b7280;margin:0;">Or paste this into your browser:<br>'
         f'<span style="word-break:break-all;">{url}</span></p>'
     )
+
+
+def marketing_shell(body_html: str, *, unsubscribe_url: str) -> str:
+    """The wrapper for bulk mail, which is not the transactional one.
+
+    Two differences, and both are the point. There is no product header above
+    the message: this is a note from a person, and dressing it as a system
+    notification is what makes an invitation read as an advertisement. And the
+    footer says why the message arrived and how to stop it, which every
+    transactional message can leave out and no marketing message may.
+    """
+    return f"""<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1e26;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;font-size:15px;line-height:1.6;">
+      {body_html}
+    </div>
+    <div style="max-width:520px;margin:16px auto 0;font-size:12px;color:#9096a2;text-align:center;line-height:1.6;">
+      You are receiving this because you signed up for one of my projects.<br>
+      <a href="{unsubscribe_url}" style="color:#9096a2;">Unsubscribe</a> and I will not email you again.<br>
+      <a href="{str(settings.FRONTEND_HOST).rstrip("/")}/imprint" style="color:#9096a2;">Imprint</a>
+    </div>
+  </body>
+</html>"""
 
 
 def _code_block(code: str) -> str:

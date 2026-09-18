@@ -57,6 +57,20 @@ export const queryKeys = {
       ["admin", "usage", params] as const,
     usageModels: (params: Record<string, unknown> = {}) =>
       ["admin", "usage", "models", params] as const,
+    marketing: {
+      all: ["admin", "marketing"] as const,
+      settings: () => ["admin", "marketing", "settings"] as const,
+      template: () => ["admin", "marketing", "template"] as const,
+      contacts: (params: Record<string, unknown> = {}) =>
+        ["admin", "marketing", "contacts", params] as const,
+      contactIds: (params: Record<string, unknown> = {}) =>
+        ["admin", "marketing", "contact-ids", params] as const,
+      campaigns: () => ["admin", "marketing", "campaigns"] as const,
+      campaign: (id: string) =>
+        ["admin", "marketing", "campaigns", id] as const,
+      deliveries: (id: string) =>
+        ["admin", "marketing", "campaigns", id, "deliveries"] as const,
+    },
   },
   dataSources: {
     all: ["data-sources"] as const,

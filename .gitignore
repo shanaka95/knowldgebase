@@ -4,6 +4,10 @@
 .env.*
 !.env.example
 models.toml
+# Contact exports. Real addresses belonging to real people, so a root-level CSV
+# is a working file and never something the repository should carry. Anchored,
+# so a fixture under backend/tests/ is unaffected.
+/*.csv
 
 # --- dependencies (installed, not stored) ------------------------------------
 node_modules/

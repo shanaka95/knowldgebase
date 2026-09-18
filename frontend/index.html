@@ -8,7 +8,12 @@
          container has to load to see the first page view; the tag itself is
          async, so it does not hold up anything below it. This is the only HTML
          document the app has - every route is the same shell - so one copy
-         covers every page. -->
+         covers every page.
+
+         Verbatim, and this file is excluded from the formatter in biome.json
+         to keep it that way: `bun run lint` runs with --unsafe and rewrote
+         Google's snippet into arrow functions and template literals, which
+         works but makes it impossible to diff against what Google publishes. -->
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],

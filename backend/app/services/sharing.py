@@ -87,6 +87,15 @@ def invitation_url(token: str) -> str:
     return f"{settings.FRONTEND_HOST.rstrip('/')}/invite?token={token}"
 
 
+def unsubscribe_url(token: str) -> str:
+    """Where somebody goes to stop hearing from us.
+
+    In the path rather than a query string, so it survives being copied out of
+    a mail client that helpfully trims what it thinks is tracking.
+    """
+    return f"{str(settings.FRONTEND_HOST).rstrip('/')}/unsubscribe/{token}"
+
+
 def note_url(note_id: object) -> str:
     """Where somebody goes to open one of their own notes.
 

@@ -31,6 +31,7 @@ import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSharedRouteImport } from './routes/_layout/shared'
 import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
 import { Route as PSlugRouteImport } from './routes/p.$slug'
+import { Route as UnsubscribeTokenRouteImport } from './routes/unsubscribe.$token'
 import { Route as LayoutAgentsIndexRouteImport } from './routes/_layout/agents.index'
 import { Route as LayoutAgentsAgentIdRouteImport } from './routes/_layout/agents.$agentId'
 import { Route as LayoutNotesIndexRouteImport } from './routes/_layout/notes/index'
@@ -151,6 +152,11 @@ const PSlugRoute = PSlugRouteImport.update({
   path: '/p/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnsubscribeTokenRoute = UnsubscribeTokenRouteImport.update({
+  id: '/unsubscribe/$token',
+  path: '/unsubscribe/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LayoutAgentsIndexRoute = LayoutAgentsIndexRouteImport.update({
   id: '/agents/',
   path: '/agents/',
@@ -228,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/shared': typeof LayoutSharedRoute
   '/usage': typeof LayoutUsageRoute
   '/p/$slug': typeof PSlugRoute
+  '/unsubscribe/$token': typeof UnsubscribeTokenRoute
   '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
   '/notes/$noteId': typeof LayoutNotesNoteIdRoute
   '/notes/search': typeof LayoutNotesSearchRoute
@@ -260,6 +267,7 @@ export interface FileRoutesByTo {
   '/shared': typeof LayoutSharedRoute
   '/usage': typeof LayoutUsageRoute
   '/p/$slug': typeof PSlugRoute
+  '/unsubscribe/$token': typeof UnsubscribeTokenRoute
   '/': typeof LayoutIndexRoute
   '/agents/$agentId': typeof LayoutAgentsAgentIdRoute
   '/notes/$noteId': typeof LayoutNotesNoteIdRoute
@@ -294,6 +302,7 @@ export interface FileRoutesById {
   '/_layout/shared': typeof LayoutSharedRoute
   '/_layout/usage': typeof LayoutUsageRoute
   '/p/$slug': typeof PSlugRoute
+  '/unsubscribe/$token': typeof UnsubscribeTokenRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/agents/$agentId': typeof LayoutAgentsAgentIdRoute
   '/_layout/notes/$noteId': typeof LayoutNotesNoteIdRoute
@@ -330,6 +339,7 @@ export interface FileRouteTypes {
     | '/shared'
     | '/usage'
     | '/p/$slug'
+    | '/unsubscribe/$token'
     | '/agents/$agentId'
     | '/notes/$noteId'
     | '/notes/search'
@@ -362,6 +372,7 @@ export interface FileRouteTypes {
     | '/shared'
     | '/usage'
     | '/p/$slug'
+    | '/unsubscribe/$token'
     | '/'
     | '/agents/$agentId'
     | '/notes/$noteId'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/_layout/shared'
     | '/_layout/usage'
     | '/p/$slug'
+    | '/unsubscribe/$token'
     | '/_layout/'
     | '/_layout/agents/$agentId'
     | '/_layout/notes/$noteId'
@@ -420,6 +432,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   PSlugRoute: typeof PSlugRoute
+  UnsubscribeTokenRoute: typeof UnsubscribeTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -578,6 +591,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/unsubscribe/$token': {
+      id: '/unsubscribe/$token'
+      path: '/unsubscribe/$token'
+      fullPath: '/unsubscribe/$token'
+      preLoaderRoute: typeof UnsubscribeTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_layout/agents/': {
       id: '/_layout/agents/'
       path: '/agents'
@@ -723,6 +743,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   PSlugRoute: PSlugRoute,
+  UnsubscribeTokenRoute: UnsubscribeTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

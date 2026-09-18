@@ -28,11 +28,12 @@ from app.models import (
     Attachment,
     Document,
     InvitationPreview,
+    Message,
     Namespace,
     PublicDocument,
     User,
 )
-from app.services import sharing
+from app.services import marketing, sharing
 from app.services.cloning import referenced_attachment_ids
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -173,3 +174,28 @@ def read_invitation(session: SessionDep, token: str) -> Any:
         expires_at=record.expires_at,
         already_accepted=record.accepted_at is not None,
     )
+
+
+@router.post("/marketing/unsubscribe/{token}", response_model=Message)
+def unsubscribe(session: SessionDep, token: str) -> Any:
+    """Stop emailing whoever holds this token.
+
+    **A POST, and the reason is not REST tidiness.** Outlook Safe Links, Gmail's
+    proxy and most corporate scanners fetch every URL in a message before a
+    human sees it. A `GET` that acted would therefore unsubscribe a large part
+    of any list within minutes of sending to it, and the first anybody would
+    know is an empty campaign. The page at `/unsubscribe/{token}` issues this
+    from the browser instead, so a scanner reading the HTML changes nothing and
+    a person still only has to click once.
+
+    Unsubscribing twice succeeds. Somebody who clicks the link in two different
+    messages has not made a mistake, and an error is the worst possible reply
+    at that particular moment.
+    """
+    if not marketing.unsubscribe(session, token):
+        # 404, like every other unknown link here. Saying "no such token" and
+        # "already unsubscribed" differently would turn this into a way to test
+        # whether an address is on the list.
+        raise HTTPException(status_code=404, detail="This link is not valid")
+    session.commit()
+    return Message(message="You have been unsubscribed.")

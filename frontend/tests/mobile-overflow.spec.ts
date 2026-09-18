@@ -193,6 +193,7 @@ const PAGES: { path: string; name: string }[] = [
   { path: "/settings", name: "settings" },
   { path: "/settings?tab=api-keys", name: "settings · api keys" },
   { path: "/admin", name: "admin · users" },
+  { path: "/admin?tab=marketing", name: "admin · marketing" },
   { path: "/admin?tab=channels", name: "admin · channels" },
   { path: "/admin?tab=data-sources", name: "admin · data sources" },
 ]
@@ -380,6 +381,13 @@ test.describe("a dialog on a small phone", () => {
     await page.getByTestId("create-api-key").click()
     await expect(page.getByRole("dialog")).toBeVisible()
     await expectUsable(page, "the new-API-key dialog")
+  })
+
+  test("the add-contact dialog fits", async ({ page }) => {
+    await page.goto("/admin?tab=marketing")
+    await page.getByTestId("marketing-add").click()
+    await expect(page.getByRole("dialog")).toBeVisible()
+    await expectUsable(page, "the add-contact dialog")
   })
 
   test("the reminder dialog fits, at its tallest", async ({

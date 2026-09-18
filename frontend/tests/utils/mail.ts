@@ -128,3 +128,12 @@ export async function reminderEmail(
     30_000,
   )
 }
+
+/** The latest campaign message for an address, matched on its subject. */
+export async function marketingEmail(
+  request: APIRequestContext,
+  email: string,
+  needle: string,
+): Promise<CapturedEmail> {
+  return waitForEmail(request, email, (m) => m.subject.includes(needle), 30_000)
+}

@@ -1,3 +1,4 @@
+import logging
 import re
 import secrets
 import uuid
@@ -24,6 +25,8 @@ from app.models import (
     UserUpdate,
 )
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Users (template)
 # ---------------------------------------------------------------------------
@@ -36,7 +39,36 @@ def create_user(*, session: Session, user_create: UserCreate) -> User:
     session.add(db_obj)
     session.commit()
     session.refresh(db_obj)
+    _add_to_mailing_list(session, db_obj)
     return db_obj
+
+
+def _add_to_mailing_list(session: Session, user: User) -> None:
+    """Put a new account's address on the marketing list, if it is not there.
+
+    Here rather than in the signup route because accounts are created in more
+    than one place, and a list that only knows about people who arrived through
+    one of them is a list somebody will eventually be surprised by.
+
+    Never revives an unsubscribed contact, and never fails a registration: an
+    account that exists but is missing from a mailing list is a much smaller
+    problem than a sign-up that returned an error after creating the account.
+    """
+    from app.models import ContactSource
+    from app.services import marketing
+
+    try:
+        marketing.ensure_contact(
+            session,
+            email=user.email,
+            name=user.full_name or "",
+            source=ContactSource.signup,
+            user_id=user.id,
+        )
+        session.commit()
+    except Exception:  # noqa: BLE001 - a mailing list must not break signup
+        session.rollback()
+        logger.warning("could not add %s to the marketing list", user.id, exc_info=True)
 
 
 def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> Any:

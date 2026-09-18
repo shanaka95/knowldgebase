@@ -70,6 +70,10 @@ x-backend-common: &backend-common
     # One provider serves all three models here, so the reranker falls back to
     # the chat model's key rather than asking for the same secret twice.
     RERANK_API_KEY: ${RERANK_API_KEY:-${LLM_API_KEY}}
+    # Bulk mail. Every address here has to be a verified SES identity: an
+    # unverified sender fails every message in a campaign, one a second.
+    MARKETING_FROM_ADDRESSES: ${MARKETING_FROM_ADDRESSES:-["shanaka@plusgpt.io","noreply@plusgpt.io"]}
+    MARKETING_SEND_PER_TICK: ${MARKETING_SEND_PER_TICK:-1}
     # Optional speech to text, for dictating a note. Leave TRANSCRIPTION_MODEL
     # empty and the microphone is not offered at all. Audio is never stored.
     TRANSCRIPTION_MODEL: ${TRANSCRIPTION_MODEL:-}

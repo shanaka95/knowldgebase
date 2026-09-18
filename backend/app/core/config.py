@@ -210,6 +210,22 @@ class Settings(BaseSettings):
         )
     )
 
+    # --- Marketing email -----------------------------------------------------
+    # Bulk mail, which everything else here is not. The addresses offered in
+    # the composer: each one has to be a verified SES identity, or every send
+    # from it is rejected, so this is a list rather than free text.
+    MARKETING_FROM_ADDRESSES: list[str] = [
+        "shanaka@plusgpt.io",
+        "noreply@plusgpt.io",
+    ]
+    # Claimed per worker tick, and the tick is a second. One, so a worker that
+    # was down for an hour resumes at the same pace rather than emptying the
+    # backlog into somebody's inbox all at once.
+    MARKETING_SEND_PER_TICK: int = 1
+    MARKETING_MAX_ATTEMPTS: int = 3
+    # A campaign this size is a mistake, not a campaign.
+    MARKETING_MAX_RECIPIENTS: int = 20000
+
     # --- Speech to text ------------------------------------------------------
     # Dictation, for notes. Optional in exactly the way reranking is: leave the
     # model empty and the feature turns itself off rather than failing at the

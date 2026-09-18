@@ -12,6 +12,7 @@ import { GroupsPanel } from "@/components/Admin/GroupsPanel"
 import { UsagePanel } from "@/components/Admin/UsagePanel"
 import { DataTable } from "@/components/Common/DataTable"
 import { PageContainer, PageHeader } from "@/components/Layout/PageContainer"
+import { MarketingPanel } from "@/components/Marketing/MarketingPanel"
 import PendingUsers from "@/components/Pending/PendingUsers"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import useAuth from "@/hooks/useAuth"
@@ -31,7 +32,14 @@ function getUsersQueryOptions() {
   }
 }
 
-const TABS = ["users", "groups", "usage", "channels", "data-sources"] as const
+const TABS = [
+  "users",
+  "groups",
+  "usage",
+  "marketing",
+  "channels",
+  "data-sources",
+] as const
 type Tab = (typeof TABS)[number]
 
 const adminSearchSchema = z.object({
@@ -106,6 +114,7 @@ function Admin() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="groups">Groups</TabsTrigger>
           <TabsTrigger value="usage">Usage</TabsTrigger>
+          <TabsTrigger value="marketing">Marketing</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>
           <TabsTrigger value="data-sources">Data sources</TabsTrigger>
         </TabsList>
@@ -118,6 +127,10 @@ function Admin() {
         <TabsContent value="usage" className="pt-4">
           <UsagePanel />
         </TabsContent>
+        <TabsContent value="marketing" className="pt-4">
+          <MarketingPanel />
+        </TabsContent>
+
         <TabsContent value="channels" className="pt-4">
           <ChannelsPanel />
         </TabsContent>
