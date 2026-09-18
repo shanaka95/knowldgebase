@@ -187,8 +187,8 @@ def render_for(
         text=(
             f"{_to_text(body)}\n\n"
             "---\n"
-            "You are receiving this because you signed up for one of my "
-            f"projects. To stop hearing from me: {url}\n"
+            "You are receiving this because you are using one of our "
+            f"products. To stop hearing from us: {url}\n"
             f"{str(settings.FRONTEND_HOST).rstrip('/')}/imprint"
         ),
         unsubscribe_url=url,
@@ -362,22 +362,63 @@ def counts(session: Session) -> tuple[int, int]:
     return int(total), int(subscribed)
 
 
-DEFAULT_SUBJECT = "Would you try something I built?"
+DEFAULT_SUBJECT = "An invitation to try PlusGPT"
 
-# The message this feature exists to send. Seeded into the composer as a
+# The message this feature exists to send, seeded into the composer as a
 # starting point rather than hard-coded into the sender: it is going to be
 # rewritten, and the next campaign will be a different message entirely.
-DEFAULT_BODY_HTML = """<p>Hi {{name}},</p>
+#
+# Inline styles on every element, and no stylesheet: mail clients strip
+# <style> blocks, and half of them strip class attributes with it. The logo
+# is a PNG at an absolute URL because Gmail and Outlook do not render SVG at
+# all, and it carries an empty alt with the wordmark beside it as real text,
+# so a client blocking images still shows a header rather than a broken box.
+DEFAULT_BODY_HTML = """<div style="margin:0 0 26px;">
+  <img src="https://plusgpt.io/icon-192.png" width="40" height="40" alt="" style="display:inline-block;vertical-align:middle;border:0;outline:none;text-decoration:none;" />
+  <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-size:19px;font-weight:600;letter-spacing:-0.01em;color:#111827;">PlusGPT</span>
+</div>
 
-<p>I built PlusGPT, and I am looking for a few people to try it and tell me where it falls over.</p>
+<p style="margin:0 0 16px;">Hi {{name}},</p>
 
-<p>It takes documents you already have, a PDF, a scan, your own notes, and turns them into something you can ask. Every answer shows the passages it came from, so you can check it rather than trust it.</p>
+<p style="margin:0 0 16px;">We are opening <strong>PlusGPT</strong> to a small group of early users, and we would like you to be one of them.</p>
 
-<p>It is free to try, and about two minutes is enough to find out whether it is useful to you.</p>
+<p style="margin:0 0 24px;">PlusGPT is a personal knowledge management system. Everything you know goes in, whatever shape it arrives in: what you have read, what you have written down, what somebody sent you, what you worked out and never wrote down anywhere else. It all becomes one thing you can ask. Every answer comes back with the passages it was drawn from, so you can check it rather than take it on trust.</p>
 
-<p><a href="https://plusgpt.io/signup">Try PlusGPT</a></p>
+<div style="margin:0 0 26px;padding:16px 18px;background:#f5f6ff;border-left:3px solid #4f46e5;border-radius:6px;">
+  <p style="margin:0 0 8px;font-weight:600;color:#111827;">Your knowledge stays yours</p>
+  <p style="margin:0;font-size:14px;color:#374151;">Every account is isolated. Nothing you put in is visible to anybody else unless you choose to share it, and your private notes cannot be shared at all. We do not permit model providers to train on anything sent from this service.</p>
+</div>
 
-<p>If you do try it, hit reply and tell me the one thing that annoyed you most. I read every reply myself.</p>
+<p style="margin:0 0 14px;font-weight:600;color:#111827;">What you can do with it</p>
 
-<p>Shanaka<br>
-<a href="https://plusgpt.io">plusgpt.io</a></p>"""
+<p style="margin:0 0 14px;"><strong style="color:#111827;">Ask across everything you know</strong><br />
+Keyword and meaning search run together, so something turns up even when you have forgotten the words it was written in. A scan or a photograph is read and indexed like everything else, and the original stays one click away.</p>
+
+<p style="margin:0 0 14px;"><strong style="color:#111827;">Keep private notes</strong><br />
+Not everything you know arrives as a file. Write a thought down, tick off a checklist, sketch a diagram, or just say it out loud and let it be transcribed. Notes are private to you, they are searchable the moment you save them, and they can email you a reminder later.</p>
+
+<p style="margin:0 0 14px;"><strong style="color:#111827;">Connect your coding agent</strong><br />
+Our MCP server lets Claude Code, Cursor or any other agent read, search, question and write to your knowledge base. Each agent authenticates with its own key and reaches exactly what that key allows, and nothing else.</p>
+
+<p style="margin:0 0 14px;"><strong style="color:#111827;">Build a knowledge base for your agents</strong><br />
+Give your agents a body of knowledge of their own to work from, so everything they need is in one place and everything they learn lands somewhere you can read.</p>
+
+<p style="margin:0 0 24px;"><strong style="color:#111827;">Ask from Telegram or WhatsApp</strong><br />
+Connect your account and ask what you know from the app you are already in, without opening anything.</p>
+
+<div style="margin:0 0 26px;padding:16px 18px;border:1px solid #e5e7eb;border-radius:8px;text-align:center;">
+  <p style="margin:0 0 4px;font-weight:600;font-size:16px;color:#111827;">Free during our launch season</p>
+  <p style="margin:0;font-size:14px;color:#6b7280;">Every feature above, at no cost, for as long as the promotion runs.</p>
+</div>
+
+<p style="margin:0 0 24px;text-align:center;"><a href="https://plusgpt.io/signup" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:600;font-size:15px;">Create your free account</a></p>
+
+<p style="margin:0 0 16px;">Setting up takes about two minutes.</p>
+
+<p style="margin:0 0 24px;">If you have a question, or something does not work the way you expected, reply to this message and it will reach us directly.</p>
+
+<p style="margin:0;color:#6b7280;font-size:14px;">
+  Shanaka Samarakoon<br />
+  PlusGPT<br />
+  <a href="https://plusgpt.io" style="color:#4f46e5;text-decoration:none;">plusgpt.io</a>
+</p>"""

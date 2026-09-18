@@ -283,10 +283,14 @@ def marketing_shell(body_html: str, *, unsubscribe_url: str) -> str:
     """The wrapper for bulk mail, which is not the transactional one.
 
     Two differences, and both are the point. There is no product header above
-    the message: this is a note from a person, and dressing it as a system
-    notification is what makes an invitation read as an advertisement. And the
-    footer says why the message arrived and how to stop it, which every
-    transactional message can leave out and no marketing message may.
+    the message: the campaign supplies its own, so a message can open with a
+    logo or with a sentence, and a wrapper that insists on one would make every
+    campaign look like a system notification. And the footer says why the
+    message arrived and how to stop it, which every transactional message can
+    leave out and no marketing message may.
+
+    It does not say *which* product. The list spans more than one of them, and
+    naming the wrong one is worse than naming none.
     """
     return f"""<!doctype html>
 <html>
@@ -295,8 +299,8 @@ def marketing_shell(body_html: str, *, unsubscribe_url: str) -> str:
       {body_html}
     </div>
     <div style="max-width:520px;margin:16px auto 0;font-size:12px;color:#9096a2;text-align:center;line-height:1.6;">
-      You are receiving this because you signed up for one of my projects.<br>
-      <a href="{unsubscribe_url}" style="color:#9096a2;">Unsubscribe</a> and I will not email you again.<br>
+      You are receiving this because you are using one of our products.<br>
+      <a href="{unsubscribe_url}" style="color:#9096a2;">Unsubscribe</a> and we will not email you again.<br>
       <a href="{str(settings.FRONTEND_HOST).rstrip("/")}/imprint" style="color:#9096a2;">Imprint</a>
     </div>
   </body>

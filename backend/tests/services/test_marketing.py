@@ -207,3 +207,33 @@ def test_a_plain_two_column_file_works_too(db: Session) -> None:
     assert row.name == "Jo"
     db.delete(row)
     db.commit()
+
+
+def test_the_footer_speaks_for_the_company_not_for_a_person() -> None:
+    """Both halves of it, because the HTML and the text carry it separately.
+
+    It is also deliberately vague about *which* product: the list spans more
+    than one, and naming the wrong one is worse than naming none.
+    """
+    rendered = marketing.render_for(
+        contact(), subject="s", body_html="<p>Hi {{name}}</p>"
+    )
+    for part in (rendered.html, rendered.text):
+        assert "one of our products" in part
+        assert "my projects" not in part
+        assert " I will not email" not in part
+
+
+def test_the_default_message_is_the_one_we_meant_to_send() -> None:
+    """Three things a careless edit would quietly drop.
+
+    The logo has to be a PNG at an absolute URL, because Gmail and Outlook
+    render no SVG and resolve no relative path; the greeting has to be a
+    placeholder rather than a name somebody pasted in; and there has to be
+    somewhere to click.
+    """
+    body = marketing.DEFAULT_BODY_HTML
+    assert "https://plusgpt.io/icon-192.png" in body
+    assert "{{name}}" in body
+    assert "https://plusgpt.io/signup" in body
+    assert "<style" not in body, "mail clients strip stylesheets"

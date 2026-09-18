@@ -112,6 +112,20 @@ unsubscribe control in Gmail's own interface. That needs headers `send_email`
 cannot set, so campaigns go out through `send_raw_email`; every transactional
 message is untouched.
 
+## The default message
+
+`marketing.DEFAULT_BODY_HTML` is seeded into the composer and is meant to be
+rewritten; the next campaign will be a different message. Three things in it are
+not style choices:
+
+* **Inline styles on every element, and no stylesheet.** Mail clients strip
+  `<style>` blocks, and half of them strip `class` attributes with it.
+* **The logo is a PNG at an absolute URL.** Gmail and Outlook render no SVG and
+  resolve no relative path.
+* **The logo's `alt` is empty and the wordmark beside it is real text.** Most
+  clients block images by default, so this way the header still reads as
+  "PlusGPT" rather than as a broken-image box.
+
 ## What to call somebody
 
 `{{name}}` is not the name column. A list imported from another product's
